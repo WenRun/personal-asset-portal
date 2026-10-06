@@ -79,7 +79,7 @@ export interface Series {
 }
 export interface Clip {
   id: string
-  kind: 'clip'
+  kind: 'clip' | 'tutorial'
   title: string
   durationSec: number
   addedAt: string
@@ -90,6 +90,9 @@ export interface Clip {
   codec?: string
   tags?: string[]
   note?: string
+  series_id?: string | null
+  episode?: number | null
+  cover_url?: string | null
 }
 export type VideoAsset = Series | Clip
 

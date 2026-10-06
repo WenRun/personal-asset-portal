@@ -41,6 +41,17 @@ export interface RawAsset {
   focal_length_mm?: number | null
   gps_lat?: number | null
   gps_long?: number | null
+  // M5 视频域字段（列表/详情合并返回）
+  kind?: 'clip' | 'tutorial' | null
+  series_id?: string | null
+  episode?: number | null
+  duration_sec?: number | null
+  resolution?: string | null
+  container?: string | null
+  video_codec?: string | null
+  audio_codec?: string | null
+  streamable?: boolean | null
+  cover_url?: string | null
   // M3 书籍域字段（列表/详情合并返回）
   authors?: string[] | null
   publisher?: string | null
@@ -178,14 +189,15 @@ function toClip(r: RawAsset): Clip {
   const ext = extOf(r.file_name)
   return {
     id: r.id,
-    kind: 'clip',
+    kind: r.kind ?? 'clip',
     title: r.title,
-    durationSec: 0,
+    durationSec: r.duration_sec ?? 0,
     addedAt: r.created_at,
-    playable: PLAYABLE_EXT.has(ext),
-    resolution: '',
+    playable: r.streamable ?? PLAYABLE_EXT.has(ext),
+    resolution: r.resolution ?? '',
     sizeMB: +(r.size_bytes / 1048576).toFixed(1),
     hue: hueFromId(r.id),
+    codec: r.video_codec ?? '',
     tags: (r.tags ?? []).map((t) => t.name),
     note: r.note ?? '',
   }
@@ -300,6 +312,13 @@ export const api = {
   musicTracks: () =>
     req<{ asset_id: string; album_id: string; title: string; album: string; artist: string; no: number | null; duration_sec: number; bitrate_kbps: number | null; lrc: boolean; format: string | null; streamable: boolean; created_at: string }[]>('/api/music/tracks'),
   musicAlbumCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/music/albums/${id}/cover?size=${size}`,
+  videoSeries: () => req<{ id: string; name: string; episodes: number; first_ep: number | null; last_ep: number | null; duration_sec: number; cover_url: string | null }[]>('/api/videos/series'),
+  seriesEpisodes: (id: string) => req<{ id: string; name: string; description: string; episode_count: number; watched: number; cover_url: string | null; episodes: { asset_id: string; episode: number | null; title: string; duration_sec: number; position_sec: number; streamable: boolean; cover_url: string | null }[] }>(`/api/videos/series/${id}/episodes`),
+  videoCoverUrl: (coverUrl: string) => `${BASE}${coverUrl}`,
+  videoStreamUrl: (assetId: string) => `${BASE}/api/videos/${assetId}/stream`,
+  confirmList: () => req<{ id: string; file: string; series: string | null; hint: string }[]>('/api/admin/confirm'),
+  confirmSeries: (assetId: string, seriesName: string, episode: number) =>
+    req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   videos: async (): Promise<Clip[]> => (await listRaw('videos')).map(toClip),
   video: async (id: string) => toClip(await detailRaw(id)),

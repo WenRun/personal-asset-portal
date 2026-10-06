@@ -16,6 +16,7 @@ import app.domains.books.parser  # noqa: F401  M3: parse:book
 import app.domains.books.thumbs  # noqa: F401  M3: derive:book_cover
 import app.domains.music.parser  # noqa: F401  M4: parse:music
 import app.domains.music.thumbs  # noqa: F401  M4: derive:music_cover
+import app.domains.videos.parser  # noqa: F401  M5: parse:video
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 

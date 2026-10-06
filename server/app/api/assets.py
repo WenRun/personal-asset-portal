@@ -14,7 +14,7 @@ from app.core.deps import get_app_settings, get_current_user, require_admin, req
 from app.core.db import get_db
 from app.core.errors import bad_request, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicTrack, Tag, User
+from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicTrack, Tag, User, VideoDetail
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -145,6 +145,22 @@ async def list_assets(
                     "glyph_count": d.glyph_count, "languages": d.languages,
                     "license": d.license, "version": d.version, "designer": d.designer,
                 })
+    if route == "videos" and rows:
+        details = (
+            await db.execute(select(VideoDetail).where(VideoDetail.asset_id.in_([a.id for a in rows])))
+        ).scalars().all()
+        dmap = {d.asset_id: d for d in details}
+        for it, a in zip(items, rows):
+            d = dmap.get(a.id)
+            if d is not None:
+                it.update({
+                    "kind": d.kind, "series_id": str(d.series_id) if d.series_id else None,
+                    "episode": d.episode, "duration_sec": int((d.duration_ms or 0) / 1000),
+                    "resolution": f"{d.width}x{d.height}" if d.width else None,
+                    "container": d.container, "video_codec": d.video_codec, "audio_codec": d.audio_codec,
+                    "streamable": d.streamable,
+                    "cover_url": f"/api/videos/cover/{d.cover_path}" if d.cover_path else None,
+                })
     if route == "music" and rows:
         details = (
             await db.execute(select(MusicTrack).where(MusicTrack.asset_id.in_([a.id for a in rows])))
@@ -200,6 +216,17 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     ).scalars().all()
     out = {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    if a.asset_type == "video":
+        d = await db.get(VideoDetail, a.id)
+        if d is not None:
+            out.update({
+                "kind": d.kind, "series_id": str(d.series_id) if d.series_id else None,
+                "episode": d.episode, "duration_sec": int((d.duration_ms or 0) / 1000),
+                "resolution": f"{d.width}x{d.height}" if d.width else None,
+                "container": d.container, "video_codec": d.video_codec, "audio_codec": d.audio_codec,
+                "streamable": d.streamable,
+                "cover_url": f"/api/videos/cover/{d.cover_path}" if d.cover_path else None,
+            })
     if a.asset_type == "book":
         d = await db.get(BookDetail, a.id)
         if d is not None:

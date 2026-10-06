@@ -88,6 +88,33 @@ class Setting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+# 领域扩展表 M5：视频（详细设计 §2.3/§5.3）
+class VideoSeries(Base):
+    __tablename__ = "video_series"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name: Mapped[str] = mapped_column(Text, unique=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    cover_path: Mapped[str | None] = mapped_column(Text, nullable=True)  # 取首集封面帧
+
+
+class VideoDetail(Base):
+    __tablename__ = "video_details"
+
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, default="clip")  # clip | tutorial
+    series_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_series.id", ondelete="SET NULL"), nullable=True)
+    episode: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    container: Mapped[str | None] = mapped_column(Text, nullable=True)
+    video_codec: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_codec: Mapped[str | None] = mapped_column(Text, nullable=True)
+    streamable: Mapped[bool] = mapped_column(Boolean, default=False)
+    cover_path: Mapped[str | None] = mapped_column(Text, nullable=True)  # 选定封面帧（cover_1..3 之一）
+
+
 # 领域扩展表 M4：音乐三级聚合（详细设计 §2.3/§5.2）
 class MusicArtist(Base):
     __tablename__ = "music_artists"
