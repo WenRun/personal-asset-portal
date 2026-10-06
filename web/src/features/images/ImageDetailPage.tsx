@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -13,13 +13,23 @@ export function ImageDetailPage() {
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: api.photos })
   const [rating, setRating] = useState<number | null>(null)
   const [viewerFail, setViewerFail] = useState(false)
+  const stripRef = useRef<HTMLDivElement>(null)
 
   const idx = useMemo(() => (photos ?? []).findIndex((p) => p.id === id), [photos, id])
   const photo = photos?.[idx]
+  const atFirst = idx === 0
+  const atLast = photos != null && idx === photos.length - 1
+
+  // 胶片条：当前缩略图滚动到条中央
+  useEffect(() => {
+    const strip = stripRef.current
+    const cur = strip?.querySelector('[data-current="true"]') as HTMLElement | null
+    if (strip && cur) {
+      strip.scrollTo({ left: cur.offsetLeft - (strip.clientWidth - cur.clientWidth) / 2, behavior: 'smooth' })
+    }
+  }, [idx, photo?.id])
 
   if (!photo || !photos) return <div className="p-6 text-slate-400">加载中…</div>
-
-  const around = [-2, -1, 0, 1, 2].map((d) => photos[(idx + d + photos.length) % photos.length])
 
   return (
     <div className="flex h-full flex-col">
@@ -52,25 +62,43 @@ export function ImageDetailPage() {
             100% · {photo.w} × {photo.h} · {Math.round((photo.w * photo.h) / 1e6)}MP
           </div>
           <button
-            className="absolute left-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
-            onClick={() => nav(`/images/${photos[(idx - 1 + photos.length) % photos.length].id}`)}
+            disabled={atFirst}
+            className={cn(
+              'absolute left-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70',
+              atFirst && 'cursor-not-allowed opacity-30',
+            )}
+            onClick={() => !atFirst && nav(`/images/${photos[idx - 1].id}`)}
           ><ChevronLeft className="h-5 w-5" /></button>
           <button
-            className="absolute right-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
-            onClick={() => nav(`/images/${photos[(idx + 1) % photos.length].id}`)}
+            disabled={atLast}
+            className={cn(
+              'absolute right-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70',
+              atLast && 'cursor-not-allowed opacity-30',
+            )}
+            onClick={() => !atLast && nav(`/images/${photos[idx + 1].id}`)}
           ><ChevronRight className="h-5 w-5" /></button>
-          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
-            {around.map((p) => (
+          <div
+            ref={stripRef}
+            className="absolute inset-x-6 bottom-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="mx-auto flex w-fit gap-2">
+            {photos.map((p) => (
               <img
                 key={p.id}
+                data-current={p.id === photo.id}
                 src={`${API_BASE}/api/images/${p.id}/thumbnail?size=256`}
                 alt={p.title}
+                title={p.title}
+                onClick={() => p.id !== photo.id && nav(`/images/${p.id}`)}
                 className={cn(
-                  'h-10 w-16 cursor-pointer rounded bg-slate-800 object-cover transition',
-                  p.id === photo.id ? 'ring-2 ring-brand-400' : 'opacity-60 hover:opacity-100',
+                  'h-12 w-20 shrink-0 cursor-pointer rounded object-cover transition',
+                  p.id === photo.id
+                    ? 'ring-2 ring-brand-400 opacity-100'
+                    : 'opacity-50 hover:opacity-90',
                 )}
               />
             ))}
+            </div>
           </div>
         </div>
 
