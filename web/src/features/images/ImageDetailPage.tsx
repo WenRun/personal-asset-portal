@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Download, Pencil, Share2 } from 'lucide-react'
-import { api } from '@/api/client'
+import { api, API_BASE } from '@/api/client'
 import { BackLink, Badge, Button, HueCover, RatingStars } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +12,7 @@ export function ImageDetailPage() {
   const nav = useNavigate()
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: api.photos })
   const [rating, setRating] = useState<number | null>(null)
+  const [viewerFail, setViewerFail] = useState(false)
 
   const idx = useMemo(() => (photos ?? []).findIndex((p) => p.id === id), [photos, id])
   const photo = photos?.[idx]
@@ -37,7 +38,16 @@ export function ImageDetailPage() {
       <div className="flex min-h-0 flex-1">
         {/* 查看器 */}
         <div className="relative grid min-w-0 flex-1 place-items-center bg-slate-950">
-          <HueCover hue={photo.hue} className="h-[82%] w-[80%] rounded-lg shadow-2xl" />
+          {viewerFail ? (
+            <HueCover hue={photo.hue} className="h-[82%] w-[80%] rounded-lg shadow-2xl" />
+          ) : (
+            <img
+              src={`${API_BASE}/api/images/${photo.id}/original`}
+              alt={photo.title}
+              className="max-h-[86%] max-w-[80%] rounded-lg object-contain shadow-2xl"
+              onError={() => setViewerFail(true)}
+            />
+          )}
           <div className="absolute left-3 top-3 rounded bg-black/50 px-2 py-1 font-mono text-[11px] text-slate-300">
             100% · {photo.w} × {photo.h} · {Math.round((photo.w * photo.h) / 1e6)}MP
           </div>
@@ -51,11 +61,12 @@ export function ImageDetailPage() {
           ><ChevronRight className="h-5 w-5" /></button>
           <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
             {around.map((p) => (
-              <HueCover
+              <img
                 key={p.id}
-                hue={p.hue}
+                src={`${API_BASE}/api/images/${p.id}/thumbnail?size=256`}
+                alt={p.title}
                 className={cn(
-                  'h-10 w-16 cursor-pointer rounded transition',
+                  'h-10 w-16 cursor-pointer rounded bg-slate-800 object-cover transition',
                   p.id === photo.id ? 'ring-2 ring-brand-400' : 'opacity-60 hover:opacity-100',
                 )}
               />
@@ -69,7 +80,7 @@ export function ImageDetailPage() {
             <div>
               <div className="font-bold">{photo.title}</div>
               <div className="mt-0.5 text-xs text-slate-400">{photo.takenAt.replace('T', ' ')} 拍摄</div>
-              <Button size="sm" className="mt-2 w-full">下载原图 {photo.sizeMB}MB</Button>
+              <a href={api.downloadUrl(photo.id)} className="mt-2 block w-full rounded-lg bg-brand-600 py-1.5 text-center text-xs font-medium text-white hover:bg-brand-700">下载原图 {photo.sizeMB}MB</a>
             </div>
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">评分</div>
@@ -79,14 +90,14 @@ export function ImageDetailPage() {
               <div className="mb-1 text-xs font-semibold text-slate-400">EXIF</div>
               <dl className="divide-y divide-slate-100 text-sm">
                 {[
-                  ['拍摄时间', photo.takenAt.replace('T', ' ')],
-                  ['相机', photo.camera],
-                  ['镜头', photo.lens],
-                  ['焦距', photo.focal],
-                  ['光圈', photo.aperture],
-                  ['快门', photo.shutter],
-                  ['ISO', String(photo.iso)],
-                  ['尺寸', `${photo.w} × ${photo.h}`],
+                  ['拍摄时间', (photo.takenAt ?? '').slice(0, 19).replace('T', ' ') || '—'],
+                  ['相机', photo.camera || '—'],
+                  ['镜头', photo.lens || '—'],
+                  ['焦距', photo.focal || '—'],
+                  ['光圈', photo.aperture || '—'],
+                  ['快门', photo.shutter || '—'],
+                  ['ISO', photo.iso ? String(photo.iso) : '—'],
+                  ['尺寸', photo.w ? `${photo.w} × ${photo.h}` : '—'],
                   ['文件', `${photo.fileName.split('.').pop()?.toUpperCase()} · ${photo.sizeMB}MB`],
                   ['GPS', photo.gps],
                 ].map(([k, v]) => (

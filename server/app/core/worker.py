@@ -5,7 +5,9 @@ import logging
 
 from app.core.config import get_settings
 from app.core.jobs import worker_loop
-from app.core.pipeline import HANDLERS  # noqa: F401  确保任务处理器注册
+from app.core.pipeline import HANDLERS  # noqa: F401  确保内核任务处理器注册
+import app.domains.images.parser  # noqa: F401  M1: parse:image（EXIF）
+import app.domains.images.thumbs  # noqa: F401  M1: derive:thumb_image
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 

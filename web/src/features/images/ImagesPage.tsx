@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Heart } from 'lucide-react'
-import { api } from '@/api/client'
+import { api, API_BASE } from '@/api/client'
 import { useAssetNav, HueCover, PageHeader } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import type { Photo } from '@/types'
@@ -11,9 +11,10 @@ export function ImagesPage() {
   const nav = useAssetNav()
   const [filter, setFilter] = useState<string>('all')
   const [favs, setFavs] = useState<Record<string, boolean>>({})
+  const [imgFail, setImgFail] = useState<Record<string, boolean>>({})
 
   const months = useMemo(() => [...new Set((photos ?? []).map((p) => p.takenAt.slice(0, 7)))].sort().reverse(), [photos])
-  const cameras = useMemo(() => [...new Set((photos ?? []).map((p) => p.camera))], [photos])
+  const cameras = useMemo(() => [...new Set((photos ?? []).map((p) => p.camera).filter(Boolean))], [photos])
 
   const list = useMemo(() => {
     const arr = photos ?? []
@@ -36,7 +37,7 @@ export function ImagesPage() {
     <div className="p-4 md:p-6">
       <PageHeader
         title="图片"
-        sub={`${photos?.length ?? 0} 张（EXIF 解析随 M1 接入，时间线暂用入库时间）`}
+        sub={`${photos?.length ?? 0} 张 · 时间线按拍摄时间分组（无 EXIF 时回退入库时间）`}
         right={<span className="text-xs text-slate-400">游标分页 · 虚拟滚动</span>}
       />
       <div className="mt-3 flex flex-wrap gap-2">
@@ -64,9 +65,18 @@ export function ImagesPage() {
                 className="group relative cursor-pointer overflow-hidden rounded-xl break-inside-avoid"
                 onClick={() => nav(`/images/${p.id}`)}
               >
-                <HueCover hue={p.hue} className="w-full" >
-                  <div style={{ height: p.displayH }} />
-                </HueCover>
+                {imgFail[p.id] ? (
+                  <HueCover hue={p.hue} className="w-full"><div style={{ height: p.displayH }} /></HueCover>
+                ) : (
+                  <img
+                    src={`${API_BASE}/api/images/${p.id}/thumbnail?size=256`}
+                    loading="lazy"
+                    alt={p.title}
+                    className="w-full bg-slate-200 object-cover transition group-hover:brightness-95"
+                    style={{ height: p.displayH }}
+                    onError={() => setImgFail((f) => ({ ...f, [p.id]: true }))}
+                  />
+                )}
                 <div className="absolute inset-0 bg-slate-900/0 transition group-hover:bg-slate-900/20" />
                 <button
                   className={cn('absolute right-2 top-2 rounded-full bg-white/90 p-1 shadow transition', (favs[p.id] || p.favorite) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}

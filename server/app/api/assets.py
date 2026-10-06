@@ -14,7 +14,7 @@ from app.core.deps import get_app_settings, get_current_user, require_admin, req
 from app.core.db import get_db
 from app.core.errors import bad_request, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, Job, Tag, User
+from app.core.models import Asset, AssetTag, ImageDetail, Job, Tag, User
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -130,7 +130,21 @@ async def list_assets(
         rows = rows[:page_size]
         last = rows[-1]
         next_cursor = _cursor_encode(last.created_at, last.id)
-    return {"items": [_item(a) for a in rows], "next_cursor": next_cursor}
+    items = [_item(a) for a in rows]
+    if route == "images" and rows:
+        details = (
+            await db.execute(select(ImageDetail).where(ImageDetail.asset_id.in_([a.id for a in rows])))
+        ).scalars().all()
+        dmap = {d.asset_id: d for d in details}
+        for it, a in zip(items, rows):
+            d = dmap.get(a.id)
+            if d is not None:
+                it.update({
+                    "taken_at": d.taken_at.isoformat() if d.taken_at else None,
+                    "camera": " ".join(x for x in (d.camera_make, d.camera_model) if x) or None,
+                    "width": d.width, "height": d.height,
+                })
+    return {"items": items, "next_cursor": next_cursor}
 
 
 # ---------- 详情（member） ----------
@@ -144,8 +158,20 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     tags = (
         await db.execute(select(Tag).join(AssetTag, AssetTag.tag_id == Tag.id).where(AssetTag.asset_id == a.id))
     ).scalars().all()
-    return {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
-            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    out = {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
+           "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    if a.asset_type == "image":
+        d = await db.get(ImageDetail, a.id)
+        if d is not None:
+            out.update({
+                "taken_at": d.taken_at.isoformat() if d.taken_at else None,
+                "camera": " ".join(x for x in (d.camera_make, d.camera_model) if x) or None,
+                "camera_make": d.camera_make, "camera_model": d.camera_model, "lens": d.lens,
+                "iso": d.iso, "aperture": d.aperture, "shutter": d.shutter,
+                "focal_length_mm": d.focal_length_mm, "gps_lat": d.gps_lat, "gps_long": d.gps_long,
+                "width": d.width, "height": d.height,
+            })
+    return out
 
 
 # ---------- 下载（member；不暴露真实路径） ----------

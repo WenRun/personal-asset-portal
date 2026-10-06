@@ -9,6 +9,7 @@ import type {
 } from '@/types'
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://localhost:8000'
+export const API_BASE = BASE
 
 // ---------- 基础请求 ----------
 
@@ -28,6 +29,18 @@ export interface RawAsset {
   fingerprint?: string
   storage_key?: string
   tags?: { id: string; name: string }[]
+  // M1 图片域字段（列表/详情合并返回）
+  taken_at?: string | null
+  camera?: string | null
+  width?: number | null
+  height?: number | null
+  lens?: string | null
+  iso?: number | null
+  aperture?: number | null
+  shutter?: string | null
+  focal_length_mm?: number | null
+  gps_lat?: number | null
+  gps_long?: number | null
 }
 
 export interface UserPayload { id: string; username: string; role: 'admin' | 'member' }
@@ -155,18 +168,26 @@ function toBook(r: RawAsset): Book {
 }
 
 function toPhoto(r: RawAsset): Photo {
+  const w = r.width ?? 0
+  const h = r.height ?? 0
   return {
     id: r.id,
     title: r.title,
     fileName: r.file_name,
-    takenAt: r.created_at,
+    takenAt: r.taken_at ?? r.created_at,
     album: '未分组',
-    camera: '', lens: '', focal: '', aperture: '', shutter: '', iso: 0,
-    w: 0, h: 0,
+    camera: r.camera ?? '',
+    lens: r.lens ?? '',
+    focal: r.focal_length_mm ? `${r.focal_length_mm}mm` : '',
+    aperture: r.aperture ? `f/${r.aperture}` : '',
+    shutter: r.shutter ?? '',
+    iso: r.iso ?? 0,
+    w, h,
     sizeMB: +(r.size_bytes / 1048576).toFixed(1),
-    gps: '',
+    gps: r.gps_lat != null && r.gps_long != null ? `${r.gps_lat}°N, ${r.gps_long}°E` : '',
     hue: hueFromId(r.id),
-    displayH: 170 + (hueFromId(r.id) % 140),
+    // 瀑布流高度：按真实宽高比派生；无 EXIF 尺寸时退回哈希伪随机
+    displayH: w > 0 && h > 0 ? Math.min(440, Math.max(120, Math.round((300 * h) / w))) : 170 + (hueFromId(r.id) % 140),
     tags: (r.tags ?? []).map((t) => t.name),
     rating: r.rating ?? 0,
     favorite: r.is_favorite,

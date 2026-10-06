@@ -35,7 +35,7 @@ def build_storage(roots: dict[str, str]) -> LocalStorage:
 async def scan_root(db: AsyncSession, payload: dict) -> None:
     """扫描资源根目录：新文件登记 pending；mtime/size 变化重指纹（详细设计 §4.2 发现）。"""
     alias = payload["root_alias"]
-    roots = await _roots_of(db)
+    roots = await roots_of(db)
     if alias not in roots:
         raise LookupError(f"未注册的资源根目录: {alias}")
 
@@ -85,7 +85,7 @@ async def fingerprint(db: AsyncSession, payload: dict) -> None:
         ).scalar_one_or_none()
     if asset is None:
         return
-    roots = await _roots_of(db)
+    roots = await roots_of(db)
     storage = build_storage(roots)
     path = storage.resolve(asset.storage_key)
     st = path.stat()
@@ -99,7 +99,6 @@ async def fingerprint(db: AsyncSession, payload: dict) -> None:
 @register("parse:music")
 @register("parse:video")
 @register("parse:book")
-@register("parse:image")
 async def parse_generic(db: AsyncSession, payload: dict) -> None:
     """M0 通用解析：标题、mime、meta 扩展名；领域字段解析在 M1–M5 替换。"""
     asset = await db.get(Asset, payload["asset_id"])
@@ -123,7 +122,7 @@ async def index_meili(db: AsyncSession, payload: dict) -> None:
     await meili.upsert_documents(asset.asset_type, [meili.doc_from_asset(asset)])
 
 
-async def _roots_of(db: AsyncSession) -> dict[str, str]:
+async def roots_of(db: AsyncSession) -> dict[str, str]:
     from app.core.models import Setting
 
     rows = (await db.execute(select(Setting))).scalars().all()

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, SmallInteger, String,
+    BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, SmallInteger, String,
     Text, text, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -86,6 +86,42 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# 领域扩展表 M1：图片（详细设计 §2.3/§5.5）
+class ImageDetail(Base):
+    __tablename__ = "image_details"
+
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    camera_make: Mapped[str | None] = mapped_column(Text, nullable=True)
+    camera_model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lens: Mapped[str | None] = mapped_column(Text, nullable=True)
+    iso: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    aperture: Mapped[float | None] = mapped_column(Float, nullable=True)
+    shutter: Mapped[str | None] = mapped_column(Text, nullable=True)
+    focal_length_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_long: Mapped[float | None] = mapped_column(Float, nullable=True)
+    orientation: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class ImageAlbum(Base):
+    __tablename__ = "image_albums"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text, default="directory")  # directory | manual
+    dir_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ImageAlbumItem(Base):
+    __tablename__ = "image_album_items"
+
+    album_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("image_albums.id", ondelete="CASCADE"), primary_key=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
 
 
 class Job(Base):
