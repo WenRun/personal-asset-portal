@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, SmallInteger, String,
+    ARRAY, BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, SmallInteger, String,
     Text, text, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -86,6 +86,24 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# 领域扩展表 M2：字体（详细设计 §2.3/§5.1）
+class FontDetail(Base):
+    __tablename__ = "font_details"
+
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    family: Mapped[str] = mapped_column(Text, default="", index=True)   # 聚合键：nameID16 优先，回落 nameID1
+    style: Mapped[str | None] = mapped_column(Text, nullable=True)
+    weight: Mapped[int] = mapped_column(SmallInteger, default=400)      # OS/2 usWeightClass
+    italic: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_variable: Mapped[bool] = mapped_column(Boolean, default=False)
+    formats: Mapped[list] = mapped_column(ARRAY(Text), default=list)
+    glyph_count: Mapped[int] = mapped_column(Integer, default=0)
+    languages: Mapped[list] = mapped_column(ARRAY(Text), default=list)
+    license: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    designer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 # 领域扩展表 M1：图片（详细设计 §2.3/§5.5）

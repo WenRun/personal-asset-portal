@@ -14,7 +14,7 @@ from app.core.deps import get_app_settings, get_current_user, require_admin, req
 from app.core.db import get_db
 from app.core.errors import bad_request, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, ImageDetail, Job, Tag, User
+from app.core.models import Asset, AssetTag, FontDetail, ImageDetail, Job, Tag, User
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -131,6 +131,20 @@ async def list_assets(
         last = rows[-1]
         next_cursor = _cursor_encode(last.created_at, last.id)
     items = [_item(a) for a in rows]
+    if route == "fonts" and rows:
+        details = (
+            await db.execute(select(FontDetail).where(FontDetail.asset_id.in_([a.id for a in rows])))
+        ).scalars().all()
+        dmap = {d.asset_id: d for d in details}
+        for it, a in zip(items, rows):
+            d = dmap.get(a.id)
+            if d is not None:
+                it.update({
+                    "family": d.family, "style": d.style, "weight": d.weight,
+                    "italic": d.italic, "is_variable": d.is_variable, "formats": d.formats,
+                    "glyph_count": d.glyph_count, "languages": d.languages,
+                    "license": d.license, "version": d.version, "designer": d.designer,
+                })
     if route == "images" and rows:
         details = (
             await db.execute(select(ImageDetail).where(ImageDetail.asset_id.in_([a.id for a in rows])))
@@ -160,6 +174,15 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     ).scalars().all()
     out = {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    if a.asset_type == "font":
+        d = await db.get(FontDetail, a.id)
+        if d is not None:
+            out.update({
+                "family": d.family, "style": d.style, "weight": d.weight,
+                "italic": d.italic, "is_variable": d.is_variable, "formats": d.formats,
+                "glyph_count": d.glyph_count, "languages": d.languages,
+                "license": d.license, "version": d.version, "designer": d.designer,
+            })
     if a.asset_type == "image":
         d = await db.get(ImageDetail, a.id)
         if d is not None:

@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from app.api import admin, assets, auth, search, tags
 from app.domains.images.router import router as images_router
+from app.domains.fonts.router import router as fonts_router
 from app.core.config import get_settings
 from app.core.db import Base, SessionLocal, engine
 from app.core.errors import ApiError, api_error_handler
@@ -68,4 +69,5 @@ app.include_router(tags.router)
 app.include_router(search.router)
 app.include_router(admin.router)
 app.include_router(images_router)  # M1：/api/images/{id}/thumbnail|original
+app.include_router(fonts_router)   # M2：/api/fonts/{id}/file|charset|preview/specimen
 app.include_router(assets.router)  # 注意：含 /{route} 兜底，需在最后注册

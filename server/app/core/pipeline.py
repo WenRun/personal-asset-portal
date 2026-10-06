@@ -95,7 +95,6 @@ async def fingerprint(db: AsyncSession, payload: dict) -> None:
     await enqueue(db, f"parse:{asset.asset_type}", {"asset_id": str(asset.id)}, priority=5)
 
 
-@register("parse:font")
 @register("parse:music")
 @register("parse:video")
 @register("parse:book")

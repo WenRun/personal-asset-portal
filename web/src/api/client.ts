@@ -41,6 +41,18 @@ export interface RawAsset {
   focal_length_mm?: number | null
   gps_lat?: number | null
   gps_long?: number | null
+  // M2 字体域字段（列表/详情合并返回）
+  family?: string | null
+  style?: string | null
+  weight?: number | null
+  italic?: boolean | null
+  is_variable?: boolean | null
+  formats?: string[] | null
+  glyph_count?: number | null
+  languages?: string[] | null
+  license?: string | null
+  version?: string | null
+  designer?: string | null
 }
 
 export interface UserPayload { id: string; username: string; role: 'admin' | 'member' }
@@ -94,20 +106,20 @@ function toFont(r: RawAsset): FontFamily {
   const ext = extOf(r.file_name).toUpperCase()
   return {
     id: r.id,
-    family: r.title,
+    family: r.family ?? r.title,
     familyEn: '',
-    variable: false,
-    axes: [],
-    files: [{ styleName: 'Regular', weight: 400, italic: false, format: ext || 'TTF', sizeMB: +(r.size_bytes / 1048576).toFixed(1) }],
-    glyphCount: 0,
-    languages: [],
-    license: '',
-    version: '',
-    designer: '',
+    variable: !!r.is_variable,
+    axes: (r.meta?.variable_axes as FontFamily['axes']) ?? [],
+    files: [{ styleName: r.style ?? `W${r.weight ?? 400}`, weight: r.weight ?? 400, italic: !!r.italic, format: ext || 'TTF', sizeMB: +(r.size_bytes / 1048576).toFixed(1) }],
+    glyphCount: r.glyph_count ?? 0,
+    languages: r.languages ?? [],
+    license: r.license ?? '',
+    version: r.version ?? '',
+    designer: r.designer ?? '',
     tags: (r.tags ?? []).map((t) => t.name),
     ...base(r),
     charset: [],
-    css: 'system-ui, -apple-system, "PingFang SC", sans-serif',
+    css: `portal-${r.id}`,
   }
 }
 
@@ -231,6 +243,9 @@ export const api = {
   // 五类资源
   fonts: async (): Promise<FontFamily[]> => (await listRaw('fonts')).map(toFont),
   font: async (id: string) => toFont(await detailRaw(id)),
+  fontCharset: (id: string) => req<{ name: string; pct: number }[]>(`/api/fonts/${id}/charset`),
+  fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
+  fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
   albums: async (): Promise<Album[]> => (await listRaw('music')).map(toAlbum),
   album: async (id: string) => toAlbum(await detailRaw(id)),
   videos: async (): Promise<Clip[]> => (await listRaw('videos')).map(toClip),
