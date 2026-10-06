@@ -97,7 +97,6 @@ async def fingerprint(db: AsyncSession, payload: dict) -> None:
 
 @register("parse:music")
 @register("parse:video")
-@register("parse:book")
 async def parse_generic(db: AsyncSession, payload: dict) -> None:
     """M0 通用解析：标题、mime、meta 扩展名；领域字段解析在 M1–M5 替换。"""
     asset = await db.get(Asset, payload["asset_id"])

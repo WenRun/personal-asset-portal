@@ -41,6 +41,16 @@ export interface RawAsset {
   focal_length_mm?: number | null
   gps_lat?: number | null
   gps_long?: number | null
+  // M3 书籍域字段（列表/详情合并返回）
+  authors?: string[] | null
+  publisher?: string | null
+  pub_year?: number | null
+  isbn?: string | null
+  series_name?: string | null
+  series_index?: number | null
+  language?: string | null
+  format?: string | null
+  pages?: number | null
   // M2 字体域字段（列表/详情合并返回）
   family?: string | null
   style?: string | null
@@ -102,6 +112,28 @@ function base(r: RawAsset) {
   return { hue: hueFromId(r.id), rating: r.rating ?? 0, favorite: r.is_favorite, createdAt: r.created_at }
 }
 
+function toBook(r: RawAsset): Book {
+  const ext = extOf(r.file_name)
+  return {
+    id: r.id,
+    title: r.title,
+    author: (r.authors ?? []).join(' / '),
+    publisher: r.publisher ?? '',
+    year: r.pub_year ?? new Date(r.created_at).getFullYear(),
+    isbn: r.isbn ?? '',
+    series: r.series_name ? { name: r.series_name, idx: r.series_index ?? 1, total: 0 } : undefined,
+    formats: [{ kind: (ext.toUpperCase() || 'EPUB') as Book['formats'][number]['kind'], sizeMB: +(r.size_bytes / 1048576).toFixed(1), readable: ['epub', 'pdf'].includes(ext) }],
+    progressPct: 0,
+    lastChapter: undefined,
+    rating: r.rating ?? 0,
+    tags: (r.tags ?? []).map((t) => t.name),
+    hue: hueFromId(r.id),
+    createdAt: r.created_at,
+    desc: r.note ?? '',
+    language: r.language ?? '',
+  }
+}
+
 function toFont(r: RawAsset): FontFamily {
   const ext = extOf(r.file_name).toUpperCase()
   return {
@@ -159,25 +191,7 @@ function toClip(r: RawAsset): Clip {
   }
 }
 
-function toBook(r: RawAsset): Book {
-  const ext = extOf(r.file_name)
-  return {
-    id: r.id,
-    title: r.title,
-    author: '',
-    publisher: '',
-    year: new Date(r.created_at).getFullYear(),
-    isbn: '',
-    formats: [{ kind: (ext.toUpperCase() || 'EPUB') as Book['formats'][number]['kind'], sizeMB: +(r.size_bytes / 1048576).toFixed(1), readable: READABLE_BOOK.has(ext) }],
-    progressPct: 0,
-    tags: (r.tags ?? []).map((t) => t.name),
-    hue: hueFromId(r.id),
-    createdAt: r.created_at,
-    desc: r.note ?? '',
-    language: '',
-    rating: r.rating ?? 0,
-  }
-}
+
 
 function toPhoto(r: RawAsset): Photo {
   const w = r.width ?? 0
@@ -244,6 +258,18 @@ export const api = {
   fonts: async (): Promise<FontFamily[]> => (await listRaw('fonts')).map(toFont),
   font: async (id: string) => toFont(await detailRaw(id)),
   fontCharset: (id: string) => req<{ name: string; pct: number }[]>(`/api/fonts/${id}/charset`),
+  bookFileUrl: (id: string) => `${BASE}/api/books/${id}/file`,
+  bookCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/books/${id}/cover?size=${size}`,
+  bookContents: (id: string) => req<{ chapters: { index: number; href: string; title: string }[] }>(`/api/books/${id}/contents`),
+  bookResource: async (id: string, path: string) => {
+    const res = await fetch(`${BASE}/api/books/${id}/resource?path=${encodeURIComponent(path)}`, { credentials: 'include' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.text()
+  },
+  saveProgress: (assetId: string, position: Record<string, unknown>) =>
+    req<{ ok: boolean }>('/api/progress', { method: 'POST', body: JSON.stringify({ asset_id: assetId, position }) }),
+  getProgress: (assetId: string) =>
+    req<{ position: Record<string, number | string> | null; updated_at: string } | null>(`/api/progress?asset_id=${assetId}`),
   fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
   fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
   albums: async (): Promise<Album[]> => (await listRaw('music')).map(toAlbum),

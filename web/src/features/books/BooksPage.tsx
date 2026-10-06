@@ -1,9 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/api/client'
+import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Chip, HueCover, PageHeader } from '@/components/ui'
 
-function BookCover({ hue, title, className }: { hue: number; title: string; className?: string }) {
+function BookCover({ id, hue, title, className }: { id?: string; hue: number; title: string; className?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (id && !failed) {
+    return (
+      <img
+        src={api.bookCoverUrl(id, 256)}
+        alt={title}
+        className={`w-full rounded-lg bg-slate-200 object-cover ${className ?? ''}`}
+        onError={() => setFailed(true)}
+      />
+    )
+  }
   return (
     <HueCover hue={hue} dir={160} className={`p-2.5 flex flex-col justify-end ${className ?? ''}`}>
       <span className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent" />
@@ -16,6 +27,7 @@ export function BooksPage() {
   const { data: books } = useQuery({ queryKey: ['books'], queryFn: api.books })
   const nav = useAssetNav()
   const [filter, setFilter] = useState<'all' | 'reading' | 'unread' | 'readable' | 'fav'>('all')
+  const [coverFail, setCoverFail] = useState<Record<string, boolean>>({})
 
   const list = useMemo(() => {
     const arr = books ?? []
@@ -42,7 +54,7 @@ export function BooksPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="书籍" sub={`${books?.length ?? 0} 本书籍文件（元数据解析随 M3 接入）`} />
+      <PageHeader title="书籍" sub={`${books?.length ?? 0} 本（epub/pdf 元数据与封面已解析 · mobi/azw3 仅下载）`} />
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
@@ -55,12 +67,12 @@ export function BooksPage() {
       {seriesList.map(([name, bs]) => (
         <div key={name} className="mt-6">
           <div className="mb-3 text-xs font-semibold text-slate-400">
-            系列 · {name}（{bs.length}/{bs[0].series?.total ?? bs.length}）
+            系列 · {name}（{bs.length} 本）
           </div>
           <div className="grid grid-cols-3 gap-4 md:grid-cols-6 xl:grid-cols-8">
             {bs.sort((a, b) => (a.series?.idx ?? 0) - (b.series?.idx ?? 0)).map((b) => (
               <div key={b.id} className="group cursor-pointer" onClick={() => nav(`/books/${b.id}`)}>
-                <BookCover hue={b.hue} title={b.title} className="aspect-[3/4] rounded-lg shadow-sm transition group-hover:shadow-md" />
+                <BookCover id={b.id} hue={b.hue} title={b.title} className="aspect-[3/4] shadow-sm transition group-hover:shadow-md" />
                 <div className="mt-1.5 truncate text-xs font-medium">{b.title}</div>
                 {fmtState(b)}
               </div>
@@ -76,12 +88,14 @@ export function BooksPage() {
           return (
             <div key={b.id} className="group cursor-pointer" onClick={() => nav(`/books/${b.id}`)}>
               <div className="relative">
-                <BookCover hue={b.hue} title={b.title} className="aspect-[3/4] rounded-lg shadow-sm transition group-hover:shadow-md" />
+                <BookCover id={b.id} hue={b.hue} title={b.title} className="aspect-[3/4] shadow-sm transition group-hover:shadow-md" />
                 <span className="absolute right-2 top-2 rounded bg-black/50 px-1 py-0.5 text-[9px] text-white">{b.formats[0].kind}</span>
               </div>
               <div className="mt-1.5 truncate text-xs font-medium">{b.title}</div>
               <div className="truncate text-[10px] text-slate-400">
-                {onlyDownload ? <span className="text-amber-600">{b.formats[0].kind} · 仅下载</span> : `${b.author} · ${fmtState(b)}`}
+                {onlyDownload
+                  ? <span className="text-amber-600">{b.formats[0].kind} · 仅下载</span>
+                  : <>{b.author && `${b.author} · `}{fmtState(b)}</>}
               </div>
             </div>
           )

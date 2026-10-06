@@ -14,7 +14,7 @@ from app.core.deps import get_app_settings, get_current_user, require_admin, req
 from app.core.db import get_db
 from app.core.errors import bad_request, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, FontDetail, ImageDetail, Job, Tag, User
+from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, Tag, User
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -145,6 +145,19 @@ async def list_assets(
                     "glyph_count": d.glyph_count, "languages": d.languages,
                     "license": d.license, "version": d.version, "designer": d.designer,
                 })
+    if route == "books" and rows:
+        details = (
+            await db.execute(select(BookDetail).where(BookDetail.asset_id.in_([a.id for a in rows])))
+        ).scalars().all()
+        dmap = {d.asset_id: d for d in details}
+        for it, a in zip(items, rows):
+            d = dmap.get(a.id)
+            if d is not None:
+                it.update({
+                    "authors": d.authors, "publisher": d.publisher, "pub_year": d.pub_year,
+                    "isbn": d.isbn, "series_name": d.series_name, "series_index": d.series_index,
+                    "language": d.language, "format": d.format, "pages": d.pages,
+                })
     if route == "images" and rows:
         details = (
             await db.execute(select(ImageDetail).where(ImageDetail.asset_id.in_([a.id for a in rows])))
@@ -174,6 +187,14 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     ).scalars().all()
     out = {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    if a.asset_type == "book":
+        d = await db.get(BookDetail, a.id)
+        if d is not None:
+            out.update({
+                "authors": d.authors, "publisher": d.publisher, "pub_year": d.pub_year,
+                "isbn": d.isbn, "series_name": d.series_name, "series_index": d.series_index,
+                "language": d.language, "format": d.format, "pages": d.pages,
+            })
     if a.asset_type == "font":
         d = await db.get(FontDetail, a.id)
         if d is not None:

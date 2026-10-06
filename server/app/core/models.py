@@ -88,6 +88,32 @@ class Setting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+# 领域扩展表 M3：书籍（详细设计 §2.3/§5.4）
+class BookDetail(Base):
+    __tablename__ = "book_details"
+
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    authors: Mapped[list] = mapped_column(ARRAY(Text), default=list)
+    publisher: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pub_year: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    isbn: Mapped[str | None] = mapped_column(Text, nullable=True)
+    series_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    series_index: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    language: Mapped[str | None] = mapped_column(Text, nullable=True)
+    format: Mapped[str | None] = mapped_column(Text, nullable=True)  # epub|pdf|mobi|azw3
+    pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+# 阅读进度（详细设计 §2.3/§6.3）：视频观看与书籍阅读共用
+class UserProgress(Base):
+    __tablename__ = "user_progress"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[dict] = mapped_column(JSONB, default=dict)  # 书 {cfi,pct} / 视频 {seconds}
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 # 领域扩展表 M2：字体（详细设计 §2.3/§5.1）
 class FontDetail(Base):
     __tablename__ = "font_details"
