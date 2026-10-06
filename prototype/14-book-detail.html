@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>书籍详情 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.b6{background:linear-gradient(160deg,#7c3aed,#312e81)}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<div class="flex h-screen overflow-hidden">
+  <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div class="flex items-center gap-2 px-5 h-16 border-b border-slate-800 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 grid place-items-center text-white font-bold">资</div>
+      <div><div class="text-white font-semibold text-sm leading-tight">个人资源门户</div><div class="text-[10px] text-slate-500">Asset Portal</div></div>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">仪表盘</a>
+      <a href="02-fonts-wall.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">字体</a>
+      <a href="09-music-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">音乐</a>
+      <a href="11-video-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">视频</a>
+      <a href="10-books-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-600/20 text-white">书籍<span class="ml-auto text-xs text-brand-300">1.3w</span></a>
+      <a href="01-images-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">图片</a>
+      <div class="pt-3 mt-3 border-t border-slate-800 space-y-1">
+        <a href="08-admin.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">任务中心</a>
+      </div>
+    </nav>
+    <div class="p-4 border-t border-slate-800 flex items-center gap-3 shrink-0">
+      <div class="w-8 h-8 rounded-full bg-brand-500 grid place-items-center text-white text-sm font-semibold">管</div>
+      <div class="text-sm"><div class="text-white">admin</div><div class="text-[10px] text-slate-500">管理员</div></div>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0">
+    <header class="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-6">
+      <a href="10-books-browse.html" class="flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600">← 书籍浏览</a>
+      <a href="05-search.html" class="flex items-center gap-2 w-72 px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-sm hover:bg-slate-200 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3"/></svg>
+        搜索…<kbd class="ml-auto text-[10px] border border-slate-300 rounded px-1.5 py-0.5 bg-white">⌘K</kbd>
+      </a>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+      <div class="max-w-4xl mx-auto px-6 py-6 flex gap-8">
+        <!-- 左：封面 + 格式 -->
+        <div class="w-52 shrink-0 space-y-4">
+          <div class="b6 aspect-[3/4] rounded-lg shadow-lg p-4 flex flex-col justify-end">
+            <div class="text-white font-bold text-lg leading-tight">三体Ⅱ·黑暗森林</div>
+            <div class="text-white/60 text-xs mt-1">刘慈欣 著</div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
+            <div class="flex items-center justify-between px-3 py-2.5"><div><span class="font-mono text-xs bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">EPUB</span><div class="text-xs text-slate-400 mt-0.5">3.2MB · 可在线阅读</div></div><button class="text-slate-400 hover:text-brand-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button></div>
+            <div class="flex items-center justify-between px-3 py-2.5"><div><span class="font-mono text-xs bg-sky-100 text-sky-700 rounded px-1.5 py-0.5">PDF</span><div class="text-xs text-slate-400 mt-0.5">12.4MB · 可在线阅读</div></div><button class="text-slate-400 hover:text-brand-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button></div>
+            <div class="flex items-center justify-between px-3 py-2.5 opacity-70"><div><span class="font-mono text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">MOBI</span><div class="text-xs text-slate-400 mt-0.5">2.1MB · 仅下载</div></div><button class="text-slate-400 hover:text-brand-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button></div>
+          </div>
+        </div>
+
+        <!-- 右：信息 -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 text-xs mb-2">
+            <a href="10-books-browse.html" class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 hover:bg-brand-100">系列 · 三体三部曲 第 2/3 部</a>
+            <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">科幻</span>
+            <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">雨果奖</span>
+          </div>
+          <h1 class="text-2xl font-bold">三体Ⅱ·黑暗森林</h1>
+          <div class="text-sm text-slate-500 mt-1">刘慈欣 · 重庆出版社 · 2008</div>
+          <div class="mt-2 text-amber-400">★★★★<span class="text-slate-300">★</span> <span class="text-xs text-slate-400 ml-1">4.0 · 我的评分</span></div>
+
+          <!-- 阅读进度 -->
+          <div class="mt-5 bg-white rounded-xl border border-slate-200 p-4">
+            <div class="flex items-center justify-between text-sm mb-2">
+              <span class="font-medium">在读 · 42%</span>
+              <span class="text-xs text-slate-400">上次阅读：3 天前</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-slate-100 mb-3"><div class="h-1.5 rounded-full bg-brand-500" style="width:42%"></div></div>
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-slate-500">上次读到：第二部 · 第 12 章「黑暗森林」</div>
+              <button onclick="document.getElementById('reader').classList.remove('hidden')" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700">继续阅读</button>
+            </div>
+          </div>
+
+          <!-- 简介 -->
+          <div class="mt-5">
+            <div class="text-xs font-semibold text-slate-400 mb-1.5">简介</div>
+            <p class="text-sm text-slate-600 leading-relaxed">巨大的三体舰队先锋已经逼近太阳系，人类面经历大低谷后的复苏与再度危机。面壁计划启动，罗辑从玩世不恭的学者，成为唯一能参透宇宙社会学两条公理的人……</p>
+          </div>
+
+          <!-- 元数据 -->
+          <div class="mt-5 bg-white rounded-xl border border-slate-200 p-4">
+            <div class="text-xs font-semibold text-slate-400 mb-2">元数据</div>
+            <dl class="text-sm divide-y divide-slate-100">
+              <div class="flex py-2"><dt class="w-24 text-slate-400">ISBN</dt><dd class="font-mono text-xs leading-5">978-7-5366-9293-0</dd></div>
+              <div class="flex py-2"><dt class="w-24 text-slate-400">语言</dt><dd>中文（简体）</dd></div>
+              <div class="flex py-2"><dt class="w-24 text-slate-400">文件</dt><dd>3 个格式 · 共 17.7MB</dd></div>
+              <div class="flex py-2"><dt class="w-24 text-slate-400">入库时间</dt><dd>2026-09-21</dd></div>
+              <div class="flex py-2"><dt class="w-24 text-slate-400">标签</dt><dd class="flex gap-1.5 flex-wrap"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs">科幻</span><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs">中国作家</span><button class="text-xs text-slate-400 hover:text-brand-600">+ 添加</button></dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 阅读器弹层（示意 foliate-js / pdf.js 的容器形态） -->
+<div id="reader" class="hidden fixed inset-0 z-50 bg-white flex flex-col">
+  <div class="h-12 shrink-0 border-b border-slate-200 flex items-center gap-3 px-4">
+    <button onclick="document.getElementById('reader').classList.add('hidden')" class="flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600">← 返回详情</button>
+    <div class="text-sm font-medium">三体Ⅱ·黑暗森林</div>
+    <span class="text-xs text-slate-400 ml-auto font-mono">EPUB · 第 128 / 302 页 · 42%</span>
+    <button class="px-2 py-1 rounded-lg border border-slate-200 text-xs">Aa 字号</button>
+  </div>
+  <div class="flex-1 overflow-y-auto">
+    <div class="max-w-2xl mx-auto py-10 px-6 text-[15px] leading-8 text-slate-700">
+      <h2 class="text-lg font-bold mb-4">第 12 章 黑暗森林</h2>
+      <p class="mb-4">这次突然的陨石雨，把布雷奇的第一次联合国会议变成了一个紧急会议。人类对三体世界的任何计划都是毫无意义的展示，在末日之战中，联合舰队的覆灭已证明了这一点……</p>
+      <p class="mb-4">罗辑在冬眠中醒来时，已是危机纪元二〇五年。他站在新生活五村的街道上，看着湛蓝的天空和空中穿梭的飞行车，意识到两个世纪的时间，已经从他的生命中悄无声息地滑过。</p>
+      <p class="mb-4">面壁计划的真正意义，只有在宇宙社会学的两条公理被完全理解之后，才会显现出来。生存是文明的第一需要；文明不断增长和扩张，但宇宙中的物质总量保持不变……</p>
+      <p class="text-center text-slate-300 mt-8">— 128 —</p>
+    </div>
+  </div>
+  <div class="h-12 shrink-0 border-t border-slate-200 flex items-center gap-4 px-4">
+    <button class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50">← 上一页</button>
+    <div class="flex-1 h-1 rounded-full bg-slate-100"><div class="h-1 rounded-full bg-brand-500" style="width:42%"></div></div>
+    <button class="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700">下一页 →</button>
+  </div>
+</div>
+<a href="index.html" class="fixed bottom-4 right-4 px-3 py-2 rounded-full bg-slate-900 text-white text-xs shadow-lg hover:bg-slate-700">☰ 原型导航</a>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>访客浏览态 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.ph1{background:linear-gradient(135deg,#a5b4fc,#6366f1)}.ph2{background:linear-gradient(135deg,#6ee7b7,#0ea5e9)}
+.ph3{background:linear-gradient(135deg,#fcd34d,#f97316)}.ph4{background:linear-gradient(135deg,#f9a8d4,#a78bfa)}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<div class="flex h-screen overflow-hidden">
+  <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div class="flex items-center gap-2 px-5 h-16 border-b border-slate-800 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 grid place-items-center text-white font-bold">资</div>
+      <div><div class="text-white font-semibold text-sm leading-tight">个人资源门户</div><div class="text-[10px] text-slate-500">Asset Portal</div></div>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">仪表盘</a>
+      <a href="02-fonts-wall.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">字体<span class="ml-auto text-xs text-slate-500">2.1k</span></a>
+      <a href="09-music-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">音乐</a>
+      <a href="11-video-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">视频</a>
+      <a href="10-books-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">书籍</a>
+      <a href="01-images-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-600/20 text-white">图片<span class="ml-auto text-xs text-brand-300">10.4w</span></a>
+      <div class="pt-3 mt-3 border-t border-slate-800 space-y-1">
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 cursor-not-allowed">标签管理 🔒</a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 cursor-not-allowed">任务中心 🔒</a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 cursor-not-allowed">设置 🔒</a>
+      </div>
+    </nav>
+    <div class="p-4 border-t border-slate-800 flex items-center gap-3 shrink-0">
+      <div class="w-8 h-8 rounded-full bg-slate-700 grid place-items-center text-white text-sm">访</div>
+      <div class="text-sm"><div class="text-white">未登录访客</div><div class="text-[10px] text-slate-500">仅可浏览</div></div>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- 访客提示条 -->
+    <div class="bg-brand-600 text-white text-xs text-center py-1.5 px-4">
+      您正在以访客身份浏览：仅可查看资源列表。登录后可搜索、查看详情与在线预览、下载。<a href="06-login.html" class="underline font-medium">立即登录 / 注册 →</a>
+    </div>
+    <header class="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-6">
+      <!-- 搜索框置灰 -->
+      <div class="flex items-center gap-2 w-80 px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-sm cursor-not-allowed select-none" title="登录后可搜索">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3"/></svg>
+        搜索（登录后可用）
+        <svg class="ml-auto w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <a href="06-login.html" class="px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50">登录</a>
+        <a href="06-login.html" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700">注册</a>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+      <div class="px-6 py-5">
+        <div class="flex items-baseline gap-3 mb-4">
+          <h1 class="text-xl font-bold">图片</h1><span class="text-sm text-slate-400">104,328 项</span>
+        </div>
+        <div class="columns-2 md:columns-3 xl:columns-5 gap-3 [&>*]:mb-3">
+          <!-- 点击卡片 → 引导弹层（示意：给每张卡片 data-open） -->
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph1 h-44"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph2 h-72"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph3 h-56"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph4 h-40"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph2 h-64"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph4 h-48"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph1 h-64"></div></div>
+          <div class="rounded-xl overflow-hidden break-inside-avoid cursor-pointer" onclick="document.getElementById('gate').classList.remove('hidden')"><div class="ph3 h-40"></div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 注册引导弹层 -->
+<div id="gate" class="hidden fixed inset-0 z-50 grid place-items-center bg-slate-900/50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl p-8 w-[360px] text-center">
+    <div class="w-12 h-12 mx-auto rounded-full bg-brand-50 grid place-items-center mb-4">
+      <svg class="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    </div>
+    <div class="font-semibold mb-1">登录后可查看详情与预览</div>
+    <p class="text-sm text-slate-500 mb-5">访客仅可浏览资源列表；搜索、详情预览、在线播放与下载均需登录。</p>
+    <a href="06-login.html" class="block w-full py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700">登录 / 注册</a>
+    <button onclick="document.getElementById('gate').classList.add('hidden')" class="mt-2 w-full py-2.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50">继续随便逛逛</button>
+  </div>
+</div>
+<a href="index.html" class="fixed bottom-4 right-4 px-3 py-2 rounded-full bg-slate-900 text-white text-xs shadow-lg hover:bg-slate-700">☰ 原型导航</a>
+</body>
+</html>

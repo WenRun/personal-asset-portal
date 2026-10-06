@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频浏览 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.v1{background:linear-gradient(135deg,#1e293b,#0f172a)}.v2{background:linear-gradient(135deg,#155e75,#164e63)}
+.v3{background:linear-gradient(135deg,#7c2d12,#431407)}.v4{background:linear-gradient(135deg,#3b0764,#2e1065)}
+.v5{background:linear-gradient(135deg,#064e3b,#022c22)}.v6{background:linear-gradient(135deg,#713f12,#422006)}
+.v7{background:linear-gradient(135deg,#334155,#1e293b)}.v8{background:linear-gradient(135deg,#831843,#500724)}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<div class="flex h-screen overflow-hidden">
+  <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div class="flex items-center gap-2 px-5 h-16 border-b border-slate-800 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 grid place-items-center text-white font-bold">资</div>
+      <div><div class="text-white font-semibold text-sm leading-tight">个人资源门户</div><div class="text-[10px] text-slate-500">Asset Portal</div></div>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m3 12 9-9 9 9M9 21v-6h6v6"/></svg>仪表盘</a>
+      <a href="02-fonts-wall.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg>字体<span class="ml-auto text-xs text-slate-500">2.1k</span></a>
+      <a href="09-music-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>音乐<span class="ml-auto text-xs text-slate-500">5.2k</span></a>
+      <a href="11-video-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-600/20 text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 9h16M4 15h16M8 5v14M16 5v14"/></svg>视频<span class="ml-auto text-xs text-brand-300">486</span></a>
+      <a href="10-books-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg>书籍<span class="ml-auto text-xs text-slate-500">1.3w</span></a>
+      <a href="01-images-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 5h18v14H3zM8.5 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM21 16l-5-5-8 8"/></svg>图片<span class="ml-auto text-xs text-slate-500">10.4w</span></a>
+      <div class="pt-3 mt-3 border-t border-slate-800 space-y-1">
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">标签管理</a>
+        <a href="08-admin.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">任务中心<span class="ml-auto text-[10px] bg-rose-500 text-white rounded-full px-1.5 py-0.5">3</span></a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">设置</a>
+      </div>
+    </nav>
+    <div class="p-4 border-t border-slate-800 flex items-center gap-3 shrink-0">
+      <div class="w-8 h-8 rounded-full bg-brand-500 grid place-items-center text-white text-sm font-semibold">管</div>
+      <div class="text-sm"><div class="text-white">admin</div><div class="text-[10px] text-slate-500">管理员</div></div>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0">
+    <header class="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-6">
+      <a href="05-search.html" class="flex items-center gap-2 w-80 px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-sm hover:bg-slate-200 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3"/></svg>
+        搜索字体、音乐、视频、书籍、图片…<kbd class="ml-auto text-[10px] border border-slate-300 rounded px-1.5 py-0.5 bg-white">⌘K</kbd>
+      </a>
+      <div class="ml-auto"><button class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700 transition">上传</button></div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+      <div class="px-6 py-5">
+        <div class="flex items-baseline gap-3 mb-3">
+          <h1 class="text-xl font-bold">视频</h1>
+          <span class="text-sm text-slate-400">18 个教程系列 · 312 个素材 · 1.8TB</span>
+          <div class="ml-auto"><select class="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm"><option>最近入库</option><option>观看进度</option><option>时长</option></select></div>
+        </div>
+        <div class="flex gap-2 text-sm flex-wrap">
+          <button class="px-3 py-1.5 rounded-full bg-brand-600 text-white">全部</button>
+          <button class="px-3 py-1.5 rounded-full bg-white border border-slate-200 hover:border-brand-400">教程系列 · 18</button>
+          <button class="px-3 py-1.5 rounded-full bg-white border border-slate-200 hover:border-brand-400">素材 · 312</button>
+          <button class="px-3 py-1.5 rounded-full bg-white border border-slate-200 hover:border-brand-400">1080P+ · 401</button>
+          <button class="px-3 py-1.5 rounded-full bg-white border border-slate-200 hover:border-brand-400">可在线播放 · 429</button>
+          <button class="px-3 py-1.5 rounded-full bg-white border border-slate-200 hover:border-brand-400">★ 收藏</button>
+        </div>
+
+        <!-- 教程系列（二级入口：系列卡片） -->
+        <div class="mt-6 text-xs font-semibold text-slate-400 mb-3">教程系列 · 点击进入系列详情</div>
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v1 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <div class="absolute top-2 left-2 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">24 集 · 38.2GB</div>
+              <div class="absolute top-2 right-2 text-[10px] bg-brand-600 text-white rounded px-1.5 py-0.5">看到 3/24</div>
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-2.5"><div class="h-1 rounded-full bg-white/25 mb-2"><div class="h-1 rounded-full bg-brand-500" style="width:12%"></div></div><div class="text-white text-sm font-medium truncate">Rust 系统编程教程</div></div>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-400 truncate">mp4 · 1080p · 2026-08 入库</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v2 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <div class="absolute top-2 left-2 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">18 集 · 24.5GB</div>
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-2.5"><div class="h-1 rounded-full bg-white/25 mb-2"><div class="h-1 rounded-full bg-brand-500" style="width:0%"></div></div><div class="text-white text-sm font-medium truncate">Go Web 开发实战</div></div>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-400 truncate">mp4 · 1080p · 未开始</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v3 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <div class="absolute top-2 left-2 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">32 集 · 61.0GB</div>
+              <div class="absolute top-2 right-2 text-[10px] bg-brand-600 text-white rounded px-1.5 py-0.5">看到 17/32</div>
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-2.5"><div class="h-1 rounded-full bg-white/25 mb-2"><div class="h-1 rounded-full bg-brand-500" style="width:55%"></div></div><div class="text-white text-sm font-medium truncate">算法导论（MIT 6.006）</div></div>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-400 truncate">mkv · 仅下载 · 2025 入库</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v4 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <div class="absolute top-2 left-2 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">20 集 · 29.8GB</div>
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-2.5"><div class="h-1 rounded-full bg-white/25 mb-2"><div class="h-1 rounded-full bg-brand-500" style="width:0%"></div></div><div class="text-white text-sm font-medium truncate">深度学习入门：基于 Python</div></div>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-400 truncate">mp4 · 1080p · 未开始</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v5 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <div class="absolute top-2 left-2 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">15 集 · 18.1GB</div>
+              <div class="absolute top-2 right-2 text-[10px] bg-emerald-600 text-white rounded px-1.5 py-0.5">✓ 已看完</div>
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-2.5"><div class="h-1 rounded-full bg-white/25 mb-2"><div class="h-1 rounded-full bg-emerald-500" style="width:100%"></div></div><div class="text-white text-sm font-medium truncate">摄影用光与构图课</div></div>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-400 truncate">mp4 · 4K · 2026-05</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v6 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <div class="absolute top-2 left-2 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">12 集 · 9.6GB</div>
+              <div class="absolute top-2 right-2 text-[10px] bg-brand-600 text-white rounded px-1.5 py-0.5">看到 1/12</div>
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-2.5"><div class="h-1 rounded-full bg-white/25 mb-2"><div class="h-1 rounded-full bg-brand-500" style="width:8%"></div></div><div class="text-white text-sm font-medium truncate">字体设计基础十二讲</div></div>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-400 truncate">mp4 · 1080p</div>
+          </div>
+        </div>
+
+        <!-- 素材片段 -->
+        <div class="mt-8 text-xs font-semibold text-slate-400 mb-3">素材片段（clip）· 最近入库</div>
+        <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v7 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition">
+              <span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">00:42</span>
+              <span class="absolute top-2 left-2 text-[10px] bg-emerald-600/90 text-white rounded px-1.5 py-0.5">可播放</span>
+            </div>
+            <div class="mt-1.5 text-sm font-medium truncate">航拍 · 雪山日出</div>
+            <div class="text-xs text-slate-400 truncate">2026-10-01 · 4K · 1.2GB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v2 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">28:10</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">会议录屏 · 架构评审</div>
+            <div class="text-xs text-slate-400 truncate">2026-09-28 · 1080p · 640MB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v4 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">03:26</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">产品演示 · App 操作走查</div>
+            <div class="text-xs text-slate-400 truncate">2026-09-22 · 1080p · 210MB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v8 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">00:15</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">猫片 · 抓沙发</div>
+            <div class="text-xs text-slate-400 truncate">2026-09-20 · 4K · 88MB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v5 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">12:44</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">生日聚会 · 家人</div>
+            <div class="text-xs text-slate-400 truncate">2026-09-12 · 1080p · 1.1GB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v6 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">01:30</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">延时 · 城市夜景</div>
+            <div class="text-xs text-slate-400 truncate">2026-09-08 · 4K · 340MB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v3 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">08:02</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">采访片段 · 用户访谈 #7</div>
+            <div class="text-xs text-slate-400 truncate">2026-09-03 · 1080p · 720MB</div>
+          </div>
+          <div class="group cursor-pointer" onclick="location.href='04-video-detail.html'">
+            <div class="relative v1 aspect-video rounded-xl overflow-hidden group-hover:shadow-md transition"><span class="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white rounded px-1.5 py-0.5 font-mono">02:18</span><span class="absolute top-2 left-2 text-[10px] bg-amber-600/90 text-white rounded px-1.5 py-0.5">mkv 仅下载</span></div>
+            <div class="mt-1.5 text-sm font-medium truncate">屏幕录制 · bug 复现步骤</div>
+            <div class="text-xs text-slate-400 truncate">2026-08-30 · 1080p · 156MB</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<a href="index.html" class="fixed bottom-4 right-4 px-3 py-2 rounded-full bg-slate-900 text-white text-xs shadow-lg hover:bg-slate-700">☰ 原型导航</a>
+</body>
+</html>

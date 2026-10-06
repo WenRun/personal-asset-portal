@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全局搜索 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.f-serif{font-family:ui-serif,Georgia,'Songti SC',serif}
+.ph{background:linear-gradient(135deg,#a5b4fc,#6366f1)}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<!-- 背景页（示意：图片浏览页被弹层覆盖） -->
+<div class="flex h-screen overflow-hidden opacity-40 pointer-events-none select-none">
+  <aside class="w-60 shrink-0 bg-slate-900"></aside>
+  <div class="flex-1"><header class="h-16 bg-white border-b border-slate-200"></header>
+  <main class="p-6 grid grid-cols-4 gap-3">
+    <div class="ph h-40 rounded-xl"></div><div class="rounded-xl bg-slate-300 h-56"></div><div class="rounded-xl bg-slate-300 h-32"></div><div class="rounded-xl bg-slate-300 h-48"></div>
+    <div class="rounded-xl bg-slate-300 h-36"></div><div class="ph h-52 rounded-xl"></div><div class="rounded-xl bg-slate-300 h-40"></div><div class="rounded-xl bg-slate-300 h-44"></div>
+  </main></div>
+</div>
+
+<!-- Cmd+K 弹层 -->
+<div class="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4 bg-slate-900/50 backdrop-blur-sm">
+  <div class="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <!-- 输入行 -->
+    <div class="flex items-center gap-3 px-5 h-14 border-b border-slate-200">
+      <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3"/></svg>
+      <input value="永" class="flex-1 text-lg outline-none placeholder:text-slate-300" placeholder="搜索字体、音乐、视频、书籍、图片…">
+      <span class="text-[10px] text-slate-400">Meilisearch · 23ms</span>
+      <kbd class="text-[10px] border border-slate-300 rounded px-1.5 py-0.5 text-slate-400">ESC</kbd>
+    </div>
+
+    <div class="flex max-h-[55vh]">
+      <!-- 类型侧栏 -->
+      <div class="w-36 shrink-0 border-r border-slate-200 p-2 text-sm space-y-0.5">
+        <div class="px-3 py-2 rounded-lg bg-brand-50 text-brand-700 font-medium flex justify-between">全部 <span class="text-xs">11</span></div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 flex justify-between text-slate-600">字体 <span class="text-xs text-slate-400">3</span></div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 flex justify-between text-slate-600">音乐 <span class="text-xs text-slate-400">2</span></div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 flex justify-between text-slate-600">视频 <span class="text-xs text-slate-400">2</span></div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 flex justify-between text-slate-600">书籍 <span class="text-xs text-slate-400">1</span></div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 flex justify-between text-slate-600">图片 <span class="text-xs text-slate-400">3</span></div>
+      </div>
+
+      <!-- 结果 -->
+      <div id="results" class="flex-1 overflow-y-auto p-2 text-sm">
+        <div class="px-3 pt-1 pb-1 text-[10px] font-semibold text-slate-400">字体 · 3</div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-brand-50 grid place-items-center f-serif text-lg text-brand-700">永</div>
+          <div class="min-w-0"><div class="truncate">思源宋体 <mark class="bg-brand-100 text-brand-700 rounded px-0.5">永</mark>字全可显示</div><div class="text-xs text-slate-400">7 字重 · OTF · 含中文</div></div>
+        </div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-brand-50 grid place-items-center f-serif text-lg text-brand-700">永</div>
+          <div class="min-w-0"><div class="truncate">霞鹜文楷</div><div class="text-xs text-slate-400">可变 · TTF · 含中文</div></div>
+        </div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-slate-100 grid place-items-center f-serif text-lg text-slate-500">永</div>
+          <div class="min-w-0"><div class="truncate">黑体示例</div><div class="text-xs text-slate-400">9 字重 · 简繁日韩</div></div>
+        </div>
+
+        <div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400">视频 · 2</div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-16 h-9 rounded bg-slate-200 grid place-items-center shrink-0"><svg class="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></div>
+          <div class="min-w-0"><div class="truncate">楷书入门：从<mark class="bg-brand-100 text-brand-700 rounded px-0.5">永</mark>字八法开始 · 第01讲</div><div class="text-xs text-slate-400">教程系列 · 38:02 · 1080p</div></div>
+        </div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-16 h-9 rounded bg-slate-200 grid place-items-center shrink-0"><svg class="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></div>
+          <div class="min-w-0"><div class="truncate">书法审美漫谈（讲座）</div><div class="text-xs text-slate-400">素材 · 1:12:40 · 720p</div></div>
+        </div>
+
+        <div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400">音乐 · 2</div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-9 h-9 rounded bg-slate-200 grid place-items-center text-slate-400 shrink-0">♪</div>
+          <div class="min-w-0"><div class="truncate"><mark class="bg-brand-100 text-brand-700 rounded px-0.5">永</mark>夜（Live）- 万能青年旅店</div><div class="text-xs text-slate-400">冀西南林路行 · FLAC</div></div>
+        </div>
+
+        <div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400">书籍 · 1</div>
+        <div class="px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-3">
+          <div class="w-9 h-9 rounded bg-slate-200 grid place-items-center text-slate-400 shrink-0">📖</div>
+          <div class="min-w-0"><div class="truncate">《说文解字<mark class="bg-brand-100 text-brand-700 rounded px-0.5">永</mark>注》</div><div class="text-xs text-slate-400">EPUB · 文字学</div></div>
+        </div>
+
+        <div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400">图片 · 3</div>
+        <div class="px-3 py-2 flex gap-2 cursor-pointer" onclick="location.href='12-image-detail.html'">
+          <div class="ph w-20 h-14 rounded-lg cursor-pointer hover:ring-2 ring-brand-400"></div>
+          <div class="w-20 h-14 rounded-lg bg-slate-200 cursor-pointer hover:ring-2 ring-brand-400"></div>
+          <div class="w-20 h-14 rounded-lg bg-slate-200 cursor-pointer hover:ring-2 ring-brand-400"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-5 py-2.5 border-t border-slate-200 bg-slate-50 flex items-center gap-4 text-[10px] text-slate-400">
+      <span><kbd class="border rounded px-1">↑↓</kbd> 导航</span><span><kbd class="border rounded px-1">↵</kbd> 打开</span><span><kbd class="border rounded px-1">Tab</kbd> 切换类型</span><span class="ml-auto">全局搜索同时查 5 个 Meilisearch 索引</span>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var map=[['思源宋体','03-font-detail.html'],['霞鹜文楷','03-font-detail.html'],['黑体示例','03-font-detail.html'],['楷书入门','04-video-detail.html'],['书法审美漫谈','04-video-detail.html'],['永夜','13-music-album.html'],['说文解字','14-book-detail.html']];
+  var box=document.getElementById('results');if(!box)return;
+  box.querySelectorAll(':scope > div').forEach(function(row){
+    var t=row.textContent||'';
+    map.forEach(function(m){if(t.indexOf(m[0])>-1){row.style.cursor='pointer';row.onclick=function(){location.href=m[1];};}});
+  });
+})();
+</script>
+<a href="index.html" class="fixed bottom-4 right-4 px-3 py-2 rounded-full bg-white text-slate-700 text-xs shadow-lg border border-slate-200">☰ 原型导航</a>
+</body>
+</html>

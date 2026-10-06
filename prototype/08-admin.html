@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理端 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<div class="flex h-screen overflow-hidden">
+  <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div class="flex items-center gap-2 px-5 h-16 border-b border-slate-800 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 grid place-items-center text-white font-bold">资</div>
+      <div><div class="text-white font-semibold text-sm leading-tight">个人资源门户</div><div class="text-[10px] text-slate-500">Asset Portal</div></div>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <a href="08-admin.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-600/20 text-white">任务中心<span class="ml-auto text-[10px] bg-rose-500 text-white rounded-full px-1.5 py-0.5">3</span></a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">标签管理</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">用户管理</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">设置（资源目录 / 注册开关）</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">回收站</a>
+      <div class="pt-3 mt-3 border-t border-slate-800 space-y-1">
+        <a href="02-fonts-wall.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">← 返回浏览</a>
+      </div>
+    </nav>
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0">
+    <header class="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center px-6">
+      <h1 class="font-bold">管理端</h1>
+      <span class="ml-3 text-xs text-slate-400">worker 在线 · 并发 2 · 队列轮询 1.5s</span>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-6 space-y-6">
+      <!-- 统计卡片 -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-xs text-slate-400">队列中</div><div class="text-2xl font-bold mt-1">12</div></div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-xs text-slate-400">运行中</div><div class="text-2xl font-bold mt-1 text-brand-600">2</div></div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-xs text-slate-400">失败</div><div class="text-2xl font-bold mt-1 text-rose-600">3</div></div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-xs text-slate-400">今日完成</div><div class="text-2xl font-bold mt-1">1,482</div></div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-xs text-slate-400">待确认入库</div><div class="text-2xl font-bold mt-1 text-amber-500">6</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-1 bg-slate-200/70 rounded-lg p-1 w-fit text-sm">
+        <button class="px-4 py-1.5 rounded-md bg-white shadow-sm font-medium">任务中心</button>
+        <button class="px-4 py-1.5 rounded-md text-slate-500 hover:text-slate-700">入库确认队列 <span class="text-[10px] bg-amber-100 text-amber-700 rounded px-1">6</span></button>
+      </div>
+
+      <!-- 任务表 -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-xs text-slate-400">
+            <tr><th class="text-left px-4 py-2.5 font-medium">任务</th><th class="text-left px-4 py-2.5 font-medium">对象</th><th class="text-left px-4 py-2.5 font-medium">状态</th><th class="text-left px-4 py-2.5 font-medium">尝试</th><th class="text-left px-4 py-2.5 font-medium">时间</th><th class="px-4 py-2.5"></th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr>
+              <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-mono">parse:video</span></td>
+              <td class="px-4 py-2.5 text-slate-600">Rust 教程 第07讲.mp4</td>
+              <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-100 text-brand-700">运行中</span></td>
+              <td class="px-4 py-2.5 text-slate-400">1</td><td class="px-4 py-2.5 text-slate-400">3 秒前</td><td class="px-4 py-2.5"></td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-mono">derive:thumb_image</span></td>
+              <td class="px-4 py-2.5 text-slate-600">IMG_20261001_8821.HEIC</td>
+              <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-100 text-brand-700">运行中</span></td>
+              <td class="px-4 py-2.5 text-slate-400">1</td><td class="px-4 py-2.5 text-slate-400">12 秒前</td><td class="px-4 py-2.5"></td>
+            </tr>
+            <tr class="bg-rose-50/40">
+              <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-mono">derive:hls</span></td>
+              <td class="px-4 py-2.5 text-slate-600">旧电脑备份_001.mkv</td>
+              <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">失败</span><div class="text-[10px] text-rose-500 mt-0.5 font-mono">ffmpeg: Codec hevc not supported in mp4 container …</div></td>
+              <td class="px-4 py-2.5 text-slate-400">3</td><td class="px-4 py-2.5 text-slate-400">2 小时前</td>
+              <td class="px-4 py-2.5 text-right"><button class="text-xs px-2.5 py-1 rounded-md border border-slate-200 hover:bg-slate-50">重试</button></td>
+            </tr>
+            <tr class="bg-rose-50/40">
+              <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-mono">parse:book</span></td>
+              <td class="px-4 py-2.5 text-slate-600">corrupted.epub</td>
+              <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">失败</span><div class="text-[10px] text-rose-500 mt-0.5 font-mono">BadZipFile: not a valid epub package</div></td>
+              <td class="px-4 py-2.5 text-slate-400">3</td><td class="px-4 py-2.5 text-slate-400">5 小时前</td>
+              <td class="px-4 py-2.5 text-right"><button class="text-xs px-2.5 py-1 rounded-md border border-slate-200 hover:bg-slate-50">重试</button></td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-mono">scan_root</span></td>
+              <td class="px-4 py-2.5 text-slate-600">books:/新建收书</td>
+              <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">完成</span></td>
+              <td class="px-4 py-2.5 text-slate-400">1</td><td class="px-4 py-2.5 text-slate-400">今天 09:12</td><td class="px-4 py-2.5"></td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-mono">pack_zip</span></td>
+              <td class="px-4 py-2.5 text-slate-600">下载包 · 34 个文件 · 2.1GB</td>
+              <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">完成</span></td>
+              <td class="px-4 py-2.5 text-slate-400">1</td><td class="px-4 py-2.5 text-slate-400">今天 08:40</td><td class="px-4 py-2.5"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 入库确认队列（视频系列识别） -->
+      <div>
+        <div class="text-sm font-semibold mb-2">入库确认队列 · 系列识别存疑 <span class="text-xs font-normal text-slate-400">（详细设计 §5.3 need_confirm）</span></div>
+        <div class="grid md:grid-cols-2 gap-3">
+          <div class="bg-white rounded-xl border border-amber-200 p-4">
+            <div class="flex gap-3">
+              <div class="w-24 h-16 rounded-lg shrink-0 grid place-items-center text-white" style="background:linear-gradient(135deg,#475569,#1e293b)"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></div>
+              <div class="min-w-0 text-sm">
+                <div class="truncate font-medium">Go Web 开发实战 EP02.mp4</div>
+                <div class="text-xs text-slate-400 mt-0.5">识别到模式 <span class="font-mono">EP?N</span> · 集数 2 · 系列名不确定</div>
+                <div class="text-xs text-amber-600 mt-0.5">候选：① 沿用目录系列「Go Web 开发实战」 ② 新建系列</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-xs">
+              <input value="Go Web 开发实战" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:border-brand-500">
+              <span class="text-slate-400">第</span><input value="2" class="w-12 px-2 py-1.5 rounded-lg border border-slate-200 text-center outline-none focus:border-brand-500"><span class="text-slate-400">集</span>
+              <button class="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700">确认</button>
+              <button class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">跳过</button>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-amber-200 p-4">
+            <div class="flex gap-3">
+              <div class="w-24 h-16 rounded-lg shrink-0 grid place-items-center text-white" style="background:linear-gradient(135deg,#64748b,#334155)"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></div>
+              <div class="min-w-0 text-sm">
+                <div class="truncate font-medium">算法导论 第十二讲 动态规划.mkv</div>
+                <div class="text-xs text-slate-400 mt-0.5">mkv 容器 · 标记「仅下载」（Direct Play 不支持）</div>
+                <div class="text-xs text-amber-600 mt-0.5">待确认：归入系列「算法导论」第 12 集？</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-xs">
+              <input value="算法导论" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:border-brand-500">
+              <span class="text-slate-400">第</span><input value="12" class="w-12 px-2 py-1.5 rounded-lg border border-slate-200 text-center outline-none focus:border-brand-500"><span class="text-slate-400">集</span>
+              <button class="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700">确认</button>
+              <button class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">跳过</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<a href="index.html" class="fixed bottom-4 right-4 px-3 py-2 rounded-full bg-slate-900 text-white text-xs shadow-lg hover:bg-slate-700">☰ 原型导航</a>
+</body>
+</html>

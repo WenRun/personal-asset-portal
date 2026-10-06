@@ -1,0 +1,239 @@
+"""资产路由（详细设计 §6.2/§6.3）：浏览列表（公开）、详情/下载（member）、编辑/删除/标签（admin）。"""
+
+import base64
+import uuid
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select, tuple_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import get_app_settings, get_current_user, require_admin, require_member
+from app.core.db import get_db
+from app.core.errors import bad_request, not_found, unauthenticated
+from app.core.jobs import enqueue
+from app.core.models import Asset, AssetTag, Tag, User
+from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
+from app.core.search import delete_document
+from app.core.storage import LocalStorage
+
+router = APIRouter(prefix="/api", tags=["assets"])
+
+
+def _cursor_encode(created_at: datetime, id_: uuid.UUID) -> str:
+    raw = f"{created_at.isoformat()}|{id_}".encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def _cursor_decode(cursor: str) -> tuple[datetime, uuid.UUID]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        ts, id_ = raw.split("|", 1)
+        return datetime.fromisoformat(ts), uuid.UUID(id_)
+    except Exception as exc:  # noqa: BLE001
+        raise bad_request("非法游标") from exc
+
+
+def _item(a: Asset) -> dict:
+    return {
+        "id": str(a.id), "type": a.asset_type, "status": a.status,
+        "title": a.title, "file_name": a.file_name, "size_bytes": a.size_bytes,
+        "mime_type": a.mime_type, "rating": a.rating, "is_favorite": a.is_favorite,
+        "note": a.note, "created_at": a.created_at.isoformat(),
+    }
+
+
+async def _storage(db: AsyncSession) -> LocalStorage:
+    kv = await get_app_settings(db)
+    return LocalStorage({r["alias"]: r["path"] for r in kv["scan_roots"]})
+
+
+# ---------- 浏览（公开；访客禁止携带 q —— §6.2/§6.4） ----------
+
+@router.get("/{route}")
+async def list_assets(
+    route: str,
+    cursor: str | None = None,
+    page_size: int = 60,
+    q: str | None = None,
+    favorite: bool | None = None,
+    user: User | None = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if route not in ROUTE_TO_TYPE:
+        raise not_found()
+    if q is not None and q.strip() and user is None:
+        raise unauthenticated("访客不可搜索，请先登录")
+    page_size = max(1, min(page_size, 200))
+    cond = [Asset.asset_type == ROUTE_TO_TYPE[route], Asset.deleted_at.is_(None)]
+    if favorite:
+        cond.append(Asset.is_favorite.is_(True))
+    if q is not None and q.strip():
+        pat = f"%{q.strip()}%"
+        cond.append(Asset.title.ilike(pat) | Asset.file_name.ilike(pat))
+    if cursor:
+        ts, id_ = _cursor_decode(cursor)
+        cond.append(tuple_(Asset.created_at, Asset.id) < tuple_(ts, id_))
+    rows = (
+        await db.execute(
+            select(Asset).where(*cond).order_by(Asset.created_at.desc(), Asset.id.desc()).limit(page_size + 1)
+        )
+    ).scalars().all()
+    next_cursor = None
+    if len(rows) > page_size:
+        rows = rows[:page_size]
+        last = rows[-1]
+        next_cursor = _cursor_encode(last.created_at, last.id)
+    return {"items": [_item(a) for a in rows], "next_cursor": next_cursor}
+
+
+# ---------- 详情（member） ----------
+
+@router.get("/assets/{asset_id}")
+async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(require_member)):
+    a = await db.get(Asset, asset_id)
+    if a is None or a.deleted_at is not None:
+        raise not_found()
+    tags = (
+        await db.execute(select(Tag).join(AssetTag, AssetTag.tag_id == Tag.id).where(AssetTag.asset_id == a.id))
+    ).scalars().all()
+    return {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
+            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+
+
+# ---------- 下载（member；不暴露真实路径） ----------
+
+@router.get("/assets/{asset_id}/download")
+async def download(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                   user: User = Depends(require_member)):
+    a = await db.get(Asset, asset_id)
+    if a is None or a.deleted_at is not None:
+        raise not_found()
+    storage = await _storage(db)
+    path = storage.resolve(a.storage_key)
+    return FileResponse(path, filename=a.file_name, media_type=a.mime_type or "application/octet-stream")
+
+
+# ---------- 编辑 / 删除 / 恢复（admin） ----------
+
+class AssetPatch(BaseModel):
+    title: str | None = Field(default=None, max_length=256)
+    note: str | None = None
+    rating: int | None = Field(default=None, ge=0, le=5)
+    is_favorite: bool | None = None
+
+
+async def _reindex(db: AsyncSession, a: Asset) -> None:
+    await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
+
+
+@router.patch("/assets/{asset_id}")
+async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = Depends(get_db),
+                      user: User = Depends(require_admin)):
+    a = await db.get(Asset, asset_id)
+    if a is None or a.deleted_at is not None:
+        raise not_found()
+    for field in ("title", "note", "rating", "is_favorite"):
+        val = getattr(body, field)
+        if val is not None:
+            setattr(a, field, val)
+    await db.commit()
+    await _reindex(db, a)
+    return _item(a)
+
+
+@router.delete("/assets/{asset_id}")
+async def delete_asset(asset_id: uuid.UUID, purge: bool = False, delete_file: bool = False,
+                       db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
+    a = await db.get(Asset, asset_id)
+    if a is None:
+        raise not_found()
+    if purge:
+        await delete_document(a.asset_type, str(a.id))
+        if delete_file:
+            storage = await _storage(db)
+            storage.delete(a.storage_key)
+        await db.delete(a)
+    else:
+        a.deleted_at = datetime.now().astimezone()
+        await _reindex(db, a)  # 软删后同步删除索引文档（由 worker 判断 deleted_at）
+    await db.commit()
+    return {"ok": True, "purged": purge}
+
+
+@router.post("/assets/{asset_id}/restore")
+async def restore_asset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                        user: User = Depends(require_admin)):
+    a = await db.get(Asset, asset_id)
+    if a is None:
+        raise not_found()
+    a.deleted_at = None
+    await db.commit()
+    await _reindex(db, a)
+    return _item(a)
+
+
+# ---------- 标签挂载（admin） ----------
+
+class TagsBody(BaseModel):
+    tag_ids: list[uuid.UUID]
+
+
+@router.post("/assets/{asset_id}/tags")
+async def attach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = Depends(get_db),
+                      user: User = Depends(require_admin)):
+    a = await db.get(Asset, asset_id)
+    if a is None:
+        raise not_found()
+    for tid in body.tag_ids:
+        exists = await db.get(AssetTag, {"asset_id": a.id, "tag_id": tid})
+        if exists is None:
+            db.add(AssetTag(asset_id=a.id, tag_id=tid))
+    await db.commit()
+    await _reindex(db, a)
+    return {"ok": True}
+
+
+@router.delete("/assets/{asset_id}/tags")
+async def detach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = Depends(get_db),
+                      user: User = Depends(require_admin)):
+    for tid in body.tag_ids:
+        row = await db.get(AssetTag, {"asset_id": asset_id, "tag_id": tid})
+        if row is not None:
+            await db.delete(row)
+    await db.commit()
+    return {"ok": True}
+
+
+# ---------- 上传入库（admin；与扫描共用同一管道 §4.3） ----------
+
+@router.post("/admin/uploads")
+async def upload(file: UploadFile, db: AsyncSession = Depends(get_db),
+                 user: User = Depends(require_admin)):
+    from app.core.config import get_settings
+
+    if asset_type_of(file.filename or "") is None:
+        raise bad_request(f"不支持的文件类型: {ext_of(file.filename or '')}")
+    data = await file.read()
+    if len(data) > get_settings().max_upload_gb * 1024**3:
+        raise bad_request("文件超过上传上限")
+    storage = await _storage(db)
+    ym = datetime.now().strftime("%Y-%m")
+    key = f"uploads:staging/{ym}/{uuid.uuid4().hex}{ext_of(file.filename or '')}"
+    storage.save(key, data)
+    asset = Asset(
+        asset_type=asset_type_of(file.filename),
+        status="pending",
+        title=(file.filename or "upload").rsplit(".", 1)[0],
+        storage_key=key,
+        file_name=file.filename or "upload",
+        size_bytes=len(data),
+        mime_type=None,
+    )
+    db.add(asset)
+    await db.commit()
+    await enqueue(db, "fingerprint", {"asset_id": str(asset.id)}, priority=1)
+    return _item(asset)

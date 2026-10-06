@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>字体详情 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.f-serif{font-family:ui-serif,Georgia,'Songti SC',serif}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<div class="flex h-screen overflow-hidden">
+  <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div class="flex items-center gap-2 px-5 h-16 border-b border-slate-800 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 grid place-items-center text-white font-bold">资</div>
+      <div><div class="text-white font-semibold text-sm leading-tight">个人资源门户</div><div class="text-[10px] text-slate-500">Asset Portal</div></div>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">仪表盘</a>
+      <a href="02-fonts-wall.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-600/20 text-white">字体<span class="ml-auto text-xs text-brand-300">2.1k</span></a>
+      <a href="09-music-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">音乐</a>
+      <a href="11-video-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">视频</a>
+      <a href="10-books-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">书籍</a>
+      <a href="01-images-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">图片</a>
+    </nav>
+  </aside>
+
+  <div class="flex-1 flex min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 bg-slate-200/60">
+      <!-- 浏览列表（半透明，示意详情面板浮在其上） -->
+      <header class="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-6">
+        <a href="02-fonts-wall.html" class="flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600">← 字体墙</a>
+      </header>
+      <main class="flex-1 overflow-y-auto p-6 opacity-50 pointer-events-none select-none">
+        <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="font-semibold mb-3">思源宋体</div><div class="f-serif text-[24px]">永东国爱 Aa Bb 123</div></div>
+          <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="font-semibold mb-3">黑体示例</div><div class="f-serif text-[24px] font-black">永东国爱 Aa Bb 123</div></div>
+          <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="font-semibold mb-3">衬线示例</div><div class="f-serif text-[24px] italic">永东国爱 Aa Bb 123</div></div>
+          <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="font-semibold mb-3">楷体示例</div><div class="f-serif text-[24px]">永东国爱 Aa Bb 123</div></div>
+          <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="font-semibold mb-3">圆体示例</div><div class="f-serif text-[24px] font-bold">永东国爱 Aa Bb 123</div></div>
+          <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="font-semibold mb-3">手写体示例</div><div class="f-serif text-[24px] italic">永东国爱 Aa Bb 123</div></div>
+        </div>
+      </main>
+    </div>
+
+    <!-- 右侧详情侧栏 -->
+    <aside class="w-[400px] shrink-0 bg-white border-l border-slate-200 flex flex-col">
+      <div class="p-5 border-b border-slate-200">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-lg font-bold">思源宋体 <span class="text-sm font-normal text-slate-400">Source Han Serif SC</span></div>
+            <div class="text-xs text-slate-400 mt-0.5">字族 · 7 个字重文件 · 62.4MB</div>
+          </div>
+          <button class="p-2 rounded-lg hover:bg-slate-100 text-slate-400"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20.3 4.7 13a4.8 4.8 0 0 1 6.8-6.8l.5.5.5-.5a4.8 4.8 0 0 1 6.8 6.8Z"/></svg></button>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载字族 (.zip)</button>
+          <button class="px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50">编辑</button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-5 space-y-6">
+        <!-- 样张 -->
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">样张预览（可变轴实时生效）</div>
+          <div class="rounded-xl border border-slate-200 p-4 space-y-3 f-serif">
+            <div class="text-[28px] font-black">永东国爱 Aa Bb 123</div>
+            <div class="text-[22px] font-semibold">永东国爱 Aa Bb 123</div>
+            <div class="text-[18px]">永东国爱 Aa Bb 123</div>
+            <div class="text-[15px] font-light text-slate-600">永东国爱 Aa Bb 123</div>
+          </div>
+        </section>
+
+        <!-- 可变轴 -->
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">可变字体轴</div>
+          <div class="rounded-xl border border-slate-200 p-4 space-y-3 text-sm">
+            <div class="flex items-center gap-3"><span class="w-12 font-mono text-xs text-slate-500">wght</span><input type="range" min="200" max="900" value="400" class="flex-1 accent-brand-600"><span class="w-10 text-right text-xs font-mono">400</span></div>
+            <div class="flex items-center gap-3"><span class="w-12 font-mono text-xs text-slate-500">wdth</span><input type="range" min="62" max="100" value="100" class="flex-1 accent-brand-600"><span class="w-10 text-right text-xs font-mono">100</span></div>
+          </div>
+        </section>
+
+        <!-- 字重列表 -->
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">字重文件</div>
+          <div class="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
+            <div class="flex items-center justify-between px-4 py-2.5"><span class="f-serif font-extralight">ExtraLight 200</span><span class="text-xs text-slate-400">OTF · 8.9MB</span></div>
+            <div class="flex items-center justify-between px-4 py-2.5"><span class="f-serif font-light">Light 300</span><span class="text-xs text-slate-400">OTF · 8.9MB</span></div>
+            <div class="flex items-center justify-between px-4 py-2.5 bg-brand-50"><span class="f-serif">Regular 400</span><span class="text-xs text-brand-600">OTF · 9.1MB</span></div>
+            <div class="flex items-center justify-between px-4 py-2.5"><span class="f-serif font-medium">Medium 500</span><span class="text-xs text-slate-400">OTF · 9.0MB</span></div>
+            <div class="flex items-center justify-between px-4 py-2.5"><span class="f-serif font-bold">Bold 700</span><span class="text-xs text-slate-400">OTF · 9.2MB</span></div>
+            <div class="flex items-center justify-between px-4 py-2.5"><span class="f-serif font-black">Black 900</span><span class="text-xs text-slate-400">OTF · 9.3MB</span></div>
+          </div>
+        </section>
+
+        <!-- 字符集覆盖 -->
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">字符集覆盖（charset.json）</div>
+          <div class="rounded-xl border border-slate-200 p-4 space-y-3 text-sm">
+            <div><div class="flex justify-between mb-1"><span>拉丁字母</span><span class="text-xs font-mono text-slate-400">100%</span></div><div class="h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width:100%"></div></div></div>
+            <div><div class="flex justify-between mb-1"><span>常用汉字（3500）</span><span class="text-xs font-mono text-slate-400">99.8%</span></div><div class="h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width:99.8%"></div></div></div>
+            <div><div class="flex justify-between mb-1"><span>GB2312 全集</span><span class="text-xs font-mono text-slate-400">97.2%</span></div><div class="h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width:97.2%"></div></div></div>
+            <div><div class="flex justify-between mb-1"><span>谚文</span><span class="text-xs font-mono text-slate-400">0%</span></div><div class="h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-slate-300" style="width:2%"></div></div></div>
+            <button class="w-full mt-1 text-xs text-brand-600 hover:underline text-left">浏览全部区块 →</button>
+          </div>
+        </section>
+
+        <!-- 元数据 -->
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">元数据</div>
+          <dl class="text-sm divide-y divide-slate-100">
+            <div class="flex py-2"><dt class="w-24 text-slate-400">版本</dt><dd>2.003</dd></div>
+            <div class="flex py-2"><dt class="w-24 text-slate-400">设计者</dt><dd>Adobe / Google</dd></div>
+            <div class="flex py-2"><dt class="w-24 text-slate-400">许可</dt><dd><span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs">SIL OFL 1.1</span></dd></div>
+            <div class="flex py-2"><dt class="w-24 text-slate-400">标签</dt><dd class="flex gap-1.5 flex-wrap"><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs">衬线</span><span class="px-1.5 py-0.5 rounded bg-slate-100 text-xs">中文</span><button class="text-xs text-slate-400 hover:text-brand-600">+ 添加</button></dd></div>
+          </dl>
+        </section>
+      </div>
+    </aside>
+  </div>
+</div>
+<a href="index.html" class="fixed bottom-4 left-[15.5rem] px-3 py-2 rounded-full bg-slate-900 text-white text-xs shadow-lg hover:bg-slate-700">☰ 原型导航</a>
+</body>
+</html>

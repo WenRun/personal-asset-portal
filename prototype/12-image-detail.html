@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片详情 · 个人资源门户</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca'}}}}}</script>
+<style>
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#475569;border-radius:4px}
+.ph1{background:linear-gradient(135deg,#a5b4fc,#6366f1)}.ph2{background:linear-gradient(135deg,#6ee7b7,#0ea5e9)}
+.ph3{background:linear-gradient(135deg,#fcd34d,#f97316)}.ph4{background:linear-gradient(135deg,#f9a8d4,#a78bfa)}
+.ph5{background:linear-gradient(135deg,#94a3b8,#334155)}
+</style>
+</head>
+<body class="bg-slate-950 text-slate-800 antialiased font-sans">
+<div class="flex h-screen overflow-hidden">
+  <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div class="flex items-center gap-2 px-5 h-16 border-b border-slate-800 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 grid place-items-center text-white font-bold">资</div>
+      <div><div class="text-white font-semibold text-sm leading-tight">个人资源门户</div><div class="text-[10px] text-slate-500">Asset Portal</div></div>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">仪表盘</a>
+      <a href="02-fonts-wall.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">字体</a>
+      <a href="09-music-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">音乐</a>
+      <a href="11-video-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">视频</a>
+      <a href="10-books-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">书籍</a>
+      <a href="01-images-browse.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-600/20 text-white">图片<span class="ml-auto text-xs text-brand-300">10.4w</span></a>
+    </nav>
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- 查看器顶栏 -->
+    <header class="h-12 shrink-0 bg-slate-950 border-b border-slate-800 flex items-center gap-3 px-4 text-slate-300">
+      <a href="01-images-browse.html" class="flex items-center gap-1 text-sm hover:text-white">← 图片墙</a>
+      <span class="text-sm font-mono text-slate-400">DSC01234.ARW</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">相册：2026-10 川西</span>
+      <div class="ml-auto flex items-center gap-1">
+        <button class="p-2 rounded-lg hover:bg-slate-800"><svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20.3 4.7 13a4.8 4.8 0 0 1 6.8-6.8l.5.5.5-.5a4.8 4.8 0 0 1 6.8 6.8Z"/></svg></button>
+        <button class="p-2 rounded-lg hover:bg-slate-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
+        <button class="p-2 rounded-lg hover:bg-slate-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"/></svg></button>
+        <button class="p-2 rounded-lg hover:bg-slate-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4v7M20 20h-7M20 9V4h-7M4 15v5h5"/></svg></button>
+      </div>
+    </header>
+
+    <div class="flex-1 flex min-h-0">
+      <!-- 查看器 -->
+      <div class="flex-1 relative bg-slate-950 grid place-items-center min-w-0">
+        <div class="ph1 w-[82%] h-[86%] rounded-lg shadow-2xl"></div>
+        <!-- 缩放/尺寸信息 -->
+        <div class="absolute top-3 left-3 text-[11px] bg-black/50 text-slate-300 rounded px-2 py-1 font-mono">100% · 8640 × 5760 · 24MP</div>
+        <!-- 左右切换 -->
+        <button class="absolute left-4 w-10 h-10 rounded-full bg-black/50 text-white grid place-items-center hover:bg-black/70"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="absolute right-4 w-10 h-10 rounded-full bg-black/50 text-white grid place-items-center hover:bg-black/70"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+        <!-- 底部胶片条 -->
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          <div class="ph2 w-16 h-10 rounded cursor-pointer opacity-60 hover:opacity-100"></div>
+          <div class="ph1 w-16 h-10 rounded cursor-pointer ring-2 ring-brand-400"></div>
+          <div class="ph3 w-16 h-10 rounded cursor-pointer opacity-60 hover:opacity-100"></div>
+          <div class="ph4 w-16 h-10 rounded cursor-pointer opacity-60 hover:opacity-100"></div>
+          <div class="ph5 w-16 h-10 rounded cursor-pointer opacity-60 hover:opacity-100"></div>
+        </div>
+      </div>
+
+      <!-- EXIF / 信息侧栏 -->
+      <aside class="w-80 shrink-0 bg-white border-l border-slate-200 overflow-y-auto p-5 space-y-5">
+        <div>
+          <div class="font-bold">雪山日照金山</div>
+          <div class="text-xs text-slate-400 mt-0.5">2026-10-01 07:42 拍摄 · 手动命名</div>
+          <div class="flex gap-1.5 mt-2">
+            <button class="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-brand-600 text-white text-xs">下载原图 42.3MB</button>
+            <button class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50">编辑</button>
+          </div>
+        </div>
+
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">评分</div>
+          <div class="text-amber-400 text-lg tracking-wide">★★★★<span class="text-slate-300">★</span></div>
+        </section>
+
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">EXIF</div>
+          <dl class="text-sm divide-y divide-slate-100">
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">拍摄时间</dt><dd class="font-mono text-xs leading-5">2026-10-01 07:42:18</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">相机</dt><dd>Sony A7M4</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">镜头</dt><dd>FE 24-70mm F2.8 GM</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">焦距</dt><dd>35.0 mm</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">光圈</dt><dd>f/2.8</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">快门</dt><dd>1/500 s</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">ISO</dt><dd>200</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">尺寸</dt><dd class="font-mono text-xs leading-5">8640 × 5760（3:2）</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">文件</dt><dd class="font-mono text-xs leading-5">ARW · 42.3MB</dd></div>
+            <div class="flex py-1.5"><dt class="w-24 text-slate-400">GPS</dt><dd class="font-mono text-xs leading-5">29.5832°N, 101.2571°E</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">标签</div>
+          <div class="flex gap-1.5 flex-wrap text-xs"><span class="px-2 py-0.5 rounded bg-slate-100">风景</span><span class="px-2 py-0.5 rounded bg-slate-100">雪山</span><span class="px-2 py-0.5 rounded bg-slate-100">川西</span><button class="px-2 py-0.5 rounded border border-dashed border-slate-300 text-slate-400 hover:border-brand-400 hover:text-brand-600">+ 添加</button></div>
+        </section>
+
+        <section>
+          <div class="text-xs font-semibold text-slate-400 mb-2">派生物（可重建）</div>
+          <ul class="text-xs font-mono text-slate-400 space-y-1">
+            <li>thumb_256.webp ✓</li><li>thumb_1024.webp ✓</li><li>thumb_2560.webp ✓</li>
+          </ul>
+        </section>
+      </aside>
+    </div>
+  </div>
+</div>
+<a href="index.html" class="fixed bottom-4 right-[21rem] px-3 py-2 rounded-full bg-white text-slate-700 text-xs shadow-lg border border-slate-200">☰ 原型导航</a>
+</body>
+</html>
