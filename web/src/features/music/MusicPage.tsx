@@ -20,7 +20,7 @@ function hueOf(id: string) {
 }
 
 export function MusicPage() {
-  const { data: albums } = useQuery({ queryKey: ['music-albums'], queryFn: api.musicAlbums })
+  const { data: albums } = useQuery({ queryKey: ['music-albums'], queryFn: api.musicAlbums, refetchInterval: 10_000 })
   const playAlbum = usePlayer((s) => s.playAlbum)
   const nav = useAssetNav()
   const [view, setView] = useState<View>('album')
