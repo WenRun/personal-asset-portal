@@ -9,7 +9,13 @@ export function JobsPage() {
   const qc = useQueryClient()
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 10_000 })
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, refetchInterval: 10_000 })
+  const { data: confirms } = useQuery({ queryKey: ['confirm'], queryFn: api.confirmList, refetchInterval: 15_000 })
   const [tab, setTab] = useState<'jobs' | 'confirm'>('jobs')
+  const [dismissed, setDismissed] = useState<Record<string, boolean>>({})
+  const confirmSeries = useMutation({
+    mutationFn: (v: { id: string; name: string; ep: number }) => api.confirmSeries(v.id, v.name, v.ep),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['confirm'] }),
+  })
 
   const retry = useMutation({
     mutationFn: (id: string) => api.retryJob(id),
@@ -92,10 +98,45 @@ export function JobsPage() {
           </table>
         </div>
       ) : (
-        <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-400">
-          入库确认队列（视频系列识别人工校对）随 M5 视频模块上线
+        <div className="mt-4 space-y-3">
+          {(confirms ?? []).filter((c) => !dismissed[c.id]).map((c) => (
+            <ConfirmCard key={c.id} item={c}
+              onConfirm={(name, ep) => confirmSeries.mutate({ id: c.id, name, ep })}
+              onSkip={() => setDismissed((d) => ({ ...d, [c.id]: true }))} />
+          ))}
+          {(confirms ?? []).length - Object.keys(dismissed).length <= 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-400">
+              队列清空 ✓（视频系列识别存疑时会出现在这里，人工校对系列名与集数）
+            </div>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+
+function ConfirmCard({ item, onConfirm, onSkip }: {
+  item: { id: string; file: string; hint: string }
+  onConfirm: (name: string, ep: number) => void
+  onSkip: () => void
+}) {
+  const [name, setName] = useState(item.file.replace(/\.[^.]+$/, "").replace(/[ ._-]*(S\d+E\d+|第\d+[讲集课回]|EP?\d+).*$/i, "") || item.file)
+  const [ep, setEp] = useState(1)
+  return (
+    <div className="rounded-xl border border-amber-200 bg-white p-4">
+      <div className="text-sm font-medium">{item.file}</div>
+      <div className="mt-0.5 text-xs text-slate-400">{item.hint}</div>
+      <div className="mt-3 flex items-center gap-2 text-xs">
+        <input value={name} onChange={(e) => setName(e.target.value)}
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 outline-none focus:border-brand-500" />
+        <span className="text-slate-400">第</span>
+        <input type="number" value={ep} onChange={(e) => setEp(Number(e.target.value))}
+          className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-center outline-none focus:border-brand-500" />
+        <span className="text-slate-400">集</span>
+        <Button size="sm" onClick={() => onConfirm(name, ep)}>确认</Button>
+        <Button size="sm" variant="outline" onClick={onSkip}>跳过</Button>
+      </div>
     </div>
   )
 }
