@@ -37,18 +37,18 @@ export function ImageDetailPage() {
 
       <div className="flex min-h-0 flex-1">
         {/* 查看器 */}
-        <div className="relative grid min-w-0 flex-1 place-items-center bg-slate-950">
+        <div className="relative min-w-0 flex-1 overflow-hidden bg-slate-950">
           {viewerFail ? (
-            <HueCover hue={photo.hue} className="h-[82%] w-[80%] rounded-lg shadow-2xl" />
+            <HueCover hue={photo.hue} className="absolute inset-6 rounded-lg" />
           ) : (
             <img
               src={`${API_BASE}/api/images/${photo.id}/original`}
               alt={photo.title}
-              className="max-h-[86%] max-w-[80%] rounded-lg object-contain shadow-2xl"
+              className="absolute inset-0 h-full w-full object-contain"
               onError={() => setViewerFail(true)}
             />
           )}
-          <div className="absolute left-3 top-3 rounded bg-black/50 px-2 py-1 font-mono text-[11px] text-slate-300">
+          <div className="absolute left-16 top-3 rounded bg-black/50 px-2 py-1 font-mono text-[11px] text-slate-300">
             100% · {photo.w} × {photo.h} · {Math.round((photo.w * photo.h) / 1e6)}MP
           </div>
           <button
