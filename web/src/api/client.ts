@@ -317,6 +317,19 @@ export const api = {
   videoCoverUrl: (coverUrl: string) => `${BASE}${coverUrl}`,
   videoStreamUrl: (assetId: string) => `${BASE}/api/videos/${assetId}/stream`,
   confirmList: () => req<{ id: string; file: string; series: string | null; hint: string }[]>('/api/admin/confirm'),
+  // M6：打包 / 分享 / 智能集合
+  createPack: (body: { asset_ids?: string[]; type?: string; favorite?: boolean }) =>
+    req<{ id: string; status: string }>('/api/download-packs', { method: 'POST', body: JSON.stringify(body) }),
+  packs: () => req<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; params: Record<string, unknown>; size_bytes: number | null; file_count: number | null; error: string | null; created_at: string }[]>('/api/download-packs'),
+  packFileUrl: (id: string) => `${BASE}/api/download-packs/${id}/file`,
+  createShare: (assetId: string, expiresHours: number, allowDownload: boolean) =>
+    req<{ token: string; url: string; expires_hours: number }>('/api/admin/shares', { method: 'POST', body: JSON.stringify({ asset_id: assetId, expires_hours: expiresHours, allow_download: allowDownload }) }),
+  shares: () => req<{ token: string; asset_title: string; file_name: string; allow_download: boolean; expires_at: string; expired: boolean }[]>('/api/admin/shares'),
+  revokeShare: (token: string) => req<{ ok: boolean }>(`/api/admin/shares/${token}`, { method: 'DELETE' }),
+  collections: () => req<{ id: string; name: string; asset_type: string | null; params: Record<string, unknown> }[]>('/api/collections'),
+  createCollection: (name: string, assetType: string | null, params: Record<string, unknown>) =>
+    req<{ id: string; name: string }>('/api/collections', { method: 'POST', body: JSON.stringify({ name, asset_type: assetType, params }) }),
+  deleteCollection: (id: string) => req<{ ok: boolean }>(`/api/collections/${id}`, { method: 'DELETE' }),
   confirmSeries: (assetId: string, seriesName: string, episode: number) =>
     req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,

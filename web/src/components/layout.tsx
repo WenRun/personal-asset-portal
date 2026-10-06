@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   BookOpen, Film, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Music,
-  Search, Settings, Tag, Type, Wrench, X,
+  Package, Search, Settings, Tag, Type, Wrench, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
@@ -73,6 +73,11 @@ function Sidebar() {
             <Wrench className="h-4 w-4" />任务中心
             {(stats?.jobs.failed ?? 0) > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{stats?.jobs.failed}</span>}
           </a>
+          {user?.role === 'admin' && (
+            <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/tools')}>
+              <Package className="h-4 w-4" />工具箱
+            </a>
+          )}
           <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/settings')}>
             <Settings className="h-4 w-4" />设置
           </a>

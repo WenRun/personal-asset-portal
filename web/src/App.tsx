@@ -6,6 +6,8 @@ import { useAuth } from '@/stores/auth'
 import type { ReactNode } from 'react'
 
 import { LoginPage } from '@/features/auth/LoginPage'
+import { SharePage } from '@/features/share/SharePage'
+import { ToolsPage } from '@/features/admin/ToolsPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { FontsPage } from '@/features/fonts/FontsPage'
 import { FontDetailPage } from '@/features/fonts/FontDetailPage'
@@ -51,6 +53,7 @@ export default function App() {
     <>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/share/:token" element={<SharePage />} />
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardGate />} />
           {/* 浏览页：公开（访客可浏览） */}
@@ -70,6 +73,7 @@ export default function App() {
           <Route path="/jobs" element={<RequireAdmin><JobsPage /></RequireAdmin>} />
           <Route path="/tags" element={<RequireUser><TagsPage /></RequireUser>} />
           <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
+          <Route path="/tools" element={<RequireAdmin><ToolsPage /></RequireAdmin>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

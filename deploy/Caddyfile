@@ -1,0 +1,20 @@
+# Caddy 反代（详细设计 §1.1/§12）：TLS 自动 + 静态缓存头。
+# 本地开发不需要 Caddy（Vite:5173 直连 API:8000）；部署时 docker compose --profile caddy up -d
+:8080 {
+    # 前端静态（生产由 web/dist 提供；此处代理 Vite 或静态目录均可）
+    handle {
+        reverse_proxy host.docker.internal:5173
+    }
+
+    # 派生物缓存：路径含资产 id，内容不变
+    @preview path /api/assets/*/preview/* /api/images/*/thumbnail* /api/books/*/cover* /api/music/albums/*/cover* /api/videos/cover/*
+    handle @preview {
+        header Cache-Control "public, max-age=31536000, immutable"
+        reverse_proxy host.docker.internal:8000
+    }
+
+    # 其余 API
+    handle /api/* {
+        reverse_proxy host.docker.internal:8000
+    }
+}

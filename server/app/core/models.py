@@ -88,6 +88,44 @@ class Setting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+# M6 打磨：打包下载 / 分享链接 / 智能集合（详细设计 §8/§13）
+class DownloadPack(Base):
+    __tablename__ = "download_packs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(Text, default="queued")  # queued|running|done|failed
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)    # {"asset_ids":[...]} 或 {"type":"image","favorite":true}
+    file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    file_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ShareLink(Base):
+    __tablename__ = "share_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    token: Mapped[str] = mapped_column(Text, unique=True)  # secrets.token_urlsafe
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"))
+    allow_download: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SavedCollection(Base):
+    __tablename__ = "saved_collections"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(Text)
+    asset_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)  # {"q": "...", "favorite": true}
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 # 领域扩展表 M5：视频（详细设计 §2.3/§5.3）
 class VideoSeries(Base):
     __tablename__ = "video_series"
