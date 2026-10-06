@@ -52,11 +52,11 @@ export function ImageDetailPage() {
             100% · {photo.w} × {photo.h} · {Math.round((photo.w * photo.h) / 1e6)}MP
           </div>
           <button
-            className="absolute left-4 grid h-10 w-10 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
+            className="absolute left-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
             onClick={() => nav(`/images/${photos[(idx - 1 + photos.length) % photos.length].id}`)}
           ><ChevronLeft className="h-5 w-5" /></button>
           <button
-            className="absolute right-4 grid h-10 w-10 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
+            className="absolute right-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
             onClick={() => nav(`/images/${photos[(idx + 1) % photos.length].id}`)}
           ><ChevronRight className="h-5 w-5" /></button>
           <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
@@ -79,7 +79,7 @@ export function ImageDetailPage() {
           <div className="space-y-5">
             <div>
               <div className="font-bold">{photo.title}</div>
-              <div className="mt-0.5 text-xs text-slate-400">{photo.takenAt.replace('T', ' ')} 拍摄</div>
+              <div className="mt-0.5 text-xs text-slate-400">{(photo.takenAt ?? "").slice(0, 19).replace("T", " ")} 拍摄</div>
               <a href={api.downloadUrl(photo.id)} className="mt-2 block w-full rounded-lg bg-brand-600 py-1.5 text-center text-xs font-medium text-white hover:bg-brand-700">下载原图 {photo.sizeMB}MB</a>
             </div>
             <section>
