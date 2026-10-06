@@ -11,6 +11,7 @@ interface PlayerState {
   pos: number
   volume: number
   playAlbum: (album: Album, startNo?: number) => void
+  setPlaying: (v: boolean) => void
   toggle: () => void
   next: () => void
   prev: () => void
@@ -29,6 +30,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     const idx = Math.max(0, album.tracks.findIndex((t) => t.no === startNo))
     set({ queue: album.tracks, albumId: album.id, albumTitle: album.title, artist: album.artist, index: idx, playing: true, pos: 0 })
   },
+  setPlaying: (playing) => set({ playing }),
   toggle: () => set((s) => ({ playing: s.queue.length > 0 ? !s.playing : false })),
   next: () =>
     set((s) => (s.queue.length ? { index: (s.index + 1) % s.queue.length, pos: 0 } : {})),

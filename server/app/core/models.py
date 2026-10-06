@@ -88,6 +88,41 @@ class Setting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+# 领域扩展表 M4：音乐三级聚合（详细设计 §2.3/§5.2）
+class MusicArtist(Base):
+    __tablename__ = "music_artists"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name: Mapped[str] = mapped_column(Text, unique=True)
+
+
+class MusicAlbum(Base):
+    __tablename__ = "music_albums"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    artist_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("music_artists.id", ondelete="SET NULL"), nullable=True)
+    name: Mapped[str] = mapped_column(Text)
+    year: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    cover_path: Mapped[str | None] = mapped_column(Text, nullable=True)  # 派生物路径（首曲封面）
+    __table_args__ = (Index("uq_album_artist_name", "artist_id", "name", unique=True),)
+
+
+class MusicTrack(Base):
+    __tablename__ = "music_tracks"
+
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    album_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("music_albums.id", ondelete="SET NULL"), nullable=True)
+    artist_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("music_artists.id", ondelete="SET NULL"), nullable=True)
+    track_no: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    disc_no: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    format: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bitrate_kbps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sample_rate_hz: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    has_lyrics: Mapped[bool] = mapped_column(Boolean, default=False)
+    streamable: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 # 领域扩展表 M3：书籍（详细设计 §2.3/§5.4）
 class BookDetail(Base):
     __tablename__ = "book_details"

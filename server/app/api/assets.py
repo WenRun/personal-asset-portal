@@ -14,7 +14,7 @@ from app.core.deps import get_app_settings, get_current_user, require_admin, req
 from app.core.db import get_db
 from app.core.errors import bad_request, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, Tag, User
+from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicTrack, Tag, User
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -144,6 +144,19 @@ async def list_assets(
                     "italic": d.italic, "is_variable": d.is_variable, "formats": d.formats,
                     "glyph_count": d.glyph_count, "languages": d.languages,
                     "license": d.license, "version": d.version, "designer": d.designer,
+                })
+    if route == "music" and rows:
+        details = (
+            await db.execute(select(MusicTrack).where(MusicTrack.asset_id.in_([a.id for a in rows])))
+        ).scalars().all()
+        dmap = {d.asset_id: d for d in details}
+        for it, a in zip(items, rows):
+            d = dmap.get(a.id)
+            if d is not None:
+                it.update({
+                    "duration_sec": int((d.duration_ms or 0) / 1000), "format": d.format,
+                    "bitrate_kbps": d.bitrate_kbps, "has_lyrics": d.has_lyrics,
+                    "streamable": d.streamable,
                 })
     if route == "books" and rows:
         details = (

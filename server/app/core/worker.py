@@ -14,6 +14,8 @@ import app.domains.fonts.specimen  # noqa: F401  M2: derive:font_specimen
 import app.domains.fonts.charset  # noqa: F401  M2: derive:font_charset
 import app.domains.books.parser  # noqa: F401  M3: parse:book
 import app.domains.books.thumbs  # noqa: F401  M3: derive:book_cover
+import app.domains.music.parser  # noqa: F401  M4: parse:music
+import app.domains.music.thumbs  # noqa: F401  M4: derive:music_cover
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 

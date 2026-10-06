@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Heart, Pause, Play } from 'lucide-react'
@@ -10,6 +11,7 @@ export function AlbumDetailPage() {
   const { id } = useParams()
   const { data: album } = useQuery({ queryKey: ['album', id], queryFn: () => api.album(id!), enabled: !!id })
   const { queue, index, playing, albumId: curAlbumId, playAlbum, toggle } = usePlayer()
+  const [coverFail, setCoverFail] = useState(false)
 
   if (!album) return <div className="p-6 text-slate-400">加载中…</div>
 
@@ -21,14 +23,22 @@ export function AlbumDetailPage() {
       <BackLink to="/music">专辑墙</BackLink>
 
       <div className="mt-4 flex flex-col gap-6 md:flex-row">
-        <HueCover hue={album.hue} className="aspect-square w-44 shrink-0 rounded-xl shadow-lg" />
+        {coverFail ? (
+          <HueCover hue={album.hue} className="aspect-square w-44 shrink-0 rounded-xl shadow-lg" />
+        ) : (
+          <img
+            src={api.musicAlbumCoverUrl(album.id, 1024)}
+            alt={album.title}
+            className="aspect-square w-44 shrink-0 rounded-xl object-cover shadow-lg"
+            onError={() => setCoverFail(true)}
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="mb-1 text-[10px] font-semibold text-brand-600">专辑</div>
           <h1 className="text-2xl font-bold">{album.title}</h1>
           <div className="mt-1 text-sm text-slate-500">{album.artist || "未知艺术家"} · {album.year} · {album.genre || "音频"}</div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
             <Badge>{album.format}</Badge>
-            <Badge>{album.khz}kHz / {album.bit}bit</Badge>
             <Badge>{album.tracks.length} 首 · {fmtTime(totalSec)}</Badge>
             <Badge>{(album.tracks.reduce((s, t) => s + t.bitrateK, 0) / 1000).toFixed(1)}Mbps 均值</Badge>
           </div>
@@ -99,7 +109,7 @@ export function AlbumDetailPage() {
       )}
       {queue.length > 0 && curAlbumId === album.id && (
         <div className="mt-3 text-center text-xs text-slate-400">
-          正在通过底部播放条播放本专辑 · 点曲目行切换（mock 计时播放）
+          正在通过底部播放条播放本专辑（/api/music/{id}/stream 真实音频流）· 点曲目行切换
         </div>
       )}
     </div>

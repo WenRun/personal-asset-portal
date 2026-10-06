@@ -272,8 +272,35 @@ export const api = {
     req<{ position: Record<string, number | string> | null; updated_at: string } | null>(`/api/progress?asset_id=${assetId}`),
   fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
   fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
-  albums: async (): Promise<Album[]> => (await listRaw('music')).map(toAlbum),
-  album: async (id: string) => toAlbum(await detailRaw(id)),
+  musicAlbums: () =>
+    req<{ id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]>('/api/music/albums'),
+  album: async (id: string): Promise<Album> => {
+    const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; lrc: boolean; streamable: boolean; size_bytes: number }[] }>(`/api/music/albums/${id}`)
+    return {
+      id: d.id,
+      title: d.name,
+      artist: d.artist,
+      year: d.year ?? 0,
+      genre: '',
+      format: '',
+      khz: 0,
+      bit: 0,
+      tracks: d.tracks.map((t) => ({
+        id: t.asset_id, albumId: d.id, no: t.no ?? 0, title: t.title,
+        durationSec: t.duration_sec, bitrateK: t.bitrate_kbps ?? 0, lrc: t.lrc, streamable: t.streamable,
+      })),
+      tags: [],
+      rating: 0,
+      favorite: false,
+      createdAt: '',
+      note: '',
+      hue: hueFromId(d.id),
+    }
+  },
+  musicTracks: () =>
+    req<{ asset_id: string; album_id: string; title: string; album: string; artist: string; no: number | null; duration_sec: number; bitrate_kbps: number | null; lrc: boolean; format: string | null; streamable: boolean; created_at: string }[]>('/api/music/tracks'),
+  musicAlbumCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/music/albums/${id}/cover?size=${size}`,
+  musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   videos: async (): Promise<Clip[]> => (await listRaw('videos')).map(toClip),
   video: async (id: string) => toClip(await detailRaw(id)),
   books: async (): Promise<Book[]> => (await listRaw('books')).map(toBook),

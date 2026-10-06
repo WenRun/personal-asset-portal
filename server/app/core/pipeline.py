@@ -95,7 +95,6 @@ async def fingerprint(db: AsyncSession, payload: dict) -> None:
     await enqueue(db, f"parse:{asset.asset_type}", {"asset_id": str(asset.id)}, priority=5)
 
 
-@register("parse:music")
 @register("parse:video")
 async def parse_generic(db: AsyncSession, payload: dict) -> None:
     """M0 通用解析：标题、mime、meta 扩展名；领域字段解析在 M1–M5 替换。"""

@@ -33,13 +33,14 @@ export interface FontFamily {
 
 // ---- 音乐 ----
 export interface Track {
-  id: string
+  id: string          // = asset_id（流播放按此寻址）
   albumId: string
   no: number
   title: string
   durationSec: number
   bitrateK: number
   lrc: boolean
+  streamable?: boolean
 }
 export interface Album {
   id: string
@@ -47,7 +48,7 @@ export interface Album {
   artist: string
   year: number
   genre: string
-  format: 'FLAC' | 'MP3'
+  format: string
   khz: number
   bit: number
   hue: number
