@@ -96,6 +96,7 @@ export function FontDetailPage() {
             </section>
           )}
 
+          {font.charset.length > 0 && (
           <section>
             <div className="mb-2 text-xs font-semibold text-slate-400">字符集覆盖</div>
             <div className="space-y-3 rounded-xl border border-slate-200 p-4">
@@ -109,12 +110,13 @@ export function FontDetailPage() {
               ))}
             </div>
           </section>
+          )}
 
           <section>
             <div className="mb-2 text-xs font-semibold text-slate-400">元数据</div>
             <dl className="divide-y divide-slate-100 text-sm">
-              <div className="flex py-2"><dt className="w-20 text-slate-400">版本</dt><dd>{font.version}</dd></div>
-              <div className="flex py-2"><dt className="w-20 text-slate-400">设计者</dt><dd>{font.designer}</dd></div>
+              <div className="flex py-2"><dt className="w-20 text-slate-400">版本</dt><dd>{font.version || "—"}</dd></div>
+              <div className="flex py-2"><dt className="w-20 text-slate-400">设计者</dt><dd>{font.designer || "—"}</dd></div>
               <div className="flex py-2"><dt className="w-20 text-slate-400">许可</dt><dd><Badge tone={font.license === 'SIL OFL 1.1' ? 'amber' : 'red'}>{font.license}</Badge></dd></div>
               <div className="flex py-2"><dt className="w-20 text-slate-400">字形数</dt><dd className="font-mono">{font.glyphCount.toLocaleString()}</dd></div>
               <div className="flex py-2"><dt className="w-20 text-slate-400">标签</dt><dd className="flex flex-wrap gap-1.5">{font.tags.map((t) => <Badge key={t}>{t}</Badge>)}</dd></div>

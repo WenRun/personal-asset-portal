@@ -36,7 +36,7 @@ export function ImagesPage() {
     <div className="p-4 md:p-6">
       <PageHeader
         title="图片"
-        sub="104,328 项（mock 展示 16 张）"
+        sub={`${photos?.length ?? 0} 张（EXIF 解析随 M1 接入，时间线暂用入库时间）`}
         right={<span className="text-xs text-slate-400">游标分页 · 虚拟滚动</span>}
       />
       <div className="mt-3 flex flex-wrap gap-2">

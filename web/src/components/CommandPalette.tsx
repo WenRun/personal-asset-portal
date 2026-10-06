@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUI } from '@/stores/ui'
-import { searchAll, GROUP_LABEL, type Hit } from '@/lib/search'
+import { api } from '@/api/client'
+import { GROUP_LABEL, assetHit, type Hit } from '@/lib/search'
 import { HueCover } from '@/components/ui'
+import type { AssetType } from '@/types'
 
-const TYPE_ORDER = ['fonts', 'music', 'videos', 'books', 'images'] as const
+const TYPE_ORDER: AssetType[] = ['font', 'music', 'video', 'book', 'image']
+const GROUP_KEY: Record<AssetType, string> = { font: 'fonts', music: 'music', video: 'videos', book: 'books', image: 'images' }
 
-/** Cmd+K 全局搜索弹层（详细设计 §7.4 CommandPalette）：150ms 防抖 → 分组结果 → 键盘导航 */
+/** Cmd+K 全局搜索（§7.4）：150ms 防抖 → /api/search 聚合 → 键盘导航 */
 export function CommandPalette() {
   const open = useUI((s) => s.paletteOpen)
   const setPalette = useUI((s) => s.setPalette)
@@ -23,14 +27,18 @@ export function CommandPalette() {
     return () => clearTimeout(t)
   }, [q])
 
-  const results = useMemo(() => searchAll(debounced, 5), [debounced])
-  const flat = useMemo(
-    () =>
-      TYPE_ORDER.flatMap((k) =>
-        results[k].map((h) => ({ ...h, group: GROUP_LABEL[h.type] })),
-      ),
-    [results],
-  )
+  const { data } = useQuery({
+    queryKey: ['search', debounced],
+    queryFn: () => api.search(debounced, 5),
+    enabled: open,
+  })
+
+  const flat = useMemo<Hit[]>(() => {
+    const byIndex = new Map((data?.results ?? []).map((r) => [r.index, r]))
+    return TYPE_ORDER.flatMap((t) =>
+      (byIndex.get(GROUP_KEY[t])?.hits ?? []).map(assetHit),
+    )
+  }, [data])
 
   useEffect(() => setSel(0), [debounced])
   useEffect(() => {
@@ -57,14 +65,8 @@ export function CommandPalette() {
 
   let idx = -1
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/50 px-4 pt-[12vh] backdrop-blur-sm"
-      onClick={() => setPalette(false)}
-    >
-      <div
-        className="mx-auto max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 bg-slate-900/50 px-4 pt-[12vh] backdrop-blur-sm" onClick={() => setPalette(false)}>
+      <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex h-14 items-center gap-3 border-b border-slate-200 px-5">
           <Search className="h-5 w-5 text-slate-400" />
           <input
@@ -75,21 +77,22 @@ export function CommandPalette() {
             placeholder="搜索字体、音乐、视频、书籍、图片…"
             className="flex-1 text-lg outline-none placeholder:text-slate-300"
           />
-          <span className="text-[10px] text-slate-400">mock · {results.total} 项</span>
+          <span className="text-[10px] text-slate-400">Meilisearch</span>
           <kbd className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-400">ESC</kbd>
         </div>
 
         <div className="max-h-[52vh] overflow-y-auto p-2 text-sm" onKeyDown={onKey}>
           {flat.length === 0 && (
-            <div className="py-10 text-center text-slate-400">没有匹配「{debounced}」的资源</div>
+            <div className="py-10 text-center text-slate-400">{debounced ? `没有匹配「${debounced}」的资源` : '输入关键词，或回车浏览最近资源'}</div>
           )}
-          {TYPE_ORDER.map((k) => {
-            const list = results[k]
+          {TYPE_ORDER.map((t) => {
+            const byIndex = new Map((data?.results ?? []).map((r) => [r.index, r]))
+            const list = (byIndex.get(GROUP_KEY[t])?.hits ?? []).map(assetHit)
             if (list.length === 0) return null
             return (
-              <div key={k}>
+              <div key={t}>
                 <div className="px-3 pb-1 pt-2 text-[10px] font-semibold text-slate-400">
-                  {GROUP_LABEL[list[0].type]} · {list.length}
+                  {GROUP_LABEL[t]} · {list.length}
                 </div>
                 {list.map((hit) => {
                   idx += 1
@@ -97,10 +100,7 @@ export function CommandPalette() {
                   return (
                     <div
                       key={hit.to}
-                      className={cn(
-                        'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition',
-                        active ? 'bg-brand-50' : 'hover:bg-slate-50',
-                      )}
+                      className={cn('flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition', active ? 'bg-brand-50' : 'hover:bg-slate-50')}
                       onMouseEnter={() => setSel(flat.findIndex((x) => x.to === hit.to))}
                       onClick={() => go(hit)}
                     >
@@ -127,7 +127,7 @@ export function CommandPalette() {
             className="ml-auto cursor-pointer hover:text-brand-600"
             onClick={() => { setPalette(false); nav(`/search?q=${encodeURIComponent(debounced)}`) }}
           >
-            在搜索页查看全部 {results.total} 项 →
+            在搜索页查看全部 →
           </span>
         </div>
       </div>

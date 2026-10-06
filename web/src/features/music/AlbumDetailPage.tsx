@@ -25,7 +25,7 @@ export function AlbumDetailPage() {
         <div className="min-w-0 flex-1">
           <div className="mb-1 text-[10px] font-semibold text-brand-600">专辑</div>
           <h1 className="text-2xl font-bold">{album.title}</h1>
-          <div className="mt-1 text-sm text-slate-500">{album.artist} · {album.year} · {album.genre}</div>
+          <div className="mt-1 text-sm text-slate-500">{album.artist || "未知艺术家"} · {album.year} · {album.genre || "音频"}</div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
             <Badge>{album.format}</Badge>
             <Badge>{album.khz}kHz / {album.bit}bit</Badge>
@@ -33,7 +33,7 @@ export function AlbumDetailPage() {
             <Badge>{(album.tracks.reduce((s, t) => s + t.bitrateK, 0) / 1000).toFixed(1)}Mbps 均值</Badge>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={() => playAlbum(album)}><Play className="h-4 w-4" fill="currentColor" />播放全部</Button>
+            {album.tracks.length > 0 && <Button onClick={() => playAlbum(album)}><Play className="h-4 w-4" fill="currentColor" />播放全部</Button>}
             <Button variant="outline">下载整专辑 (.zip)</Button>
             <Button variant="outline">♥ 收藏</Button>
             <Button variant="outline">编辑</Button>
@@ -84,6 +84,11 @@ export function AlbumDetailPage() {
             })}
           </tbody>
         </table>
+        {album.tracks.length === 0 && (
+          <div className="border-t border-slate-100 p-6 text-center text-xs text-slate-400">
+            M0 为文件级资产：曲目/艺术家标签解析随 M4 音乐模块接入，届时可在此在线播放
+          </div>
+        )}
       </div>
 
       {album.note && (

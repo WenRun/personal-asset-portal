@@ -1,42 +1,34 @@
 # 个人资源门户 · 前端（web/）
 
 Vite + React 18 + TypeScript + TailwindCSS + React Router + TanStack Query + Zustand + lucide-react。
-当前为 **Mock 数据阶段**：全部页面与交互已完成，数据层通过 `src/api/client.ts` 接缝隔离，M0 后端就绪后逐函数替换为真实 REST API（页面代码零改动）。
+**已接入真实后端**（`server/`，默认 http://localhost:8000，可用 `VITE_API_BASE` 覆盖）：cookie 会话、
+REST 数据、Meilisearch 聚合搜索、真实上传与任务中心。后端 M0 返回通用资产数据，
+领域字段（字族/曲目/系列/EXIF）由前端映射层补默认值，随 M1–M5 后端解析器就绪自然填充。
 
 ## 运行
 
 ```bash
 cd web
 npm install
-npm run dev     # http://localhost:5173
-npm run build   # 产物在 dist/
+npm run dev     # http://localhost:5173（API 默认 :8000，需先启动 server + worker）
+npm run build
 ```
 
-## Mock 账号
+## 账号（真实会话，argon2id + 服务端 cookie）
 
-- 管理员：`admin` / `admin1234`（登录页有快捷填入按钮）
-- 普通用户：`demo` / `demo1234`
-- 不登录 = 访客：仅可浏览列表，点卡片/搜索会弹登录引导（对应设计 §4.7 权限矩阵）
+- 管理员：`admin` / `admin1234`（后端首次启动由环境变量引导创建）
+- 访客：不登录即可浏览列表；搜索/详情/下载会触发登录引导（§4.7 权限矩阵）
 
-## 目录
+## 数据层说明
 
-```
-src/
-├── api/client.ts      # Mock API（延迟模拟 + 与未来 REST 同签名）
-├── mocks/data.ts      # 五类资源 + jobs/confirm/tags/stats 的 mock 数据
-├── stores/            # zustand：auth(持久化) / player(播放条) / ui(弹层) / prefs(预览文案+观看进度,持久化)
-├── components/        # layout.tsx(AppShell/Sidebar/Topbar) / PlayerBar / CommandPalette / ui.tsx(原语)
-├── features/          # auth dashboard fonts music videos books images search admin
-├── lib/               # utils / search(mock 检索，对应 Meilisearch 聚合)
-└── types.ts
-```
+- `src/api/client.ts`：唯一数据出口。REST 请求 + 通用资产 → 五类视图模型的映射
+  （色相由 id 哈希派生做封面占位；后端出缩略图后替换 `HueCover` 即可）。
+- `src/stores/auth.ts`：登录/注册/登出走真实 API；`hydrate()` 在启动时用 cookie 校正本地缓存。
+- 搜索：`GET /api/search`（Meilisearch multi-search 代理），CommandPalette 与 /search 共用。
+- 上传：顶栏「上传」（admin）→ `POST /api/admin/uploads`，与目录扫描共用入库管道。
 
-## 已实现的交互（均为 mock）
+## 已实现交互
 
-- 三级角色与路由守卫、访客引导弹层、⌘K 全局搜索（键盘导航 + 回车跳详情）
-- 字体：全局样张文案/字号/字重（跨页同步）、可变轴滑杆、筛选
-- 音乐：专辑墙/艺术家视图、点曲目 → 底部播放条跨页计时播放、上一首/下一首/拖动进度
-- 视频：系列/素材两级浏览、mock 播放器计时、观看进度记忆与续播、集数切换
-- 书籍：系列分组、阅读进度记忆、阅读器弹层翻页
-- 图片：月份/相机筛选、收藏、Lightbox 左右切换 + EXIF 面板
-- 管理端：任务重试、入库确认队列、标签创建、设置项
+三级角色与路由守卫、⌘K 搜索（键盘导航）、字体样张墙（全局文案/字重）、音乐播放条（mock 计时，
+真实音频流随 M4）、视频 mock 播放与进度记忆（真实 Direct Play 随 M5）、书籍阅读器弹层（M3）、
+图片 Lightbox + EXIF（真实 EXIF 随 M1）、任务中心（真实 jobs，10s 刷新）、标签、设置（注册开关真实读写）。

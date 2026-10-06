@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   BookOpen, Film, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Music,
   Search, Settings, Tag, Type, Wrench, X,
@@ -7,19 +8,20 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { useUI } from '@/stores/ui'
-import { STATS } from '@/mocks/data'
+import { api } from '@/api/client'
 import { Button } from '@/components/ui'
+import { UploadButton } from '@/components/UploadButton'
 import { PlayerBar } from '@/components/PlayerBar'
 import { CommandPalette } from '@/components/CommandPalette'
 
 const NAV = [
-  { to: '/', label: '仪表盘', icon: LayoutDashboard, count: '' },
-  { to: '/fonts', label: '字体', icon: Type, count: STATS.fontsFiles },
-  { to: '/music', label: '音乐', icon: Music, count: STATS.albums + ' 张' },
-  { to: '/videos', label: '视频', icon: Film, count: String(STATS.seriesCount + STATS.clips) },
-  { to: '/books', label: '书籍', icon: BookOpen, count: '1.3w' },
-  { to: '/images', label: '图片', icon: ImageIcon, count: STATS.images },
-]
+  { to: '/', label: '仪表盘', icon: LayoutDashboard, key: '' },
+  { to: '/fonts', label: '字体', icon: Type, key: 'font' },
+  { to: '/music', label: '音乐', icon: Music, key: 'music' },
+  { to: '/videos', label: '视频', icon: Film, key: 'video' },
+  { to: '/books', label: '书籍', icon: BookOpen, key: 'book' },
+  { to: '/images', label: '图片', icon: ImageIcon, key: 'image' },
+] as const
 
 function Sidebar() {
   const user = useAuth((s) => s.user)
@@ -27,6 +29,11 @@ function Sidebar() {
   const sidebarOpen = useUI((s) => s.sidebarOpen)
   const setSidebar = useUI((s) => s.setSidebar)
   const nav = useNavigate()
+  const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15_000 })
+  const countOf = (key: string) => {
+    if (!key || !stats) return ''
+    return String(stats.counts[key as keyof typeof stats.counts] ?? 0)
+  }
 
   const inner = (
     <div className="flex h-full flex-col bg-slate-900 text-slate-300">
@@ -40,7 +47,7 @@ function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4 text-sm">
-        {NAV.map(({ to, label, icon: Icon, count }) => (
+        {NAV.map(({ to, label, icon: Icon, key }) => (
           <NavLink
             key={to}
             to={to}
@@ -55,7 +62,7 @@ function Sidebar() {
           >
             <Icon className="h-4 w-4" />
             {label}
-            {count && <span className={cn('ml-auto text-xs', to === '/' ? 'text-slate-500' : 'text-slate-500')}>{count}</span>}
+            {countOf(key) && <span className="ml-auto text-xs text-slate-500">{countOf(key)}</span>}
           </NavLink>
         ))}
         <div className="mt-3 space-y-1 border-t border-slate-800 pt-3">
@@ -64,7 +71,7 @@ function Sidebar() {
           </a>
           <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/jobs')}>
             <Wrench className="h-4 w-4" />任务中心
-            {STATS.jobsFailed > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{STATS.jobsFailed}</span>}
+            {(stats?.jobs.failed ?? 0) > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{stats?.jobs.failed}</span>}
           </a>
           <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/settings')}>
             <Settings className="h-4 w-4" />设置
@@ -152,7 +159,7 @@ function Topbar() {
         )}
         <div className="ml-auto flex items-center gap-2">
           {user?.role === 'admin' ? (
-            <Button size="md" onClick={() => nav('/jobs')}>上传</Button>
+            <UploadButton />
           ) : user ? null : (
             <>
               <Button variant="outline" onClick={() => nav('/login')}>登录</Button>

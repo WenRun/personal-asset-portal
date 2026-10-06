@@ -11,7 +11,7 @@ export function ImageDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: api.photos })
-  const [rating, setRating] = useState(4)
+  const [rating, setRating] = useState<number | null>(null)
 
   const idx = useMemo(() => (photos ?? []).findIndex((p) => p.id === id), [photos, id])
   const photo = photos?.[idx]
@@ -73,7 +73,7 @@ export function ImageDetailPage() {
             </div>
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">评分</div>
-              <RatingStars value={rating} onChange={setRating} />
+              <RatingStars value={rating ?? photo.rating} onChange={setRating} />
             </section>
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">EXIF</div>

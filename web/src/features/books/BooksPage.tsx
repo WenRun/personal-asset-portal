@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useAssetNav, Badge, Chip, HueCover, PageHeader } from '@/components/ui'
-import { STATS } from '@/mocks/data'
 
 function BookCover({ hue, title, className }: { hue: number; title: string; className?: string }) {
   return (
@@ -43,7 +42,7 @@ export function BooksPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="书籍" sub={`${STATS.books} 本 · EPUB 8,204 / PDF 3,150 / MOBI 1,708（mock 展示 ${books?.length ?? 0} 本）`} />
+      <PageHeader title="书籍" sub={`${books?.length ?? 0} 本书籍文件（元数据解析随 M3 接入）`} />
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>

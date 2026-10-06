@@ -7,19 +7,63 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_app_settings, get_current_user, require_admin, require_member
 from app.core.db import get_db
 from app.core.errors import bad_request, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, Tag, User
+from app.core.models import Asset, AssetTag, Job, Tag, User
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
 
 router = APIRouter(prefix="/api", tags=["assets"])
+
+
+# ---------- 汇总统计 / 最近入库（公开：仪表盘与侧栏用；需在 /{route} 之前声明） ----------
+
+@router.get("/stats")
+async def stats(db: AsyncSession = Depends(get_db)):
+    type_counts = dict(
+        (await db.execute(
+            select(Asset.asset_type, func.count()).where(Asset.deleted_at.is_(None)).group_by(Asset.asset_type)
+        )).all()
+    )
+    job_status = dict(
+        (await db.execute(select(Job.status, func.count()).group_by(Job.status))).all()
+    )
+    done_today = (
+        await db.execute(
+            select(func.count()).select_from(Job).where(
+                Job.status == "done",
+                Job.finished_at.isnot(None),
+                func.date(Job.finished_at) == func.current_date(),
+            )
+        )
+    ).scalar_one()
+    return {
+        "counts": {t: type_counts.get(t, 0) for t in ("font", "music", "video", "book", "image")},
+        "jobs": {
+            "queued": job_status.get("queued", 0),
+            "running": job_status.get("running", 0),
+            "failed": job_status.get("failed", 0),
+            "done_today": done_today,
+        },
+    }
+
+
+@router.get("/recent")
+async def recent(limit: int = 12, db: AsyncSession = Depends(get_db)):
+    rows = (
+        await db.execute(
+            select(Asset).where(Asset.deleted_at.is_(None))
+            .order_by(Asset.created_at.desc(), Asset.id.desc())
+            .limit(max(1, min(limit, 50)))
+        )
+    ).scalars().all()
+    return [_item(a) for a in rows]
 
 
 def _cursor_encode(created_at: datetime, id_: uuid.UUID) -> str:

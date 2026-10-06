@@ -1,24 +1,32 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
-import { GROUP_LABEL, searchAll } from '@/lib/search'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/api/client'
+import { GROUP_LABEL, assetHit } from '@/lib/search'
 import { HueCover, PageHeader } from '@/components/ui'
 import type { AssetType } from '@/types'
 
-/** /search?q= 完整结果页（Cmd+K 只展示每类 Top5，这里展示全部命中） */
+const ORDER: AssetType[] = ['font', 'music', 'video', 'book', 'image']
+const GROUP_KEY: Record<AssetType, string> = { font: 'fonts', music: 'music', video: 'videos', book: 'books', image: 'images' }
+
+/** /search?q= 完整结果页（Cmd+K 只展示每类 Top5，这里展示全部命中，上限 50） */
 export function SearchPage() {
   const [params] = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
   const nav = useNavigate()
-  const results = searchAll(q, 999)
+  const { data } = useQuery({ queryKey: ['search', q], queryFn: () => api.search(q, 50) })
 
-  const groups = (['fonts', 'music', 'videos', 'books', 'images'] as const).map((k) => ({
-    key: k, list: results[k],
+  const byIndex = new Map((data?.results ?? []).map((r) => [r.index, r]))
+  const groups = ORDER.map((t) => ({
+    type: t,
+    list: (byIndex.get(GROUP_KEY[t])?.hits ?? []).map(assetHit),
   })).filter((g) => g.list.length > 0)
+  const total = (data?.results ?? []).reduce((s, r) => s + r.estimated_total, 0)
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="全局搜索" sub={q ? `「${q}」共 ${results.total} 项命中` : '输入关键词搜索全部五类资源（mock）'} />
+      <PageHeader title="全局搜索" sub={q ? `「${q}」约 ${total} 项命中` : '输入关键词搜索全部五类资源（Meilisearch 聚合）'} />
       <div className="mt-4">
         <input
           autoFocus
@@ -30,9 +38,9 @@ export function SearchPage() {
       </div>
 
       <div className="mt-6 max-w-3xl space-y-6">
-        {groups.map(({ key, list }) => (
-          <div key={key}>
-            <div className="mb-2 text-[10px] font-semibold text-slate-400">{GROUP_LABEL[list[0].type as AssetType]} · {list.length}</div>
+        {groups.map(({ type, list }) => (
+          <div key={type}>
+            <div className="mb-2 text-[10px] font-semibold text-slate-400">{GROUP_LABEL[type]} · {list.length}</div>
             <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white text-sm">
               {list.map((hit) => (
                 <div
@@ -53,9 +61,9 @@ export function SearchPage() {
             </div>
           </div>
         ))}
-        {results.total === 0 && (
+        {groups.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
-            {q ? `没有匹配「${q}」的资源` : '试试搜索「永」「三体」「Rust」「雪山」…'}
+            {q ? `没有匹配「${q}」的资源` : '试试搜索已入库的文件名关键词'}
           </div>
         )}
       </div>

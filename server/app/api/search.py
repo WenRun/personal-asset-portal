@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 
 
 @router.get("")
-async def search(q: str = Query(min_length=1), types: str | None = None,
+async def search(q: str = "", types: str | None = None,
                  limit: int = 8, _: uuid.UUID = Depends(require_member), db: AsyncSession = Depends(get_db)):
     if types:
         wanted = [t.strip() for t in types.split(",") if t.strip() in ROUTE_TO_TYPE]

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
 import { GuestGate } from '@/components/ui'
@@ -43,6 +44,9 @@ function DashboardGate() {
 }
 
 export default function App() {
+  const hydrate = useAuth((s) => s.hydrate)
+  useEffect(() => { void hydrate() }, [hydrate])
+
   return (
     <>
       <Routes>

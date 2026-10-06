@@ -61,7 +61,7 @@ async def multi_search(q: str, index_uids: list[str], limit: int = 8) -> list[di
             json={
                 "queries": [
                     {"q": q, "indexUid": uid, "limit": limit, "attributesToRetrieve": [
-                        "id", "type", "title", "file_name", "note", "tags", "rating", "created_at",
+                        "id", "type", "title", "file_name", "note", "tags", "rating", "created_at", "size_bytes",
                     ]}
                     for uid in index_uids
                 ]
@@ -82,4 +82,5 @@ def doc_from_asset(a) -> dict:
         "tags": [],
         "rating": a.rating,
         "created_at": a.created_at.isoformat() if a.created_at else None,
+        "size_bytes": a.size_bytes,
     }

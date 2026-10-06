@@ -1,40 +1,41 @@
 import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { Badge, Input, PageHeader } from '@/components/ui'
 
-const SCAN_ROOTS = [
-  { alias: 'fonts:', path: '/data/library/fonts', types: '字体' },
-  { alias: 'music:', path: '/data/library/music', types: '音乐' },
-  { alias: 'videos:', path: '/data/library/videos', types: '视频' },
-  { alias: 'books:', path: '/data/library/books', types: '书籍' },
-  { alias: 'images:', path: '/data/library/images', types: '图片' },
-  { alias: 'uploads:', path: '/data/library/uploads', types: '上传暂存（注册为扫描根）' },
-]
-
 export function SettingsPage() {
+  const qc = useQueryClient()
   const { fontText, setFontPreview } = usePrefs()
-  const [regOpen, setRegOpen] = useState(true)
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.settings })
+  const [regOpen, setRegOpen] = useState<boolean | null>(null)
+  const effectiveOpen = regOpen ?? settings?.registration_open ?? true
+
+  const update = useMutation({
+    mutationFn: (patch: { registration_open: boolean }) => api.updateSettings(patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
+  })
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="系统设置" sub="运行期配置存 settings 表，修改即时生效（mock）" />
+      <PageHeader title="系统设置" sub="运行期配置存 settings 表（真实读写）" />
 
       <div className="mt-4 max-w-2xl space-y-4">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-1 text-sm font-semibold">注册开关</div>
-          <p className="mb-3 text-xs text-slate-400">关闭后仅管理员可在用户管理页手工创建账号（详细设计 §4.7）。</p>
+          <p className="mb-3 text-xs text-slate-400">关闭后仅管理员可创建账号（详细设计 §4.7）。</p>
           <button
-            className={`relative h-6 w-11 rounded-full transition ${regOpen ? 'bg-brand-600' : 'bg-slate-300'}`}
-            onClick={() => setRegOpen(!regOpen)}
+            className={`relative h-6 w-11 rounded-full transition ${effectiveOpen ? 'bg-brand-600' : 'bg-slate-300'}`}
+            onClick={() => { setRegOpen(!effectiveOpen); update.mutate({ registration_open: !effectiveOpen }) }}
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${regOpen ? 'left-[22px]' : 'left-0.5'}`} />
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${effectiveOpen ? 'left-[22px]' : 'left-0.5'}`} />
           </button>
-          <span className="ml-3 text-sm text-slate-500">{regOpen ? '开放注册' : '已关闭'}</span>
+          <span className="ml-3 text-sm text-slate-500">{effectiveOpen ? '开放注册' : '已关闭'}</span>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-1 text-sm font-semibold">字体样张默认文案</div>
-          <p className="mb-3 text-xs text-slate-400">字体样张墙与详情页的全局预览文案。</p>
+          <p className="mb-3 text-xs text-slate-400">字体样张墙与详情页的全局预览文案（当前存浏览器本地，M2 移入服务端设置）。</p>
           <Input className="w-full" value={fontText} onChange={(e) => setFontPreview({ fontText: e.target.value })} />
         </section>
 
@@ -42,13 +43,15 @@ export function SettingsPage() {
           <div className="mb-1 text-sm font-semibold">资源根目录（scan_roots）</div>
           <p className="mb-3 text-xs text-slate-400">storage_key = &#123;root_alias&#125;:&#123;相对路径&#125;；原始文件只读不搬移。</p>
           <div className="overflow-hidden rounded-lg border border-slate-100 text-sm">
-            {SCAN_ROOTS.map((r) => (
+            {(settings?.scan_roots ?? []).map((r) => (
               <div key={r.alias} className="flex items-center gap-3 border-b border-slate-100 px-3 py-2 last:border-0">
-                <Badge tone="brand">{r.alias}</Badge>
-                <code className="font-mono text-xs text-slate-500">{r.path}</code>
-                <span className="ml-auto text-xs text-slate-400">{r.types}</span>
+                <Badge tone="brand">{r.alias}:</Badge>
+                <code className="truncate font-mono text-xs text-slate-500">{r.path}</code>
               </div>
             ))}
+            {(settings?.scan_roots ?? []).length === 0 && (
+              <div className="p-4 text-center text-xs text-slate-400">加载中…</div>
+            )}
           </div>
         </section>
 

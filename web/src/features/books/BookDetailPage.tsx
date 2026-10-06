@@ -18,7 +18,7 @@ export function BookDetailPage() {
   const { data: book } = useQuery({ queryKey: ['book', id], queryFn: () => api.book(id!), enabled: !!id })
   const { bookProgress, setBookProgress } = usePrefs()
   const [readerOpen, setReaderOpen] = useState(false)
-  const [rating, setRating] = useState(book?.rating ?? 0)
+  const [rating, setRating] = useState<number | null>(null)
 
   if (!book) return <div className="p-6 text-slate-400">加载中…</div>
 
@@ -69,9 +69,9 @@ export function BookDetailPage() {
             {book.tags.map((t) => <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">{t}</span>)}
           </div>
           <h1 className="text-2xl font-bold">{book.title}</h1>
-          <div className="mt-1 text-sm text-slate-500">{book.author} · {book.publisher} · {book.year}</div>
+          <div className="mt-1 text-sm text-slate-500">{book.author || "作者未知"} · {book.publisher || "出版社未知"} · {book.year}</div>
           <div className="mt-2 flex items-center gap-2">
-            <RatingStars value={rating} onChange={setRating} />
+            <RatingStars value={rating ?? book.rating} onChange={setRating} />
             <span className="text-xs text-slate-400">{rating}.0 · 我的评分</span>
           </div>
 
@@ -97,7 +97,7 @@ export function BookDetailPage() {
 
           <div className="mt-5">
             <div className="mb-1.5 text-xs font-semibold text-slate-400">简介</div>
-            <p className="text-sm leading-relaxed text-slate-600">{book.desc}</p>
+            <p className="text-sm leading-relaxed text-slate-600">{book.desc || "（简介随 M3 元数据解析接入；当前可手动维护备注）"}</p>
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">

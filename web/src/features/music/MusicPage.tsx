@@ -5,7 +5,6 @@ import { api } from '@/api/client'
 import { usePlayer } from '@/stores/player'
 import { useAssetNav, Badge, Chip, EqBars, HueCover, PageHeader } from '@/components/ui'
 import { fmtTime } from '@/lib/utils'
-import { STATS } from '@/mocks/data'
 import type { Album } from '@/types'
 
 type View = 'album' | 'artist' | 'tracks'
@@ -44,8 +43,9 @@ export function MusicPage() {
   const byArtist = useMemo(() => {
     const map = new Map<string, Album[]>()
     for (const a of list) {
-      if (!map.has(a.artist)) map.set(a.artist, [])
-      map.get(a.artist)!.push(a)
+      const artist = a.artist || "未知艺术家"
+      if (!map.has(artist)) map.set(artist, [])
+      map.get(artist)!.push(a)
     }
     return [...map.entries()]
   }, [list])
@@ -58,7 +58,7 @@ export function MusicPage() {
     <div className="p-4 md:p-6">
       <PageHeader
         title="音乐"
-        sub={`${STATS.albums} 张专辑 · ${STATS.tracks} 首曲目（mock 展示 ${albums?.length ?? 0} 张）`}
+        sub={`${albums?.length ?? 0} 个音频文件（专辑/曲目聚合随 M4 接入）`}
         right={
           <>
             <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-xs">
@@ -109,7 +109,7 @@ export function MusicPage() {
                 <span className="absolute right-2 top-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">{a.format}</span>
               </HueCover>
               <div className="mt-2 truncate text-sm font-medium">{a.title}</div>
-              <div className="truncate text-xs text-slate-400">{a.artist} · {a.year} · {a.tracks.length} 首</div>
+              <div className="truncate text-xs text-slate-400">{a.artist || "未知艺术家"} · {a.year} · {a.format}</div>
             </div>
           ))}
         </div>

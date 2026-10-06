@@ -3,25 +3,24 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { useAssetNav, Badge, Chip, HueCover, PageHeader } from '@/components/ui'
-import { STATS } from '@/mocks/data'
 
 export function FontsPage() {
   const { data: fonts } = useQuery({ queryKey: ['fonts'], queryFn: api.fonts })
   const nav = useAssetNav()
   const { fontText, fontSize, fontWeight, setFontPreview } = usePrefs()
-  const [filter, setFilter] = useState<'all' | 'han' | 'variable' | 'fav'>('all')
+  const [filter, setFilter] = useState<'all' | 'otf' | 'ttf' | 'fav'>('all')
 
   const list = useMemo(() => {
     const arr = fonts ?? []
-    if (filter === 'han') return arr.filter((f) => f.languages.some((l) => l.includes('中文')))
-    if (filter === 'variable') return arr.filter((f) => f.variable)
+    if (filter === 'otf') return arr.filter((f) => f.files[0].format === 'OTF')
+    if (filter === 'ttf') return arr.filter((f) => f.files[0].format === 'TTF')
     if (filter === 'fav') return arr.filter((f) => f.favorite)
     return arr
   }, [fonts, filter])
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="字体" sub={`${STATS.fontFamilies} 个字族 · ${STATS.fontsFiles} 个文件（mock 展示 ${fonts?.length ?? 0} 个）`} />
+      <PageHeader title="字体" sub={`${fonts?.length ?? 0} 个字体文件（M0 通用元数据 · 字族/字重解析随 M2 接入）`} />
 
       {/* 全局预览文案控制条（prefsStore 共享，详情页样张同步） */}
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm md:flex-nowrap">
@@ -40,8 +39,8 @@ export function FontsPage() {
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
-        <Chip active={filter === 'han'} onClick={() => setFilter('han')}>含中文</Chip>
-        <Chip active={filter === 'variable'} onClick={() => setFilter('variable')}>可变字体</Chip>
+        <Chip active={filter === 'otf'} onClick={() => setFilter('otf')}>OTF</Chip>
+        <Chip active={filter === 'ttf'} onClick={() => setFilter('ttf')}>TTF</Chip>
         <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}>★ 收藏</Chip>
       </div>
 
