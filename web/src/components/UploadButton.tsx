@@ -17,9 +17,9 @@ export function UploadButton() {
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const mut = useMutation({
-    mutationFn: async (files: FileList) => {
+    mutationFn: async (files: File[]) => {
       const results: UploadResult[] = []
-      for (const f of Array.from(files)) {
+      for (const f of files) {
         try {
           const asset = await api.upload(f)
           results.push({ name: f.name, type: asset.type })
@@ -53,7 +53,11 @@ export function UploadButton() {
     <>
       <input
         ref={inputRef} type="file" multiple className="hidden"
-        onChange={(e) => { if (e.target.files?.length) mut.mutate(e.target.files); e.target.value = '' }}
+        onChange={(e) => {
+          const files = e.target.files ? Array.from(e.target.files) : []
+          e.target.value = ''
+          if (files.length) mut.mutate(files)
+        }}
       />
       <Button onClick={() => inputRef.current?.click()} disabled={mut.isPending}>
         {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
