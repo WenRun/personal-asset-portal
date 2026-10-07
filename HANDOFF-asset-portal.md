@@ -206,6 +206,7 @@ curl -s -b /tmp/jar "localhost:8000/api/search?q=思源"
 | web/Dockerfile + web/nginx-static.conf | 前端多阶段构建与静态托管（SPA 回退 + 产物 immutable 缓存；VITE_API_BASE 留空同源部署） |
 | deploy/nginx-portal.conf | 外层 NGINX 反代样例（/api/ 与 / 分流、上传体积上限、SSE 关缓冲；取代已删除的 Caddyfile） |
 | deploy/backup.sh | pg_dump + rsync library 备份脚本（支持宿主机直连与 docker exec 容器内两种模式） |
+| docs/deploy-fnos-nas.md | 飞牛 NAS（fnOS）Docker 部署步骤指南：前置确认 / 代码上机 / 建库 / .env / bind mount / 构建启动 / NGINX 接入 / 验证清单 / 运维与 FAQ |
 | .gitignore | 排除 server/.env（含口令）、server/data、venv、node_modules、.idea |
 
 ### 运行时位置（不在 git 内）
