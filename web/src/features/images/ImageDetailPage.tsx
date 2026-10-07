@@ -4,13 +4,17 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Download, Pencil, Share2 } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
+import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, HueCover, RatingStars } from '@/components/ui'
+import { ShareDialog } from '@/components/ShareDialog'
 import { cn } from '@/lib/utils'
 
 export function ImageDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: api.photos })
+  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const [shareOpen, setShareOpen] = useState(false)
+  const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
   const [rating, setRating] = useState<number | null>(null)
   const [viewerFail, setViewerFail] = useState(false)
   const stripRef = useRef<HTMLDivElement>(null)
@@ -40,7 +44,11 @@ export function ImageDetailPage() {
         <Badge className="bg-slate-800 text-slate-400">相册：{photo.album}</Badge>
         <div className="ml-auto flex items-center gap-1">
           <button className="rounded-lg p-2 hover:bg-slate-800"><Download className="h-4 w-4" /></button>
-          <button className="rounded-lg p-2 hover:bg-slate-800"><Share2 className="h-4 w-4" /></button>
+          {isAdmin && (
+            <button className="rounded-lg p-2 hover:bg-slate-800" title="生成公开分享链接" onClick={() => setShareOpen(true)}>
+              <Share2 className="h-4 w-4" />
+            </button>
+          )}
           <button className="rounded-lg p-2 hover:bg-slate-800"><Pencil className="h-4 w-4" /></button>
         </div>
       </header>
@@ -139,7 +147,11 @@ export function ImageDetailPage() {
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">标签</div>
               <div className="flex flex-wrap gap-1.5 text-xs">
-                {photo.tags.map((t) => <Badge key={t}>{t}</Badge>)}
+                {photo.tags.map((t) => (
+                  <button key={t} className="transition hover:opacity-75" title={`查看「${t}」标签下的图片`} onClick={() => nav(`/images?tag=${encodeURIComponent(t)}`)}>
+                    <Badge>{t}</Badge>
+                  </button>
+                ))}
                 <button className="rounded border border-dashed border-slate-300 px-2 py-0.5 text-slate-400 hover:border-brand-400 hover:text-brand-600">+ 添加</button>
               </div>
             </section>
@@ -154,6 +166,10 @@ export function ImageDetailPage() {
           </div>
         </aside>
       </div>
+
+      {photo && (
+        <ShareDialog assetId={photo.id} assetTitle={photo.title} open={shareOpen} onClose={() => setShareOpen(false)} />
+      )}
     </div>
   )
 }

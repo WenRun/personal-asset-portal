@@ -78,6 +78,8 @@ export interface RawAsset {
 
 export interface UserPayload { id: string; username: string; role: 'admin' | 'member' }
 
+export interface ListParams { q?: string; tag?: string; favorite?: boolean }
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
     credentials: 'include',
@@ -232,8 +234,12 @@ function toPhoto(r: RawAsset): Photo {
   }
 }
 
-async function listRaw(route: string): Promise<RawAsset[]> {
-  const d = await req<{ items: RawAsset[] }>(`/api/${route}?page_size=200`)
+async function listRaw(route: string, params?: { q?: string; tag?: string; favorite?: boolean }): Promise<RawAsset[]> {
+  const usp = new URLSearchParams({ page_size: '200' })
+  if (params?.q) usp.set('q', params.q)
+  if (params?.tag) usp.set('tag', params.tag)
+  if (params?.favorite) usp.set('favorite', 'true')
+  const d = await req<{ items: RawAsset[] }>(`/api/${route}?${usp}`)
   return d.items
 }
 
@@ -267,8 +273,13 @@ export const api = {
   recent: (limit = 12) => req<RawAsset[]>(`/api/recent?limit=${limit}`),
 
   // 五类资源
-  fonts: async (): Promise<FontFamily[]> => (await listRaw('fonts')).map(toFont),
-  font: async (id: string) => toFont(await detailRaw(id)),
+  videos: async (p?: ListParams): Promise<Clip[]> => (await listRaw('videos', p)).map(toClip),
+  video: async (id: string) => toClip(await detailRaw(id)),
+  books: async (p?: ListParams): Promise<Book[]> => (await listRaw('books', p)).map(toBook),
+  book: async (id: string) => toBook(await detailRaw(id)),
+  photos: async (p?: ListParams): Promise<Photo[]> => (await listRaw('images', p)).map(toPhoto),
+  photo: async (id: string) => toPhoto(await detailRaw(id)),
+  fonts: async (p?: ListParams): Promise<FontFamily[]> => (await listRaw('fonts', p)).map(toFont),
   fontCharset: (id: string) => req<{ name: string; pct: number }[]>(`/api/fonts/${id}/charset`),
   bookFileUrl: (id: string) => `${BASE}/api/books/${id}/file`,
   bookCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/books/${id}/cover?size=${size}`,
@@ -333,12 +344,7 @@ export const api = {
   confirmSeries: (assetId: string, seriesName: string, episode: number) =>
     req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
-  videos: async (): Promise<Clip[]> => (await listRaw('videos')).map(toClip),
-  video: async (id: string) => toClip(await detailRaw(id)),
-  books: async (): Promise<Book[]> => (await listRaw('books')).map(toBook),
-  book: async (id: string) => toBook(await detailRaw(id)),
-  photos: async (): Promise<Photo[]> => (await listRaw('images')).map(toPhoto),
-  photo: async (id: string) => toPhoto(await detailRaw(id)),
+  font: async (id: string) => toFont(await detailRaw(id)),
 
   // 编辑（admin）
   patchAsset: (id: string, patch: { title?: string; note?: string; rating?: number; is_favorite?: boolean }) =>
@@ -350,10 +356,13 @@ export const api = {
   createTag: (name: string) => req<{ id: string; name: string }>('/api/tags', { method: 'POST', body: JSON.stringify({ name }) }),
 
   // 搜索（Meilisearch 聚合代理；member）
-  search: (q: string, limit = 8) =>
+  search: (q: string, limit = 8, tag?: string) =>
     req<{
-      results: { index: string; estimated_total: number; hits: RawAsset[] }[]
-    }>(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+      results: { index: string; estimated_total: number; hits: RawAsset[]; facet_distribution?: { tags?: Record<string, number> } }[]
+    }>(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`),
+
+  // 歌词（音乐域；meta.lyrics 原文，LRC 带时间戳或纯文本）
+  lyrics: (assetId: string) => req<{ lyrics: string | null }>(`/api/music/${assetId}/lyrics`),
 
   // 管理
   jobs: () => req<JobPayload[]>('/api/admin/jobs?limit=100'),

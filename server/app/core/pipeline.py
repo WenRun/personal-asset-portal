@@ -10,7 +10,7 @@ from app.core import search as meili
 from app.core.config import get_settings
 from app.core.fingerprints import compute_fingerprint
 from app.core.jobs import enqueue
-from app.core.models import Asset, Setting
+from app.core.models import Asset, AssetTag, Setting, Tag
 from app.core.registry import asset_type_of, ext_of, mime_of
 from app.core.storage import LocalStorage
 
@@ -115,7 +115,13 @@ async def index_meili(db: AsyncSession, payload: dict) -> None:
     if asset.deleted_at is not None:
         await meili.delete_document(asset.asset_type, str(asset.id))
         return
-    await meili.upsert_documents(asset.asset_type, [meili.doc_from_asset(asset)])
+    tag_names = (
+        await db.execute(
+            select(Tag.name).join(AssetTag, AssetTag.tag_id == Tag.id)
+            .where(AssetTag.asset_id == asset.id).order_by(Tag.name)
+        )
+    ).scalars().all()
+    await meili.upsert_documents(asset.asset_type, [meili.doc_from_asset(asset, list(tag_names))])
 
 
 async def roots_of(db: AsyncSession) -> dict[str, str]:

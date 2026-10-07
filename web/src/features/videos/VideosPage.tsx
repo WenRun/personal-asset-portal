@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Chip, HueCover, PageHeader } from '@/components/ui'
 import { fmtDate, fmtTime } from '@/lib/utils'
@@ -9,7 +10,13 @@ type SeriesDetailed = Awaited<ReturnType<typeof api.videoSeries>>[number] & {
 }
 
 export function VideosPage() {
-  const { data: videos } = useQuery({ queryKey: ['videos'], queryFn: api.videos })
+  const [params, setParams] = useSearchParams()
+  const tagFilter = params.get('tag') ?? ''
+  const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  const { data: videos } = useQuery({
+    queryKey: ['videos', tagFilter],
+    queryFn: () => api.videos(tagFilter ? { tag: tagFilter } : undefined),
+  })
   const { data: series } = useQuery({
     queryKey: ['video-series'],
     queryFn: async (): Promise<SeriesDetailed[]> => {
@@ -20,7 +27,13 @@ export function VideosPage() {
   const nav = useAssetNav()
   const [filter, setFilter] = useState<'all' | 'series' | 'clip' | 'playable'>('all')
 
-  const seriesList = useMemo(() => series ?? [], [series])
+  const seriesList = useMemo(() => {
+    const all = series ?? []
+    if (!tagFilter) return all
+    // 标签过滤时：系列只要有任一剧集带该标签就保留（剧集资产也在 tag 过滤结果里）
+    const tagged = new Set((videos ?? []).map((v) => v.id))
+    return all.filter((s) => s.episodeList.some((e) => tagged.has(e.asset_id)))
+  }, [series, videos, tagFilter])
   const seriesAssetIds = useMemo(() => new Set(seriesList.flatMap((s) => s.episodeList.map((e) => e.asset_id))), [seriesList])
   const clips = useMemo(() => (videos ?? []).filter((v) => !seriesAssetIds.has(v.id)), [videos, seriesAssetIds])
   const showSeries = filter === 'all' || filter === 'series'
@@ -35,6 +48,7 @@ export function VideosPage() {
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
+        {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'series'} onClick={() => setFilter('series')}>教程系列</Chip>
         <Chip active={filter === 'clip'} onClick={() => setFilter('clip')}>素材</Chip>
         <Chip active={filter === 'playable'} onClick={() => setFilter('playable')}>可在线播放</Chip>

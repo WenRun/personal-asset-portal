@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Link2, X } from 'lucide-react'
 import { api } from '@/api/client'
+import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, Modal, RatingStars } from '@/components/ui'
+import { ShareDialog } from '@/components/ShareDialog'
 import { fmtDate } from '@/lib/utils'
 import type { Book } from '@/types'
 
 /** 书籍详情（§5.4）：真实元数据 + 自建 epub 章节阅读器 / 原生 PDF + 服务端进度（user_progress） */
 export function BookDetailPage() {
   const { id } = useParams()
+  const nav = useNavigate()
   const qc = useQueryClient()
+  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const [shareOpen, setShareOpen] = useState(false)
   const { data: book } = useQuery({ queryKey: ['book', id], queryFn: () => api.book(id!), enabled: !!id })
   const { data: progress } = useQuery({ queryKey: ['progress', id], queryFn: () => api.getProgress(id!), enabled: !!id })
   const [readerOpen, setReaderOpen] = useState(false)
@@ -58,7 +63,11 @@ export function BookDetailPage() {
             {book.series && (
               <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">系列 · {book.series.name} 第 {book.series.idx} 部</span>
             )}
-            {book.tags.map((t) => <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">{t}</span>)}
+            {book.tags.map((t) => (
+              <button key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 transition hover:bg-brand-50 hover:text-brand-700" title={`查看「${t}」标签下的书籍`} onClick={() => nav(`/books?tag=${encodeURIComponent(t)}`)}>
+                {t}
+              </button>
+            ))}
           </div>
           <h1 className="text-2xl font-bold">{book.title}</h1>
           <div className="mt-1 text-sm text-slate-500">
@@ -67,6 +76,11 @@ export function BookDetailPage() {
           <div className="mt-2 flex items-center gap-2">
             <RatingStars value={rating ?? book.rating} onChange={setRating} />
             <span className="text-xs text-slate-400">{rating ?? book.rating}.0 · 我的评分</span>
+            {isAdmin && (
+              <Button variant="outline" size="sm" className="ml-auto" onClick={() => setShareOpen(true)}>
+                <Link2 className="h-3.5 w-3.5" />分享
+              </Button>
+            )}
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
@@ -112,6 +126,8 @@ export function BookDetailPage() {
         <ReaderModal book={book} format={readable.kind} initialChapter={savedChapter ?? 0} initialPct={pct}
           onClose={() => setReaderOpen(false)} onProgress={savePage} />
       )}
+
+      <ShareDialog assetId={book.id} assetTitle={book.title} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

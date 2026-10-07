@@ -123,6 +123,15 @@ async def album_cover(album_id: uuid.UUID, size: int = Query(256, description="�
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+@router.get("/{asset_id}/lyrics", summary="歌词文本",
+            description="登录用户。返回解析时入库的歌词原文（meta.lyrics，LRC 带时间戳或纯文本），无歌词时 lyrics 为 null。")
+async def lyrics(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
+    a = await db.get(Asset, asset_id)
+    if a is None or a.deleted_at is not None or a.asset_type != "music":
+        raise not_found()
+    return {"lyrics": a.meta.get("lyrics") or None}
+
+
 @router.get("/{asset_id}/stream", summary="音频流",
             description="登录用户。返回音频文件流，原生支持 Range 分段请求（206），可直接供 audio 标签播放。")
 async def stream(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):

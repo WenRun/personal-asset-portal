@@ -14,6 +14,19 @@ const TYPES = [
   { key: 'image', label: '图片' },
 ]
 
+// asset_type（单数）→ 前端路由（复数），集合跳转用
+const ROUTE_OF: Record<string, string> = { font: 'fonts', music: 'music', video: 'videos', book: 'books', image: 'images' }
+
+function collectionHref(assetType: string | null, params: Record<string, unknown> | undefined): string {
+  const route = ROUTE_OF[assetType ?? ''] ?? 'fonts'
+  const usp = new URLSearchParams()
+  if (params?.q) usp.set('q', String(params.q))
+  if (params?.tag) usp.set('tag', String(params.tag))
+  if (params?.favorite) usp.set('favorite', 'true')
+  const qs = usp.toString()
+  return `/${route}${qs ? `?${qs}` : ''}`
+}
+
 /** M6 工具箱（admin）：打包下载 / 分享链接 / 智能集合 */
 export function ToolsPage() {
   const qc = useQueryClient()
@@ -200,9 +213,11 @@ export function ToolsPage() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {(collections ?? []).map((c) => (
               <div key={c.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
-                <button className="min-w-0 text-left" onClick={() => nav(`/${c.asset_type ?? 'fonts'}?q=${encodeURIComponent(String(c.params?.q ?? ''))}`)}>
+                <button className="min-w-0 text-left" onClick={() => nav(collectionHref(c.asset_type, c.params))}>
                   <div className="truncate font-medium hover:text-brand-600">{c.name}</div>
-                  <div className="truncate text-[10px] text-slate-400">{c.asset_type} {c.params?.q ? `· 「${String(c.params.q)}」` : ''}</div>
+                  <div className="truncate text-[10px] text-slate-400">
+                    {c.asset_type} {c.params?.q ? `· 「${String(c.params.q)}」` : ''}{c.params?.tag ? `· #${String(c.params.tag)}` : ''}{c.params?.favorite ? '· ★' : ''}
+                  </div>
                 </button>
                 <button className="text-slate-300 hover:text-rose-500" onClick={() => delCol.mutate(c.id)}><Trash2 className="h-4 w-4" /></button>
               </div>

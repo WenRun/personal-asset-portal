@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Heart, Pause, Play } from 'lucide-react'
+import { Heart, Link2, Pause, Play } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePlayer } from '@/stores/player'
+import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, EqBars, HueCover } from '@/components/ui'
+import { ShareDialog } from '@/components/ShareDialog'
 import { fmtTime } from '@/lib/utils'
 
 export function AlbumDetailPage() {
   const { id } = useParams()
   const { data: album } = useQuery({ queryKey: ['album', id], queryFn: () => api.album(id!), enabled: !!id })
   const { queue, index, playing, albumId: curAlbumId, playAlbum, toggle } = usePlayer()
+  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const [shareOpen, setShareOpen] = useState(false)
   const [coverFail, setCoverFail] = useState(false)
 
   if (!album) return <div className="p-6 text-slate-400">加载中…</div>
@@ -47,6 +51,11 @@ export function AlbumDetailPage() {
             <Button variant="outline">下载整专辑 (.zip)</Button>
             <Button variant="outline">♥ 收藏</Button>
             <Button variant="outline">编辑</Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setShareOpen(true)}>
+                <Link2 className="h-3.5 w-3.5" />分享
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -112,6 +121,8 @@ export function AlbumDetailPage() {
           正在通过底部播放条播放本专辑（/api/music/{id}/stream 真实音频流）· 点曲目行切换
         </div>
       )}
+
+      <ShareDialog assetId={album.id} assetTitle={album.title} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

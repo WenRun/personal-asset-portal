@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Pause, Play } from 'lucide-react'
+import { Download, Link2, Pause, Play } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
+import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, HueCover } from '@/components/ui'
+import { ShareDialog } from '@/components/ShareDialog'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
 /** 视频详情（§5.3）：Direct Play <video> 真实播放 + 观看进度云端同步 + 系列集数切换 */
 export function VideoDetailPage() {
   const { id } = useParams()
+  const nav = useNavigate()
   const qc = useQueryClient()
+  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const [shareOpen, setShareOpen] = useState(false)
   const { data: video } = useQuery({ queryKey: ['video', id], queryFn: () => api.video(id!), enabled: !!id })
   const { data: progress } = useQuery({ queryKey: ['progress', id], queryFn: () => api.getProgress(id!), enabled: !!id })
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -156,7 +161,11 @@ export function VideoDetailPage() {
             </div>
             {video.note && <p className="mt-3 text-sm leading-relaxed text-slate-600">{video.note}</p>}
             <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-              {(video.tags ?? []).map((t) => <Badge key={t}>{t}</Badge>)}
+              {(video.tags ?? []).map((t) => (
+                <button key={t} className="transition hover:opacity-75" title={`查看「${t}」标签下的视频`} onClick={() => nav(`/videos?tag=${encodeURIComponent(t)}`)}>
+                  <Badge>{t}</Badge>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -171,6 +180,11 @@ export function VideoDetailPage() {
             </a>
             {!isClip && <Button variant="outline">★ 评分</Button>}
             <Button variant="outline">编辑</Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setShareOpen(true)}>
+                <Link2 className="h-3.5 w-3.5" />分享
+              </Button>
+            )}
           </div>
         </div>
 
@@ -213,6 +227,8 @@ export function VideoDetailPage() {
           </div>
         )}
       </div>
+
+      <ShareDialog assetId={video.id} assetTitle={video.title} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

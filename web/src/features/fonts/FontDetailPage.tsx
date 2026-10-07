@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Heart } from 'lucide-react'
+import { Heart, Link2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
+import { useAuth } from '@/stores/auth'
 import { useFontFace } from '@/lib/useFontFace'
 import { BackLink, Badge, Button } from '@/components/ui'
+import { ShareDialog } from '@/components/ShareDialog'
 
 /** 字体详情（§5.1）：同字族字重列表 + FontFace 实时样张 + 可变轴 + 字符集覆盖率 */
 export function FontDetailPage() {
   const { id } = useParams()
+  const nav = useNavigate()
+  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const [shareOpen, setShareOpen] = useState(false)
   const { data: font } = useQuery({ queryKey: ['font', id], queryFn: () => api.font(id!), enabled: !!id })
-  const { data: allFonts } = useQuery({ queryKey: ['fonts'], queryFn: api.fonts })
+  const { data: allFonts } = useQuery({ queryKey: ['fonts'], queryFn: () => api.fonts() })
   const { data: charset } = useQuery({
     queryKey: ['font-charset', id],
     queryFn: () => api.fontCharset(id!),
@@ -115,8 +120,9 @@ export function FontDetailPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button className="flex-1" title="字族打包下载随 M6 上线">下载字族 (.zip)</Button>
+            <Button className="flex-1" title="字族打包下载随后续版本上线">下载字族 (.zip)</Button>
             <Button variant="outline">编辑</Button>
+            {isAdmin && <Button variant="outline" title="生成公开分享链接" onClick={() => setShareOpen(true)}><Link2 className="h-3.5 w-3.5" />分享</Button>}
           </div>
 
           {axes.length > 0 && (
@@ -163,7 +169,7 @@ export function FontDetailPage() {
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">设计者</dt><dd>{font.designer || '—'}</dd></div>
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">许可</dt><dd>{font.license ? <span className="line-clamp-2 text-xs text-slate-500">{font.license}</span> : '—'}</dd></div>
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">语言</dt><dd className="flex flex-wrap gap-1.5">{font.languages.map((l) => <Badge key={l}>{l}</Badge>)}</dd></div>
-              <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">标签</dt><dd className="flex flex-wrap gap-1.5">{font.tags.map((t) => <Badge key={t}>{t}</Badge>)}<button className="text-xs text-slate-400 hover:text-brand-600">+ 添加</button></dd></div>
+              <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">标签</dt><dd className="flex flex-wrap gap-1.5">{font.tags.map((t) => <button key={t} className="transition hover:opacity-75" title={`查看「${t}」标签下的字体`} onClick={() => nav(`/fonts?tag=${encodeURIComponent(t)}`)}><Badge>{t}</Badge></button>)}<button className="text-xs text-slate-400 hover:text-brand-600">+ 添加</button></dd></div>
             </dl>
           </section>
 
@@ -176,6 +182,10 @@ export function FontDetailPage() {
           </section>
         </div>
       </aside>
+
+      {font && (
+        <ShareDialog assetId={font.id} assetTitle={font.family} open={shareOpen} onClose={() => setShareOpen(false)} />
+      )}
     </div>
   )
 }

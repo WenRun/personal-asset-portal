@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Chip, HueCover, PageHeader } from '@/components/ui'
 
@@ -24,9 +25,15 @@ function BookCover({ id, hue, title, className }: { id?: string; hue: number; ti
 }
 
 export function BooksPage() {
-  const { data: books } = useQuery({ queryKey: ['books'], queryFn: api.books })
+  const [params, setParams] = useSearchParams()
+  const tagFilter = params.get('tag') ?? ''
+  const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  const { data: books } = useQuery({
+    queryKey: ['books', tagFilter],
+    queryFn: () => api.books(tagFilter ? { tag: tagFilter } : undefined),
+  })
   const nav = useAssetNav()
-  const [filter, setFilter] = useState<'all' | 'reading' | 'unread' | 'readable' | 'fav'>('all')
+  const [filter, setFilter] = useState<'all' | 'reading' | 'unread' | 'readable' | 'fav'>(params.get('favorite') ? 'fav' : 'all')
   const [coverFail, setCoverFail] = useState<Record<string, boolean>>({})
 
   const list = useMemo(() => {
@@ -58,6 +65,7 @@ export function BooksPage() {
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
+        {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'reading'} onClick={() => setFilter('reading')}>在读</Chip>
         <Chip active={filter === 'unread'} onClick={() => setFilter('unread')}>未读</Chip>
         <Chip active={filter === 'readable'} onClick={() => setFilter('readable')}>可在线阅读</Chip>

@@ -51,35 +51,38 @@ async def delete_document(asset_type: str, asset_id: str) -> None:
         await c.delete(f"/indexes/{uid}/documents/{asset_id}")
 
 
-async def multi_search(q: str, index_uids: list[str], limit: int = 8) -> list[dict]:
-    """聚合搜索（§6.4）：每索引一个查询，返回按索引分组的结果。"""
+async def multi_search(q: str, index_uids: list[str], limit: int = 8, tag: str | None = None) -> list[dict]:
+    """聚合搜索（§6.4）：每索引一个查询，返回按索引分组的结果（含 tags facet 分布）。"""
     if not enabled():
         return []
+    # Meili 过滤表达式：标签名中的双引号转义（表达式本身用双引号包裹字符串字面量）
+    filt = f'tags = "{tag.replace(chr(34), chr(92) + chr(34))}"' if tag else None
+    queries = []
+    for uid in index_uids:
+        query: dict = {
+            "q": q, "indexUid": uid, "limit": limit, "facets": ["tags"],
+            "attributesToRetrieve": [
+                "id", "type", "title", "file_name", "note", "tags", "rating", "created_at", "size_bytes",
+            ],
+        }
+        if filt:
+            query["filter"] = filt
+        queries.append(query)
     async with _client() as c:
-        r = await c.post(
-            "/multi-search",
-            json={
-                "queries": [
-                    {"q": q, "indexUid": uid, "limit": limit, "attributesToRetrieve": [
-                        "id", "type", "title", "file_name", "note", "tags", "rating", "created_at", "size_bytes",
-                    ]}
-                    for uid in index_uids
-                ]
-            },
-        )
+        r = await c.post("/multi-search", json={"queries": queries})
         r.raise_for_status()
         return r.json().get("results", [])
 
 
-def doc_from_asset(a) -> dict:
-    """assets 行 → Meili 文档。"""
+def doc_from_asset(a, tags: list[str] | None = None) -> dict:
+    """assets 行 → Meili 文档；tags 由调用方查询 asset_tags 后传入。"""
     return {
         "id": str(a.id),
         "type": a.asset_type,
         "title": a.title,
         "file_name": a.file_name,
         "note": a.note or "",
-        "tags": [],
+        "tags": tags or [],
         "rating": a.rating,
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "size_bytes": a.size_bytes,

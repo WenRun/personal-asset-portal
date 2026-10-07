@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { useFontFace } from '@/lib/useFontFace'
@@ -51,9 +52,15 @@ function FamilyCard({ family, files, text, size, weight }: {
 }
 
 export function FontsPage() {
-  const { data: fonts } = useQuery({ queryKey: ['fonts'], queryFn: api.fonts })
+  const [params, setParams] = useSearchParams()
+  const tagFilter = params.get('tag') ?? ''
+  const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  const { data: fonts } = useQuery({
+    queryKey: ['fonts', tagFilter],
+    queryFn: () => api.fonts(tagFilter ? { tag: tagFilter } : undefined),
+  })
   const { fontText, fontSize, fontWeight, setFontPreview } = usePrefs()
-  const [filter, setFilter] = useState<'all' | 'han' | 'variable' | 'fav'>('all')
+  const [filter, setFilter] = useState<'all' | 'han' | 'variable' | 'fav'>(params.get('favorite') ? 'fav' : 'all')
 
   const list = useMemo(() => {
     const arr = fonts ?? []
@@ -99,6 +106,7 @@ export function FontsPage() {
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
+        {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'han'} onClick={() => setFilter('han')}>含中文</Chip>
         <Chip active={filter === 'variable'} onClick={() => setFilter('variable')}>可变字体</Chip>
         <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}>★ 收藏</Chip>

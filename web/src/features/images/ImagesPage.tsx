@@ -1,15 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { Heart } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
-import { useAssetNav, HueCover, PageHeader } from '@/components/ui'
+import { useAssetNav, Chip, HueCover, PageHeader } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import type { Photo } from '@/types'
 
 export function ImagesPage() {
-  const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: api.photos })
+  const [params, setParams] = useSearchParams()
+  const tagFilter = params.get('tag') ?? ''
+  const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  // 有 tag 参数时走服务端过滤（不局限在最近 200 条里筛）
+  const { data: photos } = useQuery({
+    queryKey: ['photos', tagFilter],
+    queryFn: () => api.photos(tagFilter ? { tag: tagFilter } : undefined),
+  })
   const nav = useAssetNav()
-  const [filter, setFilter] = useState<string>('all')
+  const [filter, setFilter] = useState<string>(params.get('favorite') ? 'fav' : 'all')
   const [favs, setFavs] = useState<Record<string, boolean>>({})
   const [imgFail, setImgFail] = useState<Record<string, boolean>>({})
 
@@ -42,6 +50,11 @@ export function ImagesPage() {
       />
       <div className="mt-3 flex flex-wrap gap-2">
         <button className={`rounded-full px-3 py-1.5 text-sm transition ${filter === 'all' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter('all')}>全部</button>
+        {tagFilter && (
+          <button className="rounded-full bg-brand-600 px-3 py-1.5 text-sm text-white transition" onClick={clearTag}>
+            标签：{tagFilter} ✕
+          </button>
+        )}
         {months.map((m) => (
           <button key={m} className={`rounded-full px-3 py-1.5 text-sm transition ${filter === m ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter(m)}>
             {m.replace('-', '-')} · {(photos ?? []).filter((p) => p.takenAt.startsWith(m)).length}

@@ -1,9 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
-import { List, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { List, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react'
 import { cn, fmtTime } from '@/lib/utils'
 import { usePlayer } from '@/stores/player'
 import { api } from '@/api/client'
 import { HueCover } from '@/components/ui'
+
+interface LyricLine { time: number | null; text: string }
+
+/** 解析歌词：LRC 时间轴行（支持一行多时间戳）→ 按时间排序；无时间戳则整体按纯文本展示。 */
+function parseLyrics(raw: string): LyricLine[] {
+  const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g
+  // [ti:]/[ar:] 等 ID3 元数据标签行不作为歌词正文
+  const metaRe = /^\[(ti|ar|al|by|au|re|ve|offset|length|hash|encoding):/i
+  const lines: LyricLine[] = []
+  for (const line of raw.split(/\r?\n/)) {
+    if (metaRe.test(line.trim())) continue
+    const stamps: number[] = []
+    re.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = re.exec(line))) {
+      const frac = m[3] ? Number(`0.${m[3]}`) : 0
+      stamps.push(Number(m[1]) * 60 + Number(m[2]) + frac)
+    }
+    const text = line.replace(re, '').trim()
+    if (stamps.length === 0) {
+      if (text) lines.push({ time: null, text })
+      continue
+    }
+    for (const t of stamps) lines.push({ time: t, text })
+  }
+  if (lines.some((l) => l.time != null)) {
+    return lines.filter((l) => l.time != null || l.text).sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
+  }
+  return lines
+}
 
 /** 全局播放条（§7.4 PlayerBar）：真实 <audio> Range 流播放（/api/music/{id}/stream），跨页不中断。 */
 export function PlayerBar() {
@@ -11,6 +42,8 @@ export function PlayerBar() {
   const cur = queue[index]
   const audioRef = useRef<HTMLAudioElement>(null)
   const [pos, setPos] = useState(0)
+  const [showLyrics, setShowLyrics] = useState(false)
+  const lyricBoxRef = useRef<HTMLDivElement>(null)
 
   // 切曲 → 换源并播放
   useEffect(() => {
@@ -36,13 +69,48 @@ export function PlayerBar() {
     if (audio) audio.volume = volume
   }, [volume])
 
+  // 歌词（打开面板且当前曲目带歌词时拉取）
+  const { data: lyricData } = useQuery({
+    queryKey: ['lyrics', cur?.id],
+    queryFn: () => api.lyrics(cur!.id),
+    enabled: showLyrics && !!cur,
+  })
+  const lyricLines = useMemo(() => (lyricData?.lyrics ? parseLyrics(lyricData.lyrics) : []), [lyricData])
+  const lyricTimed = lyricLines.some((l) => l.time != null)
+  const activeLine = useMemo(() => {
+    if (!lyricTimed) return -1
+    let idx = -1
+    for (let i = 0; i < lyricLines.length; i++) {
+      const t = lyricLines[i].time
+      if (t != null && t <= pos) idx = i
+    }
+    return idx
+  }, [lyricLines, lyricTimed, pos])
+
+  // 当前歌词行滚动到面板中部
+  useEffect(() => {
+    const box = lyricBoxRef.current
+    if (!box || !showLyrics) return
+    const el = box.querySelector('[data-active="true"]') as HTMLElement | null
+    if (el) box.scrollTo({ top: el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2, behavior: 'smooth' })
+    else box.scrollTo({ top: 0 })
+  }, [activeLine, showLyrics])
+
   if (!cur) return null
   const audioDur = audioRef.current?.duration
   const duration = audioDur && Number.isFinite(audioDur) ? audioDur : cur.durationSec
   const pct = duration ? (pos / duration) * 100 : 0
 
+  const seekTo = (t: number) => {
+    const audio = audioRef.current
+    if (audio && Number.isFinite(t)) {
+      audio.currentTime = t
+      setPos(t)
+    }
+  }
+
   return (
-    <footer className="z-30 flex h-16 shrink-0 animate-rise items-center gap-4 border-t border-slate-800 bg-slate-900 px-4 text-slate-300">
+    <footer className="relative z-30 flex h-16 shrink-0 animate-rise items-center gap-4 border-t border-slate-800 bg-slate-900 px-4 text-slate-300">
       <audio
         ref={audioRef}
 
@@ -52,6 +120,44 @@ export function PlayerBar() {
         onPlay={() => !playing && setPlaying(true)}
         onPause={() => playing && setPlaying(false)}
       />
+
+      {/* 歌词面板（有歌词的曲目可展开；LRC 时间轴高亮 + 点击跳播） */}
+      {showLyrics && (
+        <div className="absolute inset-x-0 bottom-16 mx-auto max-h-[46vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-b-0 border-slate-800 bg-slate-900/95 p-6 shadow-2xl backdrop-blur">
+          <div className="mb-3 flex items-center justify-between text-xs text-slate-500">
+            <span>歌词{lyricTimed ? ' · 同步滚动' : ''}</span>
+            <span className="truncate pl-4 text-slate-600">{cur.title}</span>
+          </div>
+          <div ref={lyricBoxRef} className="max-h-[calc(46vh-3rem)] overflow-y-auto">
+            {lyricLines.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-500">
+                {lyricData ? '没有可用歌词' : '歌词加载中…'}
+              </div>
+            ) : (
+              <div className="space-y-3 py-4 text-center text-sm leading-6">
+                {lyricLines.map((l, i) => (
+                  <div
+                    key={`${i}-${l.time ?? 'x'}`}
+                    data-active={lyricTimed && i === activeLine ? 'true' : undefined}
+                    className={cn(
+                      'transition',
+                      lyricTimed
+                        ? i === activeLine
+                          ? 'cursor-pointer text-base font-medium text-brand-300'
+                          : 'cursor-pointer text-slate-500 hover:text-slate-300'
+                        : 'text-slate-400',
+                    )}
+                    onClick={lyricTimed && l.time != null ? () => seekTo(l.time!) : undefined}
+                  >
+                    {l.text || '♪'}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <HueCover hue={245} className="h-10 w-10 shrink-0 rounded-md" />
       <div className="hidden w-44 min-w-0 sm:block">
         <div className="truncate text-sm text-white">{cur.title}</div>
@@ -93,6 +199,15 @@ export function PlayerBar() {
           className="w-full accent-brand-500"
         />
       </div>
+      {cur.lrc && (
+        <button
+          className={cn('hidden text-slate-400 hover:text-white lg:block', showLyrics && 'text-brand-400')}
+          title="歌词"
+          onClick={() => setShowLyrics((v) => !v)}
+        >
+          <Mic2 className="h-4 w-4" />
+        </button>
+      )}
       <button className="hidden text-slate-400 hover:text-white lg:block"><List className="h-4 w-4" /></button>
     </footer>
   )

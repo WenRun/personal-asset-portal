@@ -14,22 +14,24 @@ router = APIRouter(prefix="/api/search", tags=["搜索"])
 
 
 @router.get("", summary="全局搜索",
-            description="登录用户。通过 Meilisearch multi-search 聚合字体/音乐/视频/书籍/图片五个索引，返回各类命中结果。")
+            description="登录用户。通过 Meilisearch multi-search 聚合字体/音乐/视频/书籍/图片五个索引，返回各类命中结果与标签 facet 分布。")
 async def search(q: str = Query("", description="搜索关键词"),
                  types: str | None = Query(None, description="限定资产类型，逗号分隔（fonts,music,videos,books,images），缺省查全部"),
+                 tag: str | None = Query(None, description="按标签过滤（精确匹配 tags facet 值）"),
                  limit: int = Query(8, description="单个索引返回条数上限，服务端截断为最大 50"),
                  _: uuid.UUID = Depends(require_member), db: AsyncSession = Depends(get_db)):
     if types:
         wanted = [t.strip() for t in types.split(",") if t.strip() in ROUTE_TO_TYPE]
     else:
         wanted = list(ROUTE_TO_TYPE.keys())
-    results = await meili.multi_search(q, wanted, limit=min(limit, 50))
+    results = await meili.multi_search(q, wanted, limit=min(limit, 50), tag=tag)
     return {
         "results": [
             {
                 "index": r.get("indexUid"),
                 "estimated_total": r.get("estimatedTotalHits", 0),
                 "hits": r.get("hits", []),
+                "facet_distribution": r.get("facetDistribution", {}),
             }
             for r in results
         ]

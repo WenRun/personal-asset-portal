@@ -106,6 +106,7 @@ async def list_assets(
     cursor: str | None = Query(None, description="分页游标，取自上一页返回的 next_cursor"),
     page_size: int = Query(60, description="每页条数，默认 60（上限 200，超出自动截断）"),
     q: str | None = Query(None, description="关键词，模糊匹配标题 / 文件名；游客不可用"),
+    tag: str | None = Query(None, description="按标签名精确过滤"),
     favorite: bool | None = Query(None, description="仅看收藏"),
     user: User | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -118,6 +119,10 @@ async def list_assets(
     cond = [Asset.asset_type == ROUTE_TO_TYPE[route], Asset.deleted_at.is_(None)]
     if favorite:
         cond.append(Asset.is_favorite.is_(True))
+    if tag is not None and tag.strip():
+        cond.append(Asset.id.in_(
+            select(AssetTag.asset_id).join(Tag, Tag.id == AssetTag.tag_id).where(Tag.name == tag.strip())
+        ))
     if q is not None and q.strip():
         pat = f"%{q.strip()}%"
         cond.append(Asset.title.ilike(pat) | Asset.file_name.ilike(pat))
@@ -135,6 +140,21 @@ async def list_assets(
         last = rows[-1]
         next_cursor = _cursor_encode(last.created_at, last.id)
     items = [_item(a) for a in rows]
+    if rows:
+        # 批量补标签（列表页标签筛选/展示用；一次查询避免 N+1）
+        tag_rows = (
+            await db.execute(
+                select(AssetTag.asset_id, Tag.id, Tag.name)
+                .join(Tag, Tag.id == AssetTag.tag_id)
+                .where(AssetTag.asset_id.in_([a.id for a in rows]))
+                .order_by(Tag.name)
+            )
+        ).all()
+        tags_map: dict[uuid.UUID, list[dict]] = {}
+        for aid, tid, tname in tag_rows:
+            tags_map.setdefault(aid, []).append({"id": str(tid), "name": tname})
+        for it, a in zip(items, rows):
+            it["tags"] = tags_map.get(a.id, [])
     if route == "fonts" and rows:
         details = (
             await db.execute(select(FontDetail).where(FontDetail.asset_id.in_([a.id for a in rows])))
@@ -363,14 +383,18 @@ async def attach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = De
 
 
 @router.delete("/assets/{asset_id}/tags", summary="移除标签",
-               description="管理员。批量解除资产上的标签挂载。")
+               description="管理员。批量解除资产上的标签挂载，并异步重建该资产的搜索索引文档。")
 async def detach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_admin)):
+    a = await db.get(Asset, asset_id)
+    if a is None:
+        raise not_found()
     for tid in body.tag_ids:
         row = await db.get(AssetTag, {"asset_id": asset_id, "tag_id": tid})
         if row is not None:
             await db.delete(row)
     await db.commit()
+    await _reindex(db, a)
     return {"ok": True}
 
 
