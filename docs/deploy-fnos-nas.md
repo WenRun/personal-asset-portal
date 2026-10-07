@@ -189,6 +189,8 @@ git pull
 docker compose up -d --build     # 数据库迁移在 server 启动时自动执行
 ```
 
+> 若用「git archive | tar」方式同步代码（本机推送给 NAS 的等价流程）：fnOS 下 tar 解包可能出现 `d---------`（000）目录权限，导致 fnOS 文件管理打不开目录、看不到资源文件夹。同步后执行一次 `chmod -R u+rwX,go+rX <项目目录>` 即可（2026-10-07 实机踩过）。
+
 **备份**（`deploy/backup.sh`，容器化 PG 模式）：
 
 ```bash
