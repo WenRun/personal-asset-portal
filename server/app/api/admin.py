@@ -10,7 +10,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -18,7 +18,7 @@ from app.core.deps import get_app_settings, require_admin
 from app.core.db import SessionLocal, get_db
 from app.core.errors import bad_request, not_found
 from app.core.jobs import JOB_NOTIFY_CHANNEL, enqueue, notify_job_changed
-from app.core.models import Job, Setting, User
+from app.core.models import Asset, DownloadPack, Job, MusicTrack, Setting, User
 
 log = logging.getLogger("portal.admin")
 
@@ -48,18 +48,98 @@ def _job_dict(j: Job) -> dict:
     return {
         "id": str(j.id), "kind": j.kind, "payload": j.payload, "status": j.status,
         "priority": j.priority, "attempts": j.attempts, "last_error": j.last_error,
-        "run_at": j.run_at.isoformat(), "created_at": j.created_at.isoformat(),
+        "run_at": j.run_at.isoformat(), "worker_id": j.worker_id,
+        "started_at": j.started_at.isoformat() if j.started_at else None,
+        "created_at": j.created_at.isoformat(),
         "finished_at": j.finished_at.isoformat() if j.finished_at else None,
     }
 
 
+def _as_uuid(v) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(v))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _resolve_targets(db: AsyncSession, rows: list[Job]) -> dict[str, dict]:
+    """批量把 payload 里的 asset_id / storage_key / pack_id 反查成可读对象，返回 {job_id: target}。
+    一次列表快照只发 3 条查询（资产、音乐曲目→专辑、打包），SSE 高频推送也可承受。"""
+    asset_ids: set[uuid.UUID] = set()
+    storage_keys: set[str] = set()
+    pack_ids: set[uuid.UUID] = set()
+    for j in rows:
+        p = j.payload if isinstance(j.payload, dict) else {}
+        if "asset_id" in p and (u := _as_uuid(p["asset_id"])):
+            asset_ids.add(u)
+        if p.get("storage_key"):
+            storage_keys.add(str(p["storage_key"]))
+        if "pack_id" in p and (u := _as_uuid(p["pack_id"])):
+            pack_ids.add(u)
+
+    assets: list[Asset] = []
+    if asset_ids or storage_keys:
+        cond = []
+        if asset_ids:
+            cond.append(Asset.id.in_(asset_ids))
+        if storage_keys:
+            cond.append(Asset.storage_key.in_(storage_keys))
+        assets = list((await db.execute(select(Asset).where(or_(*cond)))).scalars().all())
+
+    # 音乐资产无独立详情页，跳专辑页：顺路把 track → album 一次查出来
+    album_of: dict[uuid.UUID, uuid.UUID] = {}
+    music_ids = {a.id for a in assets if a.asset_type == "music"}
+    if music_ids:
+        trows = (await db.execute(
+            select(MusicTrack.asset_id, MusicTrack.album_id).where(MusicTrack.asset_id.in_(music_ids))
+        )).all()
+        album_of = {aid: alid for aid, alid in trows if alid is not None}
+
+    packs: dict[uuid.UUID, DownloadPack] = {}
+    if pack_ids:
+        packs = {p.id: p for p in (await db.execute(select(DownloadPack).where(DownloadPack.id.in_(pack_ids)))).scalars().all()}
+
+    by_id = {a.id: a for a in assets}
+    by_key = {a.storage_key: a for a in assets}
+    targets: dict[str, dict] = {}
+    for j in rows:
+        p = j.payload if isinstance(j.payload, dict) else {}
+        if j.kind == "scan_root" or "root_alias" in p:
+            targets[str(j.id)] = {"type": "root", "root_alias": p.get("root_alias")}
+        elif "pack_id" in p:
+            pack = packs.get(_as_uuid(p["pack_id"]))  # type: ignore[arg-type]
+            targets[str(j.id)] = {"type": "pack", "file_count": pack.file_count if pack else None}
+        else:
+            a = by_id.get(u) if (u := _as_uuid(p.get("asset_id"))) else by_key.get(str(p.get("storage_key")))
+            if a is not None:
+                t = {
+                    "type": "asset", "asset_id": str(a.id), "title": a.title, "file_name": a.file_name,
+                    "asset_type": a.asset_type, "deleted": a.deleted_at is not None,
+                }
+                if a.id in album_of:
+                    t["album_id"] = str(album_of[a.id])
+                targets[str(j.id)] = t
+    return targets
+
+
+async def _jobs_response(db: AsyncSession, rows: list[Job]) -> list[dict]:
+    """任务列表出参：序列化 + 附加可读对象（列表接口与 SSE 快照共用）。"""
+    targets = await _resolve_targets(db, rows)
+    out = []
+    for j in rows:
+        d = _job_dict(j)
+        d["target"] = targets.get(d["id"])
+        out.append(d)
+    return out
+
+
 async def _jobs_snapshot(limit: int = 100) -> list[dict]:
-    """任务列表快照（列表接口与 SSE 共用；SSE 用独立会话）。"""
+    """任务列表快照（SSE 用独立会话）。"""
     async with SessionLocal() as db:
         rows = (
             await db.execute(select(Job).order_by(Job.created_at.desc(), Job.id.desc()).limit(limit))
         ).scalars().all()
-        return [_job_dict(j) for j in rows]
+        return await _jobs_response(db, rows)
 
 
 @router.get("/jobs", summary="任务列表",
@@ -76,7 +156,7 @@ async def list_jobs(status: str | None = Query(None, description="按状态过�
     rows = (
         await db.execute(select(Job).where(*cond).order_by(Job.created_at.desc()).limit(min(limit, 200)))
     ).scalars().all()
-    return [_job_dict(j) for j in rows]
+    return await _jobs_response(db, rows)
 
 
 @router.get("/jobs/stream", summary="任务事件流（SSE）",

@@ -16,7 +16,7 @@ log = logging.getLogger("portal.jobs")
 
 CLAIM_SQL = text(
     """
-    UPDATE jobs SET status='running', worker_id=:wid, attempts=attempts+1
+    UPDATE jobs SET status='running', worker_id=:wid, attempts=attempts+1, started_at=now()
     WHERE id = (
       SELECT id FROM jobs
       WHERE status='queued' AND run_at <= now()

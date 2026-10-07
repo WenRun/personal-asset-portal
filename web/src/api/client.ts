@@ -254,11 +254,27 @@ export interface StatsPayload {
   jobs: { queued: number; running: number; failed: number; done_today: number }
 }
 
+/** 任务对象的可读描述：后端按 payload 批量反查资产/打包/目录后附带返回 */
+export interface JobTarget {
+  type: 'asset' | 'root' | 'pack'
+  asset_id?: string
+  title?: string
+  file_name?: string
+  asset_type?: 'font' | 'music' | 'video' | 'book' | 'image'
+  deleted?: boolean
+  album_id?: string
+  root_alias?: string
+  file_count?: number | null
+}
+
 export interface JobPayload {
   id: string; kind: string; payload: Record<string, unknown>
   status: 'queued' | 'running' | 'done' | 'failed'
-  attempts: number; last_error: string | null
+  priority: number; attempts: number; last_error: string | null
+  run_at: string; worker_id: string | null
+  started_at: string | null
   created_at: string; finished_at: string | null
+  target: JobTarget | null
 }
 
 export const api = {
