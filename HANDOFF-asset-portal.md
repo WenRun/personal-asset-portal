@@ -1,6 +1,6 @@
 # HANDOFF · 个人资源门户（personal-asset-portal）
 
-> 交接日期：2026-10-06（2026-10-07 更新）· 状态：M0–M6 全部里程碑完成；规划内功能缺口与工程债（除自动化测试）已清零，共 26 commits（本地 main，origin 未推送）
+> 交接日期：2026-10-06（2026-10-07 更新）· 状态：M0–M6 全部里程碑完成；功能缺口与工程债（除自动化测试）已清零；**已部署至飞牛 NAS 生产环境（http://192.168.31.31:8080，2026-10-07 实机验证通过）**，origin 已同步
 > 本文面向接手开发的人。规划与详细设计见 `docs/` 两份文档，本文只写"文档之外的实况"。
 
 ---
@@ -90,7 +90,7 @@
 4. **worker 单机假设**：SKIP LOCKED 支持多 worker，但 derive 产物目录与部署卷路径假设同机。
 5. **搜索索引与 DB 的一致性**：软删/恢复/标签变更走 index_meili 任务最终一致；Meili 宕机期间的任务会失败重试 3 次后放弃，**没有对账机制**（建议 M6.5 加 `reindex` 定时任务，CLI 目前只有启动时 ensure_indexes）。
 6. **生产安全假设**（2026-10-07 缓解）：生产 compose 强制要求注入 BOOTSTRAP_ADMIN_PASSWORD / PG_PASSWORD / MEILI_MASTER_KEY（未设置启动即报错），COOKIE_SECURE 默认 true；开发环境默认值不变（admin1234/false），本地开发不受影响。
-7. ~~基础设施依赖用户机器~~（2026-10-07 更新）：开发环境仍用本机通用容器 postgres-dev / meilisearch-dev（§6）；**生产 compose 已与开发机解耦**——通过 .env 注入外部网络与 PG/Meili 容器名，换机只带代码 + .env。
+7. ~~基础设施依赖用户机器~~（2026-10-07 已落地）：开发环境仍用本机通用容器；**生产已部署于飞牛 NAS**（网络 pg-meili-nginx_default，PG 容器 pg17，真实口令在 NAS 的 /vol1/1000/asset-portal/.env）。注意：NAS 副本以 `git archive | ssh tar` 交付（无 .git），更新方式=本机提交推送后重跑该命令，或 NAS 上重新 clone。
 8. **未推送**：origin = git@github.com:WenRun/personal-asset-portal.git，**是否 push 由需求方决定**。
 
 ## 6. 复现与验证命令
