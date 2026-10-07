@@ -14,7 +14,8 @@ export function AlbumDetailPage() {
   const { data: album } = useQuery({ queryKey: ['album', id], queryFn: () => api.album(id!), enabled: !!id })
   const { queue, index, playing, albumId: curAlbumId, playAlbum, toggle } = usePlayer()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
-  const [shareOpen, setShareOpen] = useState(false)
+  // 专辑 ID 不是资产 ID，分享必须落在曲目（asset）级，故 ShareDialog 挂在曲目行
+  const [shareTrack, setShareTrack] = useState<{ id: string; title: string } | null>(null)
   const [coverFail, setCoverFail] = useState(false)
 
   if (!album) return <div className="p-6 text-slate-400">加载中…</div>
@@ -51,11 +52,6 @@ export function AlbumDetailPage() {
             <Button variant="outline">下载整专辑 (.zip)</Button>
             <Button variant="outline">♥ 收藏</Button>
             <Button variant="outline">编辑</Button>
-            {isAdmin && (
-              <Button variant="outline" onClick={() => setShareOpen(true)}>
-                <Link2 className="h-3.5 w-3.5" />分享
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -94,9 +90,20 @@ export function AlbumDetailPage() {
                   <td className="px-2 py-2.5 font-mono text-xs text-slate-400">{t.bitrateK}k</td>
                   <td className="px-2 py-2.5 font-mono text-slate-400">{fmtTime(t.durationSec)}</td>
                   <td className="px-2 py-2.5">
-                    {active && playing
-                      ? <button onClick={(e) => { e.stopPropagation(); toggle() }}><Pause className="h-4 w-4 text-brand-600" /></button>
-                      : <span className="text-slate-300 group-hover:text-slate-400"><Heart className="h-4 w-4" /></span>}
+                    <div className="flex items-center justify-end gap-2">
+                      {isAdmin && (
+                        <button
+                          className="text-slate-300 transition hover:text-brand-600"
+                          title={`分享「${t.title}」`}
+                          onClick={(e) => { e.stopPropagation(); setShareTrack({ id: t.id, title: t.title }) }}
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {active && playing
+                        ? <button onClick={(e) => { e.stopPropagation(); toggle() }}><Pause className="h-4 w-4 text-brand-600" /></button>
+                        : <span className="text-slate-300 group-hover:text-slate-400"><Heart className="h-4 w-4" /></span>}
+                    </div>
                   </td>
                 </tr>
               )
@@ -122,7 +129,9 @@ export function AlbumDetailPage() {
         </div>
       )}
 
-      <ShareDialog assetId={album.id} assetTitle={album.title} open={shareOpen} onClose={() => setShareOpen(false)} />
+      {shareTrack && (
+        <ShareDialog assetId={shareTrack.id} assetTitle={shareTrack.title} open onClose={() => setShareTrack(null)} />
+      )}
     </div>
   )
 }
