@@ -30,6 +30,17 @@ CLAIM_SQL = text(
 
 BACKOFFS = [30, 300, 1800]  # 30s / 5min / 30min
 
+JOB_NOTIFY_CHANNEL = "portal_jobs"
+
+
+async def notify_job_changed(db: AsyncSession, job_id: uuid.UUID) -> None:
+    """任务状态变更时通知 SSE 订阅者（pg_notify 随当前事务提交后投递；
+    事件只当信号，载荷仅含 id，完整状态由订阅端查表下发）。"""
+    await db.execute(
+        text("SELECT pg_notify(:chan, :payload)"),
+        {"chan": JOB_NOTIFY_CHANNEL, "payload": json.dumps({"id": str(job_id)})},
+    )
+
 
 async def enqueue(db: AsyncSession, kind: str, payload: dict, priority: int = 5) -> uuid.UUID:
     """入队并立即提交：调用方常在自身 commit 之后入队（如 PATCH 后重索引），
@@ -39,6 +50,8 @@ async def enqueue(db: AsyncSession, kind: str, payload: dict, priority: int = 5)
     job = Job(kind=kind, payload=payload, priority=priority)
     db.add(job)
     await db.flush()
+    await db.commit()
+    await notify_job_changed(db, job.id)
     await db.commit()
     return job.id
 
@@ -55,11 +68,14 @@ async def _finish(job_id, status: str, error: str | None = None, requeue_in: int
                 text("UPDATE jobs SET status=:s, last_error=:e, finished_at=now() WHERE id=:id"),
                 {"s": status, "e": error, "id": job_id},
             )
+        await notify_job_changed(db, job_id)
         await db.commit()
 
 
 async def claim(db: AsyncSession, worker_id: str):
     row = (await db.execute(CLAIM_SQL, {"wid": worker_id})).first()
+    if row is not None:
+        await notify_job_changed(db, row[0])
     await db.commit()
     return row
 

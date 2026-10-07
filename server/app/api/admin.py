@@ -1,18 +1,26 @@
-"""管理路由（详细设计 §6.5/§6.6）：扫描、任务、设置。SSE 与打包下载随 M5/M6 加入。"""
+"""管理路由（详细设计 §6.5/§6.6）：扫描、任务、设置；任务进度 SSE 实时推送。"""
 
+import asyncio
+import json
+import logging
 import uuid
 from pathlib import Path
 
+import asyncpg
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.deps import get_app_settings, require_admin
-from app.core.db import get_db
+from app.core.db import SessionLocal, get_db
 from app.core.errors import bad_request, not_found
-from app.core.jobs import enqueue
+from app.core.jobs import JOB_NOTIFY_CHANNEL, enqueue, notify_job_changed
 from app.core.models import Job, Setting, User
+
+log = logging.getLogger("portal.admin")
 
 router = APIRouter(prefix="/api/admin", tags=["管理"])
 
@@ -36,6 +44,24 @@ async def trigger_scan(body: ScanBody, db: AsyncSession = Depends(get_db), _: Us
 
 # ---------- 任务中心 ----------
 
+def _job_dict(j: Job) -> dict:
+    return {
+        "id": str(j.id), "kind": j.kind, "payload": j.payload, "status": j.status,
+        "priority": j.priority, "attempts": j.attempts, "last_error": j.last_error,
+        "run_at": j.run_at.isoformat(), "created_at": j.created_at.isoformat(),
+        "finished_at": j.finished_at.isoformat() if j.finished_at else None,
+    }
+
+
+async def _jobs_snapshot(limit: int = 100) -> list[dict]:
+    """任务列表快照（列表接口与 SSE 共用；SSE 用独立会话）。"""
+    async with SessionLocal() as db:
+        rows = (
+            await db.execute(select(Job).order_by(Job.created_at.desc(), Job.id.desc()).limit(limit))
+        ).scalars().all()
+        return [_job_dict(j) for j in rows]
+
+
 @router.get("/jobs", summary="任务列表",
             description="管理员。按创建时间倒序返回后台任务（扫描 / 指纹 / 索引 / 打包等），可按状态与类型过滤。")
 async def list_jobs(status: str | None = Query(None, description="按状态过滤：queued / running / done / failed"),
@@ -50,19 +76,51 @@ async def list_jobs(status: str | None = Query(None, description="按状态过�
     rows = (
         await db.execute(select(Job).where(*cond).order_by(Job.created_at.desc()).limit(min(limit, 200)))
     ).scalars().all()
-    return [
-        {
-            "id": str(j.id), "kind": j.kind, "payload": j.payload, "status": j.status,
-            "priority": j.priority, "attempts": j.attempts, "last_error": j.last_error,
-            "run_at": j.run_at.isoformat(), "created_at": j.created_at.isoformat(),
-            "finished_at": j.finished_at.isoformat() if j.finished_at else None,
-        }
-        for j in rows
-    ]
+    return [_job_dict(j) for j in rows]
+
+
+@router.get("/jobs/stream", summary="任务事件流（SSE）",
+            description="管理员。text/event-stream 实时推送任务列表快照：连接即推一次（snapshot 事件），"
+                        "此后每次任务状态变更（入队/领取/完成/失败/重排）经 Postgres NOTIFY 触发再推全量快照；"
+                        "每 15 秒发送 keepalive 注释。事件仅作信号，状态以快照为准，客户端断线由 EventSource 自动重连。")
+async def jobs_stream(_: User = Depends(require_admin)):
+    dsn = get_settings().database_url.replace("+asyncpg", "")
+
+    def _sse(event: str, data: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    async def gen():
+        conn = await asyncpg.connect(dsn)
+        queue: asyncio.Queue[str] = asyncio.Queue()
+
+        def on_notify(_con, _pid, _channel, payload: str) -> None:
+            queue.put_nowait(payload)  # asyncpg 回调线程；put_nowait 无锁安全
+
+        await conn.add_listener(JOB_NOTIFY_CHANNEL, on_notify)
+        try:
+            yield _sse("snapshot", {"jobs": await _jobs_snapshot()})
+            while True:
+                try:
+                    await asyncio.wait_for(queue.get(), timeout=15)
+                    # 排空积压通知，合并为一次快照（高频入队时避免刷屏）
+                    while not queue.empty():
+                        queue.get_nowait()
+                    yield _sse("snapshot", {"jobs": await _jobs_snapshot()})
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"  # 保活穿透代理空闲超时
+        finally:
+            try:
+                await conn.remove_listener(JOB_NOTIFY_CHANNEL, on_notify)
+                await conn.close()
+            except Exception:  # noqa: BLE001  连接已断时忽略
+                pass
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 @router.post("/jobs/{job_id}/retry", summary="重试任务",
-             description="管理员。将任务重置为排队状态、清零重试次数并清除错误信息。")
+             description="管理员。将任务重置为排队状态、清零重试次数并清除错误信息；同时推送任务事件。")
 async def retry_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     job = await db.get(Job, job_id)
     if job is None:
@@ -70,6 +128,8 @@ async def retry_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: Us
     job.status = "queued"
     job.attempts = 0
     job.last_error = None
+    await db.commit()
+    await notify_job_changed(db, job.id)
     await db.commit()
     return {"ok": True}
 

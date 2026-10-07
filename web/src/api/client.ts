@@ -372,6 +372,20 @@ export const api = {
   // 管理
   jobs: () => req<JobPayload[]>('/api/admin/jobs?limit=100'),
   retryJob: (id: string) => req<{ ok: boolean }>(`/api/admin/jobs/${id}/retry`, { method: 'POST' }),
+  /** 任务中心 SSE 订阅：snapshot 事件携带全量任务列表；断线由 EventSource 自动重连（重连后再推快照）。
+   *  返回取消函数。 */
+  jobsStream: (onJobs: (jobs: JobPayload[]) => void, onState?: (state: 'connecting' | 'live') => void): (() => void) => {
+    const es = new EventSource(`${BASE}/api/admin/jobs/stream`, { withCredentials: true })
+    es.addEventListener('open', () => onState?.('live'))
+    es.addEventListener('snapshot', (e) => {
+      onState?.('live')
+      try {
+        onJobs((JSON.parse((e as MessageEvent).data) as { jobs: JobPayload[] }).jobs)
+      } catch { /* 非法载荷忽略，等待下一次快照 */ }
+    })
+    es.addEventListener('error', () => onState?.('connecting'))
+    return () => es.close()
+  },
   settings: () => req<{ scan_roots: { alias: string; path: string }[]; registration_open: boolean }>('/api/admin/settings'),
   updateSettings: (patch: { registration_open?: boolean }) => req<unknown>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),
   scan: (rootAlias: string) => req<{ job_id: string }>('/api/admin/scan', { method: 'POST', body: JSON.stringify({ root_alias: rootAlias }) }),

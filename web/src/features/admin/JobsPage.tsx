@@ -1,14 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api/client'
 import { Badge, Button, PageHeader } from '@/components/ui'
 import type { JobPayload } from '@/api/client'
+import { cn } from '@/lib/utils'
 
 export function JobsPage() {
   const qc = useQueryClient()
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 10_000 })
-  const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, refetchInterval: 10_000 })
+  // 任务列表走 SSE 实时推送（替代轮询）；断线 EventSource 自动重连，重连后重推快照
+  const [jobs, setJobs] = useState<JobPayload[] | undefined>(undefined)
+  const [live, setLive] = useState<'connecting' | 'live'>('connecting')
+  useEffect(() => api.jobsStream(setJobs, setLive), [])
   const { data: confirms } = useQuery({ queryKey: ['confirm'], queryFn: api.confirmList, refetchInterval: 15_000 })
   const [tab, setTab] = useState<'jobs' | 'confirm'>('jobs')
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({})
@@ -19,7 +23,7 @@ export function JobsPage() {
 
   const retry = useMutation({
     mutationFn: (id: string) => api.retryJob(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
+    // 重试成功后无需手动刷新：retry 端点会发 NOTIFY，SSE 立刻推新快照
   })
 
   const targetOf = (j: JobPayload) =>
@@ -33,7 +37,16 @@ export function JobsPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="管理端" sub="worker 并发 2 · DB 队列轮询 1.5s（真实任务，10s 自动刷新）" />
+      <PageHeader
+        title="管理端"
+        sub="worker 并发 2 · DB 队列轮询 1.5s"
+        right={
+          <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs', live === 'live' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', live === 'live' ? 'animate-pulse bg-emerald-500' : 'bg-slate-400')} />
+            {live === 'live' ? '实时推送已连接' : '重连中…'}
+          </span>
+        }
+      />
 
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
         {[
