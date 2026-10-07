@@ -350,6 +350,10 @@ export const api = {
   // 编辑（admin）
   patchAsset: (id: string, patch: { title?: string; note?: string; rating?: number; is_favorite?: boolean }) =>
     req<RawAsset>(`/api/assets/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  // 删除（admin）：默认软删可恢复；purge 彻底删记录，deleteFile 连源文件一起删
+  deleteAsset: (id: string, opts?: { purge?: boolean; deleteFile?: boolean }) =>
+    req<{ ok: boolean }>(`/api/assets/${id}?purge=${opts?.purge ?? false}&delete_file=${opts?.deleteFile ?? false}`, { method: 'DELETE' }),
+  restoreAsset: (id: string) => req<RawAsset>(`/api/assets/${id}/restore`, { method: 'POST' }),
   downloadUrl: (id: string) => `${BASE}/api/assets/${id}/download`,
 
   // 标签

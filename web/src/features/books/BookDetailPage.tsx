@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Download, Link2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Link2, Trash2, X } from 'lucide-react'
 import { api } from '@/api/client'
 import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, Modal, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
+import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { fmtDate } from '@/lib/utils'
 import type { Book } from '@/types'
 
@@ -16,6 +17,7 @@ export function BookDetailPage() {
   const qc = useQueryClient()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
+  const [delOpen, setDelOpen] = useState(false)
   const { data: book } = useQuery({ queryKey: ['book', id], queryFn: () => api.book(id!), enabled: !!id })
   const { data: progress } = useQuery({ queryKey: ['progress', id], queryFn: () => api.getProgress(id!), enabled: !!id })
   const [readerOpen, setReaderOpen] = useState(false)
@@ -81,6 +83,11 @@ export function BookDetailPage() {
                 <Link2 className="h-3.5 w-3.5" />分享
               </Button>
             )}
+            {isAdmin && (
+              <Button variant="outline" size="sm" className="text-rose-600 hover:bg-rose-50" title="删除该书籍" onClick={() => setDelOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
@@ -128,6 +135,7 @@ export function BookDetailPage() {
       )}
 
       <ShareDialog assetId={book.id} assetTitle={book.title} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <DeleteAssetDialog assetId={book.id} assetTitle={book.title} listPath="/books" open={delOpen} onClose={() => setDelOpen(false)} />
     </div>
   )
 }

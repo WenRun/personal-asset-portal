@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Heart, Info, Link2, X } from 'lucide-react'
+import { Heart, Info, Link2, Trash2, X } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { useAuth } from '@/stores/auth'
 import { useFontFace } from '@/lib/useFontFace'
 import { BackLink, Badge, Button } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
+import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { cn } from '@/lib/utils'
 
 /** 字体详情（§5.1）：同字族字重列表 + FontFace 实时样张 + 可变轴 + 字符集覆盖率 */
@@ -16,6 +17,7 @@ export function FontDetailPage() {
   const nav = useNavigate()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
+  const [delOpen, setDelOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const { data: font } = useQuery({ queryKey: ['font', id], queryFn: () => api.font(id!), enabled: !!id })
   const { data: allFonts } = useQuery({ queryKey: ['fonts'], queryFn: () => api.fonts() })
@@ -148,6 +150,7 @@ export function FontDetailPage() {
             </a>
             <Button variant="outline">编辑</Button>
             {isAdmin && <Button variant="outline" title="生成公开分享链接" onClick={() => setShareOpen(true)}><Link2 className="h-3.5 w-3.5" />分享</Button>}
+            {isAdmin && <Button variant="outline" className="text-rose-600 hover:bg-rose-50" title="删除该字体" onClick={() => setDelOpen(true)}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
 
           {axes.length > 0 && (
@@ -210,6 +213,9 @@ export function FontDetailPage() {
 
       {font && (
         <ShareDialog assetId={font.id} assetTitle={font.family} open={shareOpen} onClose={() => setShareOpen(false)} />
+      )}
+      {font && (
+        <DeleteAssetDialog assetId={font.id} assetTitle={font.family} listPath="/fonts" open={delOpen} onClose={() => setDelOpen(false)} />
       )}
     </div>
   )

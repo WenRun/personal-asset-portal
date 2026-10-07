@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Download, Info, Pencil, Share2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Info, Pencil, Share2, Trash2, X } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, HueCover, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
+import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { cn } from '@/lib/utils'
 
 export function ImageDetailPage() {
@@ -14,6 +15,7 @@ export function ImageDetailPage() {
   const nav = useNavigate()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
+  const [delOpen, setDelOpen] = useState(false)
   const [exifOpen, setExifOpen] = useState(false)
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
   const [rating, setRating] = useState<number | null>(null)
@@ -51,6 +53,11 @@ export function ImageDetailPage() {
             </button>
           )}
           <button className="rounded-lg p-2 hover:bg-slate-800"><Pencil className="h-4 w-4" /></button>
+          {isAdmin && (
+            <button className="rounded-lg p-2 text-slate-400 hover:bg-rose-900/40 hover:text-rose-300" title="删除该图片" onClick={() => setDelOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
           <button className="rounded-lg p-2 hover:bg-slate-800 lg:hidden" title="详细信息（EXIF/标签）" onClick={() => setExifOpen(true)}>
             <Info className="h-4 w-4" />
           </button>
@@ -186,6 +193,9 @@ export function ImageDetailPage() {
 
       {photo && (
         <ShareDialog assetId={photo.id} assetTitle={photo.title} open={shareOpen} onClose={() => setShareOpen(false)} />
+      )}
+      {photo && (
+        <DeleteAssetDialog assetId={photo.id} assetTitle={photo.title} listPath="/images" open={delOpen} onClose={() => setDelOpen(false)} />
       )}
     </div>
   )

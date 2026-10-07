@@ -2,6 +2,7 @@
 
 import logging
 import mimetypes
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +34,8 @@ def build_storage(roots: dict[str, str]) -> LocalStorage:
 
 @register("scan_root")
 async def scan_root(db: AsyncSession, payload: dict) -> None:
-    """扫描资源根目录：新文件登记 pending；mtime/size 变化重指纹（详细设计 §4.2 发现）。"""
+    """扫描资源根目录：新文件登记 pending；mtime/size 变化重指纹；
+    库内有、盘上没有的记录自动软删（对账，可恢复）——文件被删除/移动/改名后重扫即同步。"""
     alias = payload["root_alias"]
     roots = await roots_of(db)
     if alias not in roots:
@@ -46,8 +48,10 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
             await db.execute(select(Asset).where(Asset.storage_key.like(f"{alias}:%")))
         ).scalars().all()
     }
+    seen: set[str] = set()
     new_files = 0
     for st in storage.iter_files(alias):
+        seen.add(st.key)
         if asset_type_of(st.name) is None:
             continue
         row = existing.get(st.key)
@@ -71,8 +75,19 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
             row.size_bytes = st.size
             row.status = "pending"
             await enqueue(db, "fingerprint", {"asset_id": str(row.id)}, priority=5)
+
+    # 对账（安全阀）：磁盘上一个文件都没有但库内有存活记录时跳过——疑似挂载丢失/目录
+    # 被误清空，绝不能据此把整个库软删。
+    alive = [a for a in existing.values() if a.deleted_at is None]
+    missing = [a for a in alive if a.storage_key not in seen]
+    if missing and not seen:
+        log.warning("scan_root %s: 磁盘 0 个文件但库内有 %d 条记录，跳过对账（疑似挂载丢失）", alias, len(alive))
+        missing = []
+    for a in missing:
+        a.deleted_at = datetime.now().astimezone()
+        await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
     await db.commit()
-    log.info("scan_root %s: %d new files", alias, new_files)
+    log.info("scan_root %s: %d new files, %d missing -> soft-deleted", alias, new_files, len(missing))
 
 
 @register("fingerprint")
