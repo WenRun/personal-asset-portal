@@ -73,7 +73,8 @@ export default function App() {
           <Route path="/jobs" element={<RequireAdmin><JobsPage /></RequireAdmin>} />
           <Route path="/tags" element={<RequireUser><TagsPage /></RequireUser>} />
           <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
-          <Route path="/tools" element={<RequireAdmin><ToolsPage /></RequireAdmin>} />
+          {/* 工具箱：打包/集合为 member 级，分享标签页内部按角色隐藏（与 API 权限一致） */}
+          <Route path="/tools" element={<RequireUser><ToolsPage /></RequireUser>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

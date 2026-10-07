@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Download, Link2, Package, Plus, Trash2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { useAssetNav } from '@/components/ui'
+import { useAuth } from '@/stores/auth'
 import { Badge, Button, Chip, PageHeader } from '@/components/ui'
 import { fmtTime } from '@/lib/utils'
 
@@ -27,10 +28,11 @@ function collectionHref(assetType: string | null, params: Record<string, unknown
   return `/${route}${qs ? `?${qs}` : ''}`
 }
 
-/** M6 工具箱（admin）：打包下载 / 分享链接 / 智能集合 */
+/** M6 工具箱（member 可用；分享为 admin 专属页签）：打包下载 / 分享链接 / 智能集合 */
 export function ToolsPage() {
   const qc = useQueryClient()
   const nav = useAssetNav()
+  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [tab, setTab] = useState<'pack' | 'share' | 'collection'>('pack')
   const [packType, setPackType] = useState('image')
   const [packFav, setPackFav] = useState(false)
@@ -78,7 +80,9 @@ export function ToolsPage() {
       <PageHeader title="工具箱" sub="打包下载 · 分享链接 · 智能集合（M6）" />
 
       <div className="mt-4 flex w-fit gap-1 rounded-lg bg-slate-200/70 p-1 text-sm">
-        {([['pack', '打包下载', Package], ['share', '分享链接', Link2], ['collection', '智能集合', Plus]] as const).map(([k, label, Icon]) => (
+        {([['pack', '打包下载', Package],
+           ...(isAdmin ? [['share', '分享链接', Link2] as const] : []),
+           ['collection', '智能集合', Plus]] as const).map(([k, label, Icon]) => (
           <button key={k} className={`flex items-center gap-1.5 rounded-md px-4 py-1.5 transition ${tab === k ? 'bg-white font-medium shadow-sm' : 'text-slate-500 hover:text-slate-700'}`} onClick={() => setTab(k)}>
             <Icon className="h-3.5 w-3.5" />{label}
           </button>

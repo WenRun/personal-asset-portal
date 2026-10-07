@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
-import { useAssetNav, Badge, Chip, HueCover, PageHeader } from '@/components/ui'
-import { fmtDate, fmtTime } from '@/lib/utils'
+import { useAssetNav, Badge, Button, Chip, HueCover, PageHeader } from '@/components/ui'
+import { SelectionBar } from '@/components/SelectionBar'
+import { useAuth } from '@/stores/auth'
+import { useBulkSelect } from '@/lib/useBulkSelect'
+import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
 type SeriesDetailed = Awaited<ReturnType<typeof api.videoSeries>>[number] & {
   episodeList: Awaited<ReturnType<typeof api.seriesEpisodes>>['episodes']
@@ -25,6 +29,8 @@ export function VideosPage() {
     },
   })
   const nav = useAssetNav()
+  const user = useAuth((s) => s.user)
+  const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [filter, setFilter] = useState<'all' | 'series' | 'clip' | 'playable'>('all')
 
   const seriesList = useMemo(() => {
@@ -44,6 +50,11 @@ export function VideosPage() {
       <PageHeader
         title="视频"
         sub={`${seriesList.length} 个教程系列 · ${clips.length} 个素材（ffprobe 解析 · Direct Play）`}
+        right={user && (
+          <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+            <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+          </Button>
+        )}
       />
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -62,8 +73,13 @@ export function VideosPage() {
               const watchedEp = s.episodeList.filter((e) => e.position_sec > 0).length
               const done = watchedEp >= s.episodes && s.episodes > 0
               const hue = s.id.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)
+              const seriesSel = selMode && s.episodeList.some((e) => sel.has(e.asset_id))
               return (
-                <div key={s.id} className="group cursor-pointer" onClick={() => nav(`/videos/${s.episodeList[0]?.asset_id ?? s.id}`)}>
+                <div
+                  key={s.id}
+                  className={cn('group cursor-pointer rounded-xl', seriesSel && 'ring-2 ring-brand-500')}
+                  onClick={() => (selMode ? toggleSel(s.episodeList.map((e) => e.asset_id)) : nav(`/videos/${s.episodeList[0]?.asset_id ?? s.id}`))}
+                >
                   <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-800 shadow-sm transition group-hover:shadow-md">
                     {s.cover_url ? (
                       <img src={API_BASE + s.cover_url} alt={s.name} className="h-full w-full object-cover" />
@@ -107,7 +123,11 @@ export function VideosPage() {
               .map((c) => {
                 const hue = c.id.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7)
                 return (
-                  <div key={c.id} className="group cursor-pointer" onClick={() => nav(`/videos/${c.id}`)}>
+                  <div
+                    key={c.id}
+                    className={cn('group cursor-pointer rounded-xl', selMode && sel.has(c.id) && 'ring-2 ring-brand-500')}
+                    onClick={() => (selMode ? toggleSel([c.id]) : nav(`/videos/${c.id}`))}
+                  >
                     <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-800 transition group-hover:shadow-md">
                       {c.cover_url ? (
                         <img src={API_BASE + c.cover_url} alt={c.title} className="h-full w-full object-cover" />
@@ -137,6 +157,8 @@ export function VideosPage() {
       <div className="mt-6 text-center text-xs text-slate-400">
         系列识别规则：S01E02 / 第02讲 / EP02 / 父目录（存疑进确认队列）
       </div>
+
+      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
     </div>
   )
 }

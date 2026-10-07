@@ -295,6 +295,7 @@ export const api = {
     req<{ position: Record<string, number | string> | null; updated_at: string } | null>(`/api/progress?asset_id=${assetId}`),
   fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
   fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
+  fontFamilyPackUrl: (id: string) => `${BASE}/api/fonts/${id}/family-pack`,
   musicAlbums: () =>
     req<{ id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]>('/api/music/albums'),
   album: async (id: string): Promise<Album> => {
@@ -352,8 +353,12 @@ export const api = {
   downloadUrl: (id: string) => `${BASE}/api/assets/${id}/download`,
 
   // 标签
-  tags: () => req<{ id: string; name: string; count: number }[]>('/api/tags'),
-  createTag: (name: string) => req<{ id: string; name: string }>('/api/tags', { method: 'POST', body: JSON.stringify({ name }) }),
+  tags: () => req<{ id: string; name: string; parent_id: string | null; count: number }[]>('/api/tags'),
+  createTag: (name: string, parentId?: string | null) =>
+    req<{ id: string; name: string }>('/api/tags', { method: 'POST', body: JSON.stringify({ name, parent_id: parentId ?? null }) }),
+  renameTag: (id: string, name: string, parentId?: string | null) =>
+    req<{ id: string; name: string; parent_id: string | null }>(`/api/tags/${id}`, { method: 'PATCH', body: JSON.stringify({ name, parent_id: parentId ?? null }) }),
+  deleteTag: (id: string) => req<{ ok: boolean }>(`/api/tags/${id}`, { method: 'DELETE' }),
 
   // 搜索（Meilisearch 聚合代理；member）
   search: (q: string, limit = 8, tag?: string) =>

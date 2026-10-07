@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Play } from 'lucide-react'
+import { Check, ListChecks, Play } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePlayer } from '@/stores/player'
-import { useAssetNav, Badge, HueCover, PageHeader } from '@/components/ui'
-import { fmtTime } from '@/lib/utils'
+import { useAuth } from '@/stores/auth'
+import { useAssetNav, Badge, Button, HueCover, PageHeader } from '@/components/ui'
+import { SelectionBar } from '@/components/SelectionBar'
+import { useBulkSelect } from '@/lib/useBulkSelect'
+import { cn, fmtTime } from '@/lib/utils'
 
 type View = 'album' | 'artist' | 'tracks'
 type Sort = 'recent' | 'artist' | 'year'
@@ -154,11 +157,13 @@ export function MusicPage() {
   )
 }
 
-/** 全部曲目（member）：平铺表 + 点行播放（从所属专辑入队） */
+/** 全部曲目（member）：平铺表 + 点行播放（从所属专辑入队）；支持批量多选入包 */
 function TracksView() {
   const { data: tracks } = useQuery({ queryKey: ['music-tracks'], queryFn: api.musicTracks })
   const playAlbum = usePlayer((s) => s.playAlbum)
   const { queue, index } = usePlayer()
+  const user = useAuth((s) => s.user)
+  const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [q, setQ] = useState('')
 
   const list = useMemo(() => {
@@ -178,12 +183,19 @@ function TracksView() {
 
   return (
     <div className="mt-4">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="在曲目中过滤…"
-        className="mb-3 w-72 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
-      />
+      <div className="mb-3 flex items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="在曲目中过滤…"
+          className="w-72 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
+        />
+        {user && (
+          <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+            <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+          </Button>
+        )}
+      </div>
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-400">
@@ -199,9 +211,20 @@ function TracksView() {
           <tbody className="divide-y divide-slate-100">
             {list.map((t, i) => {
               const active = curTrackId === t.asset_id
+              const checked = sel.has(t.asset_id)
               return (
-                <tr key={t.asset_id} className={`cursor-pointer transition ${active ? 'bg-brand-50' : 'hover:bg-slate-50'}`} onClick={() => play(t.asset_id)}>
-                  <td className="px-4 py-2.5 text-slate-400">{i + 1}</td>
+                <tr
+                  key={t.asset_id}
+                  className={`cursor-pointer transition ${selMode && checked ? 'bg-brand-50' : active ? 'bg-brand-50' : 'hover:bg-slate-50'}`}
+                  onClick={() => (selMode ? toggleSel([t.asset_id]) : play(t.asset_id))}
+                >
+                  <td className="px-4 py-2.5 text-slate-400">
+                    {selMode ? (
+                      <span className={cn('grid h-4 w-4 place-items-center rounded border', checked ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300')}>
+                        {checked && <Check className="h-3 w-3" />}
+                      </span>
+                    ) : i + 1}
+                  </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>{t.title}</td>
                   <td className="px-2 py-2.5 text-slate-500">{t.album}</td>
                   <td className="px-2 py-2.5 text-slate-500">{t.artist}</td>
@@ -219,6 +242,8 @@ function TracksView() {
       <div className="mt-2 text-center text-xs text-slate-400">
         共 {list.length} 首 · 点行播放（/api/music/&#123;id&#125;/stream 真实音频流）
       </div>
+
+      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
     </div>
   )
 }

@@ -120,7 +120,9 @@ export function FontDetailPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button className="flex-1" title="字族打包下载随后续版本上线">下载字族 (.zip)</Button>
+            <a href={api.fontFamilyPackUrl(font.id)} className="flex-1" title={`下载 ${font.family} 全部 ${siblings?.length ?? 1} 个字重文件的 ZIP`}>
+              <Button className="w-full">下载字族 (.zip)</Button>
+            </a>
             <Button variant="outline">编辑</Button>
             {isAdmin && <Button variant="outline" title="生成公开分享链接" onClick={() => setShareOpen(true)}><Link2 className="h-3.5 w-3.5" />分享</Button>}
           </div>

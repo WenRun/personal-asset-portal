@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Heart } from 'lucide-react'
+import { Check, Heart, ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
-import { useAssetNav, Chip, HueCover, PageHeader } from '@/components/ui'
+import { useAssetNav, Button, Chip, HueCover, PageHeader } from '@/components/ui'
+import { SelectionBar } from '@/components/SelectionBar'
+import { useAuth } from '@/stores/auth'
+import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn } from '@/lib/utils'
 import type { Photo } from '@/types'
 
@@ -17,6 +20,8 @@ export function ImagesPage() {
     queryFn: () => api.photos(tagFilter ? { tag: tagFilter } : undefined),
   })
   const nav = useAssetNav()
+  const user = useAuth((s) => s.user)
+  const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [filter, setFilter] = useState<string>(params.get('favorite') ? 'fav' : 'all')
   const [favs, setFavs] = useState<Record<string, boolean>>({})
   const [imgFail, setImgFail] = useState<Record<string, boolean>>({})
@@ -46,7 +51,16 @@ export function ImagesPage() {
       <PageHeader
         title="图片"
         sub={`${photos?.length ?? 0} 张 · 时间线按拍摄时间分组（无 EXIF 时回退入库时间）`}
-        right={<span className="text-xs text-slate-400">游标分页 · 虚拟滚动</span>}
+        right={
+          <>
+            {user && (
+              <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+                <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+              </Button>
+            )}
+            <span className="text-xs text-slate-400">游标分页 · 虚拟滚动</span>
+          </>
+        }
       />
       <div className="mt-3 flex flex-wrap gap-2">
         <button className={`rounded-full px-3 py-1.5 text-sm transition ${filter === 'all' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter('all')}>全部</button>
@@ -75,9 +89,17 @@ export function ImagesPage() {
             {items.map((p) => (
               <div
                 key={p.id}
-                className="group relative cursor-pointer overflow-hidden rounded-xl break-inside-avoid"
-                onClick={() => nav(`/images/${p.id}`)}
+                className={cn(
+                  'group relative cursor-pointer overflow-hidden rounded-xl break-inside-avoid',
+                  selMode && sel.has(p.id) && 'ring-2 ring-brand-500',
+                )}
+                onClick={() => (selMode ? toggleSel([p.id]) : nav(`/images/${p.id}`))}
               >
+                {selMode && sel.has(p.id) && (
+                  <div className="absolute left-2 top-2 z-10 grid h-5 w-5 place-items-center rounded-full bg-brand-600 text-white shadow">
+                    <Check className="h-3.5 w-3.5" />
+                  </div>
+                )}
                 {imgFail[p.id] ? (
                   <HueCover hue={p.hue} className="w-full"><div style={{ height: p.displayH }} /></HueCover>
                 ) : (
@@ -110,6 +132,8 @@ export function ImagesPage() {
         <div className="mt-10 rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-400">没有符合条件的图片</div>
       )}
       <div className="mt-6 text-center text-xs text-slate-400">滚动加载更多（游标分页）…</div>
+
+      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
     </div>
   )
 }

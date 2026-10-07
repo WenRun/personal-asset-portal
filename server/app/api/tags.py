@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.errors import conflict, not_found
+from app.core.errors import bad_request, conflict, not_found
 from app.core.jobs import enqueue
 from app.core.models import AssetTag, Tag, User
 from app.core.deps import require_admin
@@ -60,16 +60,37 @@ async def create_tag(body: TagBody, db: AsyncSession = Depends(get_db), _: User 
     return {"id": str(t.id), "name": t.name}
 
 
-@router.patch("/{tag_id}", summary="重命名标签", description="管理员。标签不存在时返回 404；重命名后异步重建所有挂载该标签的资产搜索索引。")
+@router.patch("/{tag_id}", summary="重命名 / 移动标签",
+               description="管理员。可改名或把标签挂到新父标签下（parent_id 传 null 变为顶级）；形成循环层级时返回 400。改动后异步重建受影响资产的搜索索引。")
 async def rename_tag(tag_id: uuid.UUID, body: TagBody, db: AsyncSession = Depends(get_db),
                      _: User = Depends(require_admin)):
     t = await db.get(Tag, tag_id)
     if t is None:
         raise not_found()
+    if body.parent_id is not None:
+        if body.parent_id == tag_id or await _is_descendant(db, tag_id, body.parent_id):
+            raise bad_request("父标签不能是自己或自己的后代")
     t.name = body.name
+    t.parent_id = body.parent_id
     await db.commit()
     await _reindex_assets(db, await _tagged_asset_ids(db, tag_id))
-    return {"id": str(t.id), "name": t.name}
+    return {"id": str(t.id), "name": t.name, "parent_id": str(t.parent_id) if t.parent_id else None}
+
+
+async def _is_descendant(db: AsyncSession, ancestor_id: uuid.UUID, node_id: uuid.UUID) -> bool:
+    """判断 node_id 是否位于 ancestor_id 的子树内（防环）。"""
+    with_parent = (
+        await db.execute(select(Tag.id, Tag.parent_id))
+    ).all()  # 全表很小，载入内存做指针 chasing
+    parent_of = {tid: pid for tid, pid in with_parent}
+    cur = parent_of.get(node_id)
+    seen: set[uuid.UUID] = set()
+    while cur is not None and cur not in seen:
+        if cur == ancestor_id:
+            return True
+        seen.add(cur)
+        cur = parent_of.get(cur)
+    return False
 
 
 @router.delete("/{tag_id}", summary="删除标签",

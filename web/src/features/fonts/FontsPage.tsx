@@ -1,19 +1,27 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { ListChecks } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
+import { useAuth } from '@/stores/auth'
 import { useFontFace } from '@/lib/useFontFace'
-import { useAssetNav, Badge, Chip, PageHeader } from '@/components/ui'
+import { useAssetNav, Badge, Button, Chip, PageHeader } from '@/components/ui'
+import { SelectionBar } from '@/components/SelectionBar'
+import { useBulkSelect } from '@/lib/useBulkSelect'
+import { cn } from '@/lib/utils'
 import type { FontFamily } from '@/types'
 
-/** 字族卡片：FontFace 真实加载，失败回落服务端样张图（§5.1） */
-function FamilyCard({ family, files, text, size, weight }: {
+/** 字族卡片：FontFace 真实加载，失败回落服务端样张图（§5.1）；多选模式下点击整族切换选中 */
+function FamilyCard({ family, files, text, size, weight, selecting, selected, onToggle }: {
   family: string
   files: FontFamily[]
   text: string
   size: number
   weight: number
+  selecting?: boolean
+  selected?: boolean
+  onToggle?: () => void
 }) {
   const nav = useAssetNav()
   const primary = files[0]
@@ -21,12 +29,16 @@ function FamilyCard({ family, files, text, size, weight }: {
 
   return (
     <div
-      onClick={() => nav(`/fonts/${primary.id}`)}
-      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:shadow-md"
+      onClick={() => (selecting && onToggle ? onToggle() : nav(`/fonts/${primary.id}`))}
+      className={cn(
+        'cursor-pointer rounded-xl border bg-white p-4 transition hover:shadow-md',
+        selected ? 'border-brand-500 ring-2 ring-brand-500' : 'border-slate-200 hover:border-brand-400',
+      )}
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="font-semibold">{family}</div>
         <div className="flex gap-1">
+          {selected && <Badge tone="brand">已选 {files.length}</Badge>}
           {files.some((f) => f.variable) && <Badge tone="violet">可变</Badge>}
         </div>
       </div>
@@ -60,6 +72,8 @@ export function FontsPage() {
     queryFn: () => api.fonts(tagFilter ? { tag: tagFilter } : undefined),
   })
   const { fontText, fontSize, fontWeight, setFontPreview } = usePrefs()
+  const user = useAuth((s) => s.user)
+  const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [filter, setFilter] = useState<'all' | 'han' | 'variable' | 'fav'>(params.get('favorite') ? 'fav' : 'all')
 
   const list = useMemo(() => {
@@ -87,6 +101,11 @@ export function FontsPage() {
       <PageHeader
         title="字体"
         sub={`${families.length} 个字族 · ${fonts?.length ?? 0} 个文件（fontTools 解析）`}
+        right={user && (
+          <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+            <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+          </Button>
+        )}
       />
 
       {/* 全局预览文案控制条（prefsStore 共享，详情页样张同步） */}
@@ -113,16 +132,25 @@ export function FontsPage() {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {families.map(({ family, files }) => (
-          <FamilyCard key={family} family={family} files={files} text={fontText} size={fontSize} weight={fontWeight} />
-        ))}
+        {families.map(({ family, files }) => {
+          const selected = files.some((f) => sel.has(f.id))
+          return (
+            <FamilyCard
+              key={family} family={family} files={files} text={fontText} size={fontSize} weight={fontWeight}
+              selecting={selMode} selected={selMode && selected}
+              onToggle={() => toggleSel(files.map((f) => f.id))}
+            />
+          )
+        })}
         {fonts && families.length === 0 && (
           <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-400">没有符合条件的字体</div>
         )}
       </div>
       <div className="mt-4 text-center text-xs text-slate-400">
-        样张为真实字体渲染（FontFace 加载 /api/fonts/&#123;id&#125;/file，失败回落服务端样张图）；字族打包下载随 M6 上线
+        样张为真实字体渲染（FontFace 加载 /api/fonts/&#123;id&#125;/file，失败回落服务端样张图）；字族打包下载见详情页
       </div>
+
+      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
     </div>
   )
 }
