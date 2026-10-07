@@ -327,10 +327,13 @@ async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = 
 
 
 @router.delete("/assets/{asset_id}", summary="删除资产",
-               description="管理员。默认软删（可恢复）；purge=true 彻底删除记录并移出搜索索引，delete_file=true 连同源文件一起删除（仅与 purge 同时生效）。")
+               description="管理员。默认软删（可恢复）；purge=true 彻底删除记录并移出搜索索引，delete_file=true 连同源文件一起删除（仅与 purge 同时生效）。两种删除都会同步清理该资产的派生物（缩略图/封面/样张等）。")
 async def delete_asset(asset_id: uuid.UUID, purge: bool = Query(False, description="是否彻底删除（默认软删）"),
                        delete_file: bool = Query(False, description="是否同时删除磁盘文件（需 purge=true）"),
                        db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
+    from app.core.config import get_settings
+    from app.core.pipeline import cleanup_derived
+
     a = await db.get(Asset, asset_id)
     if a is None:
         raise not_found()
@@ -339,24 +342,30 @@ async def delete_asset(asset_id: uuid.UUID, purge: bool = Query(False, descripti
         if delete_file:
             storage = await _storage(db)
             storage.delete(a.storage_key)
+        cleanup_derived(a.id, get_settings().data_root)
         await db.delete(a)
     else:
         a.deleted_at = datetime.now().astimezone()
+        cleanup_derived(a.id, get_settings().data_root)  # 软删也清派生物；恢复时重新派生
         await _reindex(db, a)  # 软删后同步删除索引文档（由 worker 判断 deleted_at）
     await db.commit()
     return {"ok": True, "purged": purge}
 
 
 @router.post("/assets/{asset_id}/restore", summary="恢复软删资产",
-             description="管理员。清除删除标记并重建搜索索引；已彻底删除（purge）的无法恢复。")
+             description="管理员。清除删除标记并重建搜索索引；同时重新触发解析以补齐派生物（软删时缩略图/封面等已被清理）。")
 async def restore_asset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
                         user: User = Depends(require_admin)):
+    from app.core.jobs import enqueue as jobs_enqueue
+
     a = await db.get(Asset, asset_id)
     if a is None:
         raise not_found()
     a.deleted_at = None
     await db.commit()
     await _reindex(db, a)
+    # 重新派生：软删时派生物已清理，重跑解析链补齐缩略图/封面（解析器幂等，安全）
+    await jobs_enqueue(db, f"parse:{a.asset_type}", {"asset_id": str(a.id)}, priority=5)
     return _item(a)
 
 

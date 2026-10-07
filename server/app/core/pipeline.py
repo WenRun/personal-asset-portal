@@ -2,7 +2,9 @@
 
 import logging
 import mimetypes
+import shutil
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +32,22 @@ def register(kind: str):
 
 def build_storage(roots: dict[str, str]) -> LocalStorage:
     return LocalStorage(roots)
+
+
+def cleanup_derived(asset_id, data_root) -> int:
+    """删除资产名下的派生物目录（derived/<分类>/<asset_id>），返回清理数。
+    资产进入软删态时调用（页面删除与扫描对账两条路径共用），防止孤儿派生物累积。
+    音乐专辑封面按专辑 ID 存放，不在此范围（专辑维度，量级极小）。"""
+    derived = Path(data_root) / "derived"
+    removed = 0
+    if not derived.is_dir():
+        return removed
+    for category in derived.iterdir():
+        target = category / str(asset_id)
+        if target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+            removed += 1
+    return removed
 
 
 @register("scan_root")
@@ -83,11 +101,16 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
     if missing and not seen:
         log.warning("scan_root %s: 磁盘 0 个文件但库内有 %d 条记录，跳过对账（疑似挂载丢失）", alias, len(alive))
         missing = []
+    cleaned = 0
     for a in missing:
         a.deleted_at = datetime.now().astimezone()
+        cleaned += cleanup_derived(a.id, get_settings().data_root)
         await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
     await db.commit()
-    log.info("scan_root %s: %d new files, %d missing -> soft-deleted", alias, new_files, len(missing))
+    log.info(
+        "scan_root %s: %d new files, %d missing -> soft-deleted (%d derived dirs cleaned)",
+        alias, new_files, len(missing), cleaned,
+    )
 
 
 @register("fingerprint")
