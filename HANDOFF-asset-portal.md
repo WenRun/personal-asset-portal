@@ -1,6 +1,6 @@
 # HANDOFF · 个人资源门户（personal-asset-portal）
 
-> 交接日期：2026-10-06 · 状态：M0–M6 全部里程碑完成，13+ 个 UX/缺陷修复提交，共 16 commits（本地 main，origin 未推送）
+> 交接日期：2026-10-06（2026-10-07 更新）· 状态：M0–M6 全部里程碑完成；规划内功能缺口与工程债（除自动化测试）已清零，共 26 commits（本地 main，origin 未推送）
 > 本文面向接手开发的人。规划与详细设计见 `docs/` 两份文档，本文只写"文档之外的实况"。
 
 ---
@@ -74,7 +74,7 @@
 **工程债**
 9. ~~**Alembic**~~（✅ 2026-10-07 完成：migrations/ 异步模板基线 `e256f2a718d5`（21 表，临时库验证升级/降级/零漂移）；lifespan 改为启动时 upgrade head；现有库已 stamp；用法见 server/README.md）
 10. **自动化测试为零**：测试策略在详细设计 §10（pytest + testcontainers + Playwright），当前验证全靠 curl 冒烟 + 浏览器人工。
-11. **Caddy 生产接线**：deploy/Caddyfile 是示例；compose 中无 caddy service。
+11. ~~**Caddy 生产接线**~~（✅ 2026-10-07 完成并按用户环境改写为 **NGINX 接线**：compose 重写为 external network 拓扑（portal-server/worker/web 三服务，不发布宿主端口，共享 portal_data 卷），web 多阶段构建（同源 VITE_API_BASE 留空 + SPA 回退 + 产物长缓存），deploy/nginx-portal.conf 反代样例（client_max_body_size 对齐上传上限、SSE 关缓冲、Range 流透传），server 镜像 --proxy-headers，backup.sh 支持容器内 pg_dump；Caddyfile 已删除。**待用户在实际环境部署验证**）
 12. ~~**前端 chunk 343KB**~~（✅ 2026-10-07 完成：路由级 lazy + manualChunks，入口 380KB→36.7KB，vendor 双缓存块）
 13. ~~移动端~~（✅ 2026-10-07 完成：详情页侧栏小屏抽屉化、表格滚动+列隐藏、顶栏/页头自适应、歌词按钮全尺寸可见；375px 走查通过）
 
@@ -89,8 +89,8 @@
 3. **大库性能未压测**：图片墙是 CSS columns + 游标分页，**未实装虚拟滚动**（设计 §7.3 写了 TanStack Virtual）；10w 张目标未验证。
 4. **worker 单机假设**：SKIP LOCKED 支持多 worker，但 derive 产物目录与部署卷路径假设同机。
 5. **搜索索引与 DB 的一致性**：软删/恢复/标签变更走 index_meili 任务最终一致；Meili 宕机期间的任务会失败重试 3 次后放弃，**没有对账机制**（建议 M6.5 加 `reindex` 定时任务，CLI 目前只有启动时 ensure_indexes）。
-6. **生产安全假设**：BOOTSTRAP_ADMIN_PASSWORD 默认 admin1234、COOKIE_SECURE=false、Caddy 未上——生产部署前必须过一遍 §1.2 环境变量。
-7. **基础设施依赖用户机器**：postgres-dev / meilisearch-dev 是这台机器上的通用容器（详见 §6），换机需按 server/README.md 重建。
+6. **生产安全假设**（2026-10-07 缓解）：生产 compose 强制要求注入 BOOTSTRAP_ADMIN_PASSWORD / PG_PASSWORD / MEILI_MASTER_KEY（未设置启动即报错），COOKIE_SECURE 默认 true；开发环境默认值不变（admin1234/false），本地开发不受影响。
+7. ~~基础设施依赖用户机器~~（2026-10-07 更新）：开发环境仍用本机通用容器 postgres-dev / meilisearch-dev（§6）；**生产 compose 已与开发机解耦**——通过 .env 注入外部网络与 PG/Meili 容器名，换机只带代码 + .env。
 8. **未推送**：origin = git@github.com:WenRun/personal-asset-portal.git，**是否 push 由需求方决定**。
 
 ## 6. 复现与验证命令
@@ -126,7 +126,7 @@ curl -s -b /tmp/jar "localhost:8000/api/search?q=思源"
 # 权限矩阵自检：不带 cookie 访问 /api/search → 401；/api/fonts → 200
 ```
 
-**备份**：`DATABASE_URL=... BACKUP_DIR=... ./deploy/backup.sh`
+**备份**：开发 `DATABASE_URL=... BACKUP_DIR=... ./deploy/backup.sh`；生产容器化 PG 用 `PG_CONTAINER=<pg容器名> PG_USER=portal BACKUP_DIR=... ./deploy/backup.sh`（命名卷 library 导出命令见脚本头注释）
 
 **测试**：当前无自动化测试（见 §4-10）；验收以 curl 冒烟 + 浏览器人工走查为准（五类各：上传/扫描 → 列表可见 → 详情预览 → 搜索命中 → 下载 200）。
 
@@ -201,9 +201,11 @@ curl -s -b /tmp/jar "localhost:8000/api/search?q=思源"
 ### 部署
 | 路径 | 作用 |
 |---|---|
-| docker-compose.yml | 仅 server+worker 两个服务（通过 host.docker.internal 访问通用容器）；本地开发不使用 |
-| deploy/backup.sh | pg_dump + rsync library 备份脚本 |
-| deploy/Caddyfile | 反代与派生物缓存示例 |
+| docker-compose.yml | 生产拓扑（2026-10-07）：portal-server/worker/web 接入外部网络（NGINX/PG/Meili），不发布宿主端口，共享 portal_data 卷；本地开发不使用 |
+| .env.example | 生产 compose 配置模板（网络名、容器名、口令、站点参数） |
+| web/Dockerfile + web/nginx-static.conf | 前端多阶段构建与静态托管（SPA 回退 + 产物 immutable 缓存；VITE_API_BASE 留空同源部署） |
+| deploy/nginx-portal.conf | 外层 NGINX 反代样例（/api/ 与 / 分流、上传体积上限、SSE 关缓冲；取代已删除的 Caddyfile） |
+| deploy/backup.sh | pg_dump + rsync library 备份脚本（支持宿主机直连与 docker exec 容器内两种模式） |
 | .gitignore | 排除 server/.env（含口令）、server/data、venv、node_modules、.idea |
 
 ### 运行时位置（不在 git 内）

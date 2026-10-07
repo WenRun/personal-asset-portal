@@ -11,26 +11,36 @@
 
 ### 1.1 进程与部署模型
 
+> 2026-10-07 拓扑定稿：生产环境 NGINX / PostgreSQL / Meilisearch 均为既有独立容器且同一 Docker 网络，
+> 门户 compose 分组（server / worker / web）以 external network 接入，统一由 **NGINX 反代**（不引入 Caddy）。
+
 ```mermaid
 graph LR
-    subgraph Docker Compose
-        CADDY[Caddy :8080<br/>反代 + 静态缓存头]
-        API[server 容器<br/>uvicorn → FastAPI :8000]
-        WORKER[worker 容器<br/>python -m app.worker]
-        PG[(postgres:16)]
+    subgraph 既有容器（用户环境）
+        NGINX[NGINX<br/>TLS 入口 + 反代]
+        PG[(postgres 13+)]
         MEILI[(meilisearch)]
     end
-    USER[浏览器] --> CADDY --> API
+    subgraph Docker Compose（portal 分组）
+        API[portal-server<br/>uvicorn → FastAPI :8000]
+        WORKER[portal-worker<br/>python -m app.core.worker]
+        WEB[portal-web<br/>nginx:alpine 静态 + SPA 回退]
+    end
+    USER[浏览器] --> NGINX
+    NGINX -->|/api/| API
+    NGINX -->|/| WEB
     API --> PG
     API --> MEILI
     WORKER --> PG
     WORKER --> MEILI
-    WORKER -.->|ffmpeg / Pillow / fontTools| FS[(/data 卷)]
+    WORKER -.->|ffmpeg / Pillow / fontTools| FS[(portal_data 卷)]
     API -.->|流式读写| FS
 ```
 
-- `server` 与 `worker` 用同一个镜像、不同启动命令，共享 `/data` 卷。
-- 一期 worker 并发 = 2（环境变量可调）；`server` 单进程 + 异步 IO。
+- `portal-server` 与 `portal-worker` 用同一个镜像、不同启动命令，**共享 `portal_data` 卷**（worker 写派生物、server 读）。
+- `portal-web` 多阶段构建（node 构建 → nginx:alpine 托管 dist）：SPA 回退 + 带哈希产物 immutable 缓存；构建时 `VITE_API_BASE` 必须留空走同源相对路径，否则请求会回落到开发地址。
+- NGINX 侧要点（样例见 `deploy/nginx-portal.conf`）：`/api/` 反代 + `client_max_body_size` 对齐上传上限（默认 1MB 会 413）+ SSE location 关闭 `proxy_buffering`；`/` 反代到 portal-web。音视频 Range 流默认透传。
+- 一期 worker 并发 = 2（环境变量可调）；`server` 单进程 + 异步 IO，以 `--proxy-headers` 启动信任反代链路头。
 - 资源根目录统一挂载到容器 `/data/library/<alias>/`，派生物在 `/data/derived/`。
 
 ### 1.2 配置清单（环境变量）
@@ -679,7 +689,7 @@ sequenceDiagram
 └── packs/{pack_id}.zip
 ```
 
-规则：先写 `.tmp` 再原子改名；worker 重试安全；清除资产时整目录递归删除。Caddy 对 `/api/assets/*/preview/*` 与缩略图响应加 `Cache-Control: public, max-age=31536000, immutable`（派生物路径含资产 id，内容不变）。
+规则：先写 `.tmp` 再原子改名；worker 重试安全；清除资产时整目录递归删除。派生物响应（样张/缩略图/封面）由**应用侧**直接携带 `Cache-Control: public, max-age=31536000, immutable`（派生物路径含资产 id，内容不变），反代透传即可，无需在 NGINX 重复配置。
 
 ---
 
@@ -706,4 +716,4 @@ sequenceDiagram
 | M3 书籍 | §2.3 书籍表、§5.4、§7.4 两 Reader |
 | M4 音乐 | §2.3 音乐表、§5.2、§7.4 PlayerBar |
 | M5 视频 | §2.3 视频表、§5.3、§7.4 VideoPlayer/ConfirmQueue |
-| M6 打磨 | §6.3 剩余、智能集合（保存筛选 JSON 到 settings.user 域）、打包下载全链路、备份脚本（pg_dump + rsync /data/library）、Caddy 缓存调优 |
+| M6 打磨 | §6.3 剩余、智能集合（保存筛选 JSON 到 settings.user 域）、打包下载全链路、备份脚本（pg_dump + rsync /data/library）、反代与派生物缓存调优（NGINX，见 §1.1） |

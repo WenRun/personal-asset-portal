@@ -481,7 +481,7 @@ portal/
 │       ├── features/fonts/  # 每类型一个 feature（视图+详情+预览组件）
 │       ├── features/music/
 │       └── ...
-├── deploy/                  # docker-compose.yml、Caddy(反代+TLS)、备份脚本
+├── deploy/                  # docker-compose.yml、nginx 反代样例、备份脚本
 └── docs/
 ```
 
@@ -492,7 +492,7 @@ portal/
 | 维度 | 目标 / 方案 |
 |---|---|
 | 规模预期 | 图片 10w+、音乐 5k 曲目、视频 5k 个（含教程系列）、书籍 1w 本、字体 2k 个 |
-| 性能 | 列表一律分页 + 虚拟滚动；缩略图命中派生目录直出（Nginx/Caddy 静态缓存）；搜索 <100ms |
+| 性能 | 列表一律分页 + 虚拟滚动；缩略图命中派生目录直出（应用侧 immutable 缓存头 + NGINX 透传）；搜索 <100ms |
 | 鉴权 | 三级角色（admin / member / 未登录访客，见 §4.7）；argon2id + 服务端会话；搜索 / 预览 / 下载均要求登录 |
 | 安全 | 存储抽象防路径穿越；上传仅管理端 + 类型白名单；HLS 片段目录防列举 |
 | 备份 | `pg_dump` + 原始文件 rsync；派生物可全量重建，不纳入备份 |
@@ -543,6 +543,7 @@ portal/
 | 5 | 书籍结构 | 全新自由结构，不做 Calibre 兼容 / 依赖（§5.4） |
 | 6 | 图片智能化 | **需要人脸识别**，连同 AI 语义标签一并放二期（§5.5） |
 | 7 | 移动端 | 响应式 Web 即可，不做 PWA / 原生端 |
+| 8 | 部署拓扑（2026-10-07 补充确认） | **复用用户既有 NGINX 统一入口**（TLS/反代），门户 compose 分组（portal-server/portal-worker/portal-web）以 external network 接入既有容器网络；PG(13+)/Meilisearch 为既有独立容器。不引入 Caddy。要点：同源部署（VITE_API_BASE 留空）、反代 `client_max_body_size` 对齐上传上限、SSE location 关闭 `proxy_buffering`（详见详细设计 §1.1 与 deploy/nginx-portal.conf） |
 | 8 | v0.3 变更 | 电影模块调整为**视频模块**：管理自有素材与教程系列视频；元数据改为 ffprobe 自动探测 + 手动维护，移除 TMDB 刮削与 nfo 兼容（§5.3） |
 
 各相关章节已按上述结论同步修订。
