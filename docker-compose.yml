@@ -5,7 +5,8 @@
 #   2) docker compose up -d --build
 #   3) 按 deploy/nginx-portal.conf 样例把你现有 NGINX 的 /api 与 / 反代到本分组
 # 说明：
-#   - server/worker 共享 portal_data 卷（worker 写派生物、server 读，必须在同一卷）
+#   - server/worker 共享同一数据目录 ./data（bind mount，worker 写派生物、server 读）；
+#     媒体文件可通过 SMB 直接拷入 ./data/library/<分类>/ 再扫描入库
 #   - 本分组不发布宿主机端口：仅与外部网络互通，公网流量一律经你的 NGINX
 #   - cookie/上传上限等安全参数见 .env.example； alembic 迁移在 server 启动时自动执行
 
@@ -24,7 +25,7 @@ services:
       # 信任反代头（仅私有容器网络内，用于日志与客户端 IP 还原）
       FORWARDED_ALLOW_IPS: "*"
     volumes:
-      - portal_data:/data
+      - ./data:/data
     networks: [portal-net]
     restart: unless-stopped
 
@@ -33,7 +34,7 @@ services:
     command: python -m app.core.worker
     environment: *server_env
     volumes:
-      - portal_data:/data
+      - ./data:/data
     networks: [portal-net]
     restart: unless-stopped
 
@@ -48,6 +49,3 @@ networks:
   portal-net:
     external: true
     name: ${DOCKER_NETWORK:?请在 .env 设置与 NGINX/PG/Meili 相同的网络名}
-
-volumes:
-  portal_data:
