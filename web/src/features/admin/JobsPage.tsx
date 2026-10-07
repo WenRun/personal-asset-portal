@@ -74,14 +74,14 @@ export function JobsPage() {
       </div>
 
       {tab === 'jobs' ? (
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs text-slate-400">
               <tr>
                 <th className="px-4 py-2.5 text-left font-medium">任务</th>
                 <th className="px-4 py-2.5 text-left font-medium">对象</th>
                 <th className="px-4 py-2.5 text-left font-medium">状态</th>
-                <th className="px-4 py-2.5 text-left font-medium">尝试</th>
+                <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">尝试</th>
                 <th className="px-4 py-2.5 text-left font-medium">创建时间</th>
                 <th className="px-4 py-2.5"></th>
               </tr>
@@ -95,7 +95,7 @@ export function JobsPage() {
                     {statusPill(j.status)}
                     {j.last_error && <div className="mt-0.5 font-mono text-[10px] text-rose-500">{j.last_error}</div>}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-400">{j.attempts}</td>
+                  <td className="hidden px-4 py-2.5 text-slate-400 sm:table-cell">{j.attempts}</td>
                   <td className="px-4 py-2.5 text-slate-400">{new Date(j.created_at).toLocaleString('zh-CN')}</td>
                   <td className="px-4 py-2.5 text-right">
                     {j.status === 'failed' && (

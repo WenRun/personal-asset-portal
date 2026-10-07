@@ -196,15 +196,15 @@ function TracksView() {
           </Button>
         )}
       </div>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-400">
             <tr>
               <th className="w-10 px-4 py-2 text-left font-medium">#</th>
               <th className="px-2 py-2 text-left font-medium">标题</th>
               <th className="px-2 py-2 text-left font-medium">专辑</th>
-              <th className="px-2 py-2 text-left font-medium">艺术家</th>
-              <th className="w-16 px-2 py-2 text-left font-medium">歌词</th>
+              <th className="hidden px-2 py-2 text-left font-medium sm:table-cell">艺术家</th>
+              <th className="hidden w-16 px-2 py-2 text-left font-medium sm:table-cell">歌词</th>
               <th className="w-16 px-2 py-2 text-left font-medium">时长</th>
             </tr>
           </thead>
@@ -227,8 +227,8 @@ function TracksView() {
                   </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>{t.title}</td>
                   <td className="px-2 py-2.5 text-slate-500">{t.album}</td>
-                  <td className="px-2 py-2.5 text-slate-500">{t.artist}</td>
-                  <td className="px-2 py-2.5">{t.lrc ? <Badge tone="brand">LRC</Badge> : <span className="text-slate-300">—</span>}</td>
+                  <td className="hidden px-2 py-2.5 text-slate-500 sm:table-cell">{t.artist}</td>
+                  <td className="hidden px-2 py-2.5 sm:table-cell">{t.lrc ? <Badge tone="brand">LRC</Badge> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-2 py-2.5 font-mono text-slate-400">{fmtTime(t.duration_sec)}</td>
                 </tr>
               )

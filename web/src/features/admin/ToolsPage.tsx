@@ -107,7 +107,7 @@ export function ToolsPage() {
             </div>
           </div>
 
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-400"><tr>
                 <th className="px-4 py-2 text-left font-medium">状态</th>
@@ -128,8 +128,8 @@ export function ToolsPage() {
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{String(p.params.type ?? "指定资产")}{p.params.favorite ? "（仅收藏）" : ""}</td>
                     <td className="px-4 py-2.5 text-slate-400">{p.file_count ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-400">{p.size_bytes ? `${(p.size_bytes / 1048576).toFixed(2)}MB` : '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-400">{new Date(p.created_at).toLocaleString('zh-CN')}</td>
+                    <td className="hidden px-4 py-2.5 text-slate-400 sm:table-cell">{p.size_bytes ? `${(p.size_bytes / 1048576).toFixed(2)}MB` : '—'}</td>
+                    <td className="hidden px-4 py-2.5 text-slate-400 md:table-cell">{new Date(p.created_at).toLocaleString('zh-CN')}</td>
                     <td className="px-4 py-2.5 text-right">
                       {p.status === 'done' && (
                         <a href={api.packFileUrl(p.id)} className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline">
@@ -168,18 +168,18 @@ export function ToolsPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-400"><tr>
                 <th className="px-4 py-2 text-left font-medium">资产</th><th className="px-4 py-2 text-left font-medium">权限</th>
-                <th className="px-4 py-2 text-left font-medium">过期时间</th><th className="px-4 py-2 text-left font-medium">链接</th><th></th>
+                <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">过期时间</th><th className="px-4 py-2 text-left font-medium">链接</th><th></th>
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {(shares ?? []).map((s) => (
                   <tr key={s.token} className={s.expired ? 'opacity-50' : ''}>
                     <td className="px-4 py-2.5 text-slate-600">{s.asset_title}</td>
                     <td className="px-4 py-2.5">{s.allow_download ? '预览+下载' : '仅预览'}</td>
-                    <td className="px-4 py-2.5 text-xs text-slate-400">{new Date(s.expires_at).toLocaleString('zh-CN')}{s.expired && '（已过期）'}</td>
+                    <td className="hidden px-4 py-2.5 text-xs text-slate-400 sm:table-cell">{new Date(s.expires_at).toLocaleString('zh-CN')}{s.expired && '（已过期）'}</td>
                     <td className="px-4 py-2.5">
                       <button className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline" onClick={() => copy(`/share/${s.token}`)}>
                         <Copy className="h-3 w-3" />{copied === `/share/${s.token}` ? '已复制' : '复制链接'}

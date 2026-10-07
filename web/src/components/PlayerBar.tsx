@@ -201,7 +201,7 @@ export function PlayerBar() {
       </div>
       {cur.lrc && (
         <button
-          className={cn('hidden text-slate-400 hover:text-white lg:block', showLyrics && 'text-brand-400')}
+          className={cn('text-slate-400 hover:text-white', showLyrics && 'text-brand-400')}
           title="歌词"
           onClick={() => setShowLyrics((v) => !v)}
         >

@@ -146,7 +146,7 @@ function Topbar() {
         </button>
         {user ? (
           <button
-            className="flex w-64 max-w-full items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-200 md:w-72 xl:w-80"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-200 md:w-72 md:flex-none xl:w-80"
             onClick={() => setPalette(true)}
           >
             <Search className="h-4 w-4 shrink-0" />
@@ -155,14 +155,14 @@ function Topbar() {
           </button>
         ) : (
           <div
-            className="flex w-72 max-w-full cursor-not-allowed select-none items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400"
+            className="flex min-w-0 flex-1 cursor-not-allowed select-none items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 md:flex-none md:w-72"
             title="登录后可搜索"
           >
             <Search className="h-4 w-4" />
             搜索（登录后可用）
           </div>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {user?.role === 'admin' ? (
             <UploadButton />
           ) : user ? null : (

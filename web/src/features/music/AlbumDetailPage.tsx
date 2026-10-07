@@ -56,14 +56,14 @@ export function AlbumDetailPage() {
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-400">
             <tr>
               <th className="w-10 px-4 py-2 text-left font-medium">#</th>
               <th className="px-2 py-2 text-left font-medium">标题</th>
-              <th className="w-16 px-2 py-2 text-left font-medium">歌词</th>
-              <th className="w-16 px-2 py-2 text-left font-medium">码率</th>
+              <th className="hidden w-16 px-2 py-2 text-left font-medium sm:table-cell">歌词</th>
+              <th className="hidden w-16 px-2 py-2 text-left font-medium sm:table-cell">码率</th>
               <th className="w-16 px-2 py-2 text-left font-medium">时长</th>
               <th className="w-12 px-2 py-2"></th>
             </tr>
@@ -86,8 +86,8 @@ export function AlbumDetailPage() {
                     {t.title}
                     {active && !playing && <span className="ml-2 text-xs text-slate-400">（已暂停）</span>}
                   </td>
-                  <td className="px-2 py-2.5">{t.lrc ? <Badge tone="green">LRC</Badge> : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-2 py-2.5 font-mono text-xs text-slate-400">{t.bitrateK}k</td>
+                  <td className="hidden px-2 py-2.5 sm:table-cell">{t.lrc ? <Badge tone="green">LRC</Badge> : <span className="text-slate-300">—</span>}</td>
+                  <td className="hidden px-2 py-2.5 font-mono text-xs text-slate-400 sm:table-cell">{t.bitrateK}k</td>
                   <td className="px-2 py-2.5 font-mono text-slate-400">{fmtTime(t.durationSec)}</td>
                   <td className="px-2 py-2.5">
                     <div className="flex items-center justify-end gap-2">

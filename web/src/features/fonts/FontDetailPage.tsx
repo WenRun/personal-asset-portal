@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Heart, Link2 } from 'lucide-react'
+import { Heart, Info, Link2, X } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { useAuth } from '@/stores/auth'
 import { useFontFace } from '@/lib/useFontFace'
 import { BackLink, Badge, Button } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
+import { cn } from '@/lib/utils'
 
 /** 字体详情（§5.1）：同字族字重列表 + FontFace 实时样张 + 可变轴 + 字符集覆盖率 */
 export function FontDetailPage() {
@@ -15,6 +16,7 @@ export function FontDetailPage() {
   const nav = useNavigate()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const { data: font } = useQuery({ queryKey: ['font', id], queryFn: () => api.font(id!), enabled: !!id })
   const { data: allFonts } = useQuery({ queryKey: ['fonts'], queryFn: () => api.fonts() })
   const { data: charset } = useQuery({
@@ -54,7 +56,15 @@ export function FontDetailPage() {
   return (
     <div className="flex h-full">
       <div className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
-        <BackLink to="/fonts">字体墙</BackLink>
+        <div className="flex items-center gap-2">
+          <BackLink to="/fonts">字体墙</BackLink>
+          <button
+            className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 transition hover:border-brand-400 lg:hidden"
+            onClick={() => setInfoOpen(true)}
+          >
+            <Info className="h-3.5 w-3.5" />详情信息
+          </button>
+        </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-white p-6">
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
@@ -105,7 +115,15 @@ export function FontDetailPage() {
         </div>
       </div>
 
-      <aside className="hidden w-96 shrink-0 overflow-y-auto border-l border-slate-200 bg-white lg:block">
+      {/* 小屏为右侧抽屉（transform 切换），lg 起回归内嵌侧栏：同一 DOM 无内容复制 */}
+      {infoOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setInfoOpen(false)} />}
+      <aside
+        className={cn(
+          'fixed inset-y-0 right-0 z-40 w-96 max-w-[88vw] shrink-0 overflow-y-auto border-l border-slate-200 bg-white transition-transform',
+          'lg:static lg:z-auto lg:translate-x-0 lg:shadow-none',
+          infoOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full',
+        )}
+      >
         <div className="space-y-5 p-5">
           <div className="flex items-start justify-between">
             <div>
@@ -114,9 +132,14 @@ export function FontDetailPage() {
                 字族 · {siblings?.length ?? 1} 个字重文件 · {((siblings ?? [font]).reduce((s, f) => s + f.files[0].sizeMB, 0)).toFixed(1)}MB
               </div>
             </div>
-            <button className={fav ?? font.favorite ? 'text-rose-500' : 'text-slate-300 hover:text-rose-400'} onClick={() => setFav(!(fav ?? font.favorite))}>
-              <Heart className="h-5 w-5" fill={(fav ?? font.favorite) ? 'currentColor' : 'none'} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button className={fav ?? font.favorite ? 'text-rose-500' : 'text-slate-300 hover:text-rose-400'} onClick={() => setFav(!(fav ?? font.favorite))}>
+                <Heart className="h-5 w-5" fill={(fav ?? font.favorite) ? 'currentColor' : 'none'} />
+              </button>
+              <button className="rounded p-1 text-slate-400 hover:bg-slate-100 lg:hidden" onClick={() => setInfoOpen(false)}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2">

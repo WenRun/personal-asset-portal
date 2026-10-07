@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Download, Pencil, Share2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Info, Pencil, Share2, X } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, HueCover, RatingStars } from '@/components/ui'
@@ -14,6 +14,7 @@ export function ImageDetailPage() {
   const nav = useNavigate()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
+  const [exifOpen, setExifOpen] = useState(false)
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
   const [rating, setRating] = useState<number | null>(null)
   const [viewerFail, setViewerFail] = useState(false)
@@ -50,6 +51,9 @@ export function ImageDetailPage() {
             </button>
           )}
           <button className="rounded-lg p-2 hover:bg-slate-800"><Pencil className="h-4 w-4" /></button>
+          <button className="rounded-lg p-2 hover:bg-slate-800 lg:hidden" title="详细信息（EXIF/标签）" onClick={() => setExifOpen(true)}>
+            <Info className="h-4 w-4" />
+          </button>
         </div>
       </header>
 
@@ -110,8 +114,21 @@ export function ImageDetailPage() {
           </div>
         </div>
 
-        {/* EXIF 侧栏 */}
-        <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-5 lg:block">
+        {/* EXIF 侧栏：小屏为右侧抽屉（transform 切换），lg 起回归内嵌侧栏 */}
+        {exifOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setExifOpen(false)} />}
+        <aside
+          className={cn(
+            'fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-5 transition-transform',
+            'lg:static lg:z-auto lg:translate-x-0 lg:p-5 lg:shadow-none',
+            exifOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full',
+          )}
+        >
+          <div className="mb-3 flex items-center justify-between lg:hidden">
+            <span className="text-sm font-semibold">详细信息</span>
+            <button className="rounded p-1 text-slate-400 hover:bg-slate-100" onClick={() => setExifOpen(false)}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
           <div className="space-y-5">
             <div>
               <div className="font-bold">{photo.title}</div>

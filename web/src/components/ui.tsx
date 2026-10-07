@@ -132,10 +132,10 @@ export function EqBars({ className }: { className?: string }) {
 // ---------- PageHeader ----------
 export function PageHeader({ title, sub, right }: { title: string; sub?: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="flex items-baseline gap-3">
-      <h1 className="text-xl font-bold">{title}</h1>
-      {sub && <span className="text-sm text-slate-400">{sub}</span>}
-      {right && <div className="ml-auto flex items-center gap-2">{right}</div>}
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+      <h1 className="shrink-0 whitespace-nowrap text-xl font-bold">{title}</h1>
+      {sub && <span className="min-w-0 text-sm text-slate-400">{sub}</span>}
+      {right && <div className="ml-auto flex shrink-0 items-center gap-2">{right}</div>}
     </div>
   )
 }
