@@ -267,6 +267,13 @@ export interface JobTarget {
   file_count?: number | null
 }
 
+/** 任务列表分页出参：counts 为全表各状态计数（与过滤条件无关，供筛选片显示） */
+export interface JobsPagePayload {
+  total: number
+  counts: { queued?: number; running?: number; done?: number; failed?: number }
+  items: JobPayload[]
+}
+
 export interface JobPayload {
   id: string; kind: string; payload: Record<string, unknown>
   status: 'queued' | 'running' | 'done' | 'failed'
@@ -390,7 +397,13 @@ export const api = {
   lyrics: (assetId: string) => req<{ lyrics: string | null }>(`/api/music/${assetId}/lyrics`),
 
   // 管理
-  jobs: () => req<JobPayload[]>('/api/admin/jobs?limit=100'),
+  jobs: (p?: { status?: JobPayload['status']; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (p?.status) q.set('status', p.status)
+    q.set('limit', String(p?.limit ?? 50))
+    q.set('offset', String(p?.offset ?? 0))
+    return req<JobsPagePayload>(`/api/admin/jobs?${q}`)
+  },
   retryJob: (id: string) => req<{ ok: boolean }>(`/api/admin/jobs/${id}/retry`, { method: 'POST' }),
   /** 任务中心 SSE 订阅：snapshot 事件携带全量任务列表；断线由 EventSource 自动重连（重连后再推快照）。
    *  返回取消函数。 */

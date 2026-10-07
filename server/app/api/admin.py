@@ -10,7 +10,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -142,21 +142,28 @@ async def _jobs_snapshot(limit: int = 100) -> list[dict]:
         return await _jobs_response(db, rows)
 
 
-@router.get("/jobs", summary="任务列表",
-            description="管理员。按创建时间倒序返回后台任务（扫描 / 指纹 / 索引 / 打包等），可按状态与类型过滤。")
+@router.get("/jobs", summary="任务列表（分页）",
+            description="管理员。按创建时间倒序返回后台任务（扫描 / 指纹 / 索引 / 打包等），"
+                        "可按状态与类型过滤；返回 {items, total, counts}：total 为当前过滤条件下的总数，"
+                        "counts 为全表各状态计数（与过滤无关，供列表页筛选片显示）。")
 async def list_jobs(status: str | None = Query(None, description="按状态过滤：queued / running / done / failed"),
                     kind: str | None = Query(None, description="按任务类型过滤，如 scan_root"),
-                    limit: int = Query(50, description="返回条数上限，服务端截断为最大 200"),
+                    limit: int = Query(50, description="每页条数，服务端截断为最大 200"),
+                    offset: int = Query(0, ge=0, description="偏移量（翻页用）"),
                     db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     cond = []
     if status:
         cond.append(Job.status == status)
     if kind:
         cond.append(Job.kind == kind)
+    # 排序带 id 兜底：created_at 相同（同批入队）时翻页不重不漏
+    order = Job.created_at.desc(), Job.id.desc()
+    total = (await db.execute(select(func.count()).select_from(Job).where(*cond))).scalar_one()
+    counts = dict((await db.execute(select(Job.status, func.count()).group_by(Job.status))).all())
     rows = (
-        await db.execute(select(Job).where(*cond).order_by(Job.created_at.desc()).limit(min(limit, 200)))
+        await db.execute(select(Job).where(*cond).order_by(*order).offset(offset).limit(min(limit, 200)))
     ).scalars().all()
-    return await _jobs_response(db, rows)
+    return {"total": total, "counts": counts, "items": await _jobs_response(db, rows)}
 
 
 @router.get("/jobs/stream", summary="任务事件流（SSE）",

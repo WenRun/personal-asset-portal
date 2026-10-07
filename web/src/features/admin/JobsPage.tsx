@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api/client'
 import { Badge, Button, PageHeader } from '@/components/ui'
 import type { JobPayload, JobTarget } from '@/api/client'
 import { cn } from '@/lib/utils'
+
+const PAGE_SIZE = 20
 
 // ---------- 中文描述映射（内部任务代码 → 展示名；未知代码原样兜底） ----------
 const KIND_LABELS: Record<string, string> = {
@@ -110,14 +112,25 @@ function DurationCell({ j, now }: { j: JobPayload; now: number }) {
 export function JobsPage() {
   const qc = useQueryClient()
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 10_000 })
-  // 任务列表走 SSE 实时推送（替代轮询）；断线 EventSource 自动重连，重连后重推快照
-  const [jobs, setJobs] = useState<JobPayload[] | undefined>(undefined)
+  // 任务列表数据统一走 REST 分页接口；SSE 只当「有变更」信号（version+1 触发当前页重查）。
+  // 快照本身只含最新 100 条，翻页/筛选后的数据以 REST 为准；断线由 EventSource 自动重连。
   const [live, setLive] = useState<'connecting' | 'live'>('connecting')
-  useEffect(() => api.jobsStream(setJobs, setLive), [])
+  const [version, setVersion] = useState(0)
+  useEffect(() => api.jobsStream(() => setVersion((v) => v + 1), setLive), [])
   const { data: confirms } = useQuery({ queryKey: ['confirm'], queryFn: api.confirmList, refetchInterval: 15_000 })
   const [tab, setTab] = useState<'jobs' | 'confirm'>('jobs')
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({})
   const [statusFilter, setStatusFilter] = useState<'all' | JobPayload['status']>('all')
+  const [page, setPage] = useState(1)
+  const { data: pageData, isFetching } = useQuery({
+    queryKey: ['jobs', page, statusFilter, version],
+    queryFn: () => api.jobs({
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
+    placeholderData: keepPreviousData,
+  })
   const confirmSeries = useMutation({
     mutationFn: (v: { id: string; name: string; ep: number }) => api.confirmSeries(v.id, v.name, v.ep),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['confirm'] }),
@@ -125,22 +138,28 @@ export function JobsPage() {
 
   const retry = useMutation({
     mutationFn: (id: string) => api.retryJob(id),
-    // 重试成功后无需手动刷新：retry 端点会发 NOTIFY，SSE 立刻推新快照
+    // 重试成功后无需手动刷新：retry 端点会发 NOTIFY，SSE 推 snapshot → version 变化 → 当前页重查
   })
 
   // 有运行中/待重试任务时每秒刷新一次时钟，供耗时列实时跳动
   const [now, setNow] = useState(() => Date.now())
-  const needsTick = (jobs ?? []).some((j) => j.status === 'running' || (j.status === 'queued' && j.attempts > 0))
+  const items = pageData?.items ?? []
+  const needsTick = items.some((j) => j.status === 'running' || (j.status === 'queued' && j.attempts > 0))
   useEffect(() => {
     if (!needsTick) return
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [needsTick])
 
-  const allJobs = jobs ?? []
-  const filtered = statusFilter === 'all' ? allJobs : allJobs.filter((j) => j.status === statusFilter)
-  const countOf = (s: JobPayload['status']) => allJobs.filter((j) => j.status === s).length
+  const total = pageData?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const countOf = (s: JobPayload['status']) => pageData?.counts?.[s] ?? 0
   const pendingConfirms = confirms?.length ?? 0
+
+  const applyFilter = (v: 'all' | JobPayload['status']) => {
+    setStatusFilter(v)
+    setPage(1) // 换筛选回第一页，避免留在超出结果的页码上
+  }
 
   const statusPill = (s: JobPayload['status']) =>
     s === 'running' ? <Badge tone="brand">运行中</Badge>
@@ -196,18 +215,19 @@ export function JobsPage() {
             {([['all', '全部'], ['queued', '队列中'], ['running', '运行中'], ['failed', '失败'], ['done', '完成']] as const).map(([v, label]) => (
               <button
                 key={v}
-                onClick={() => setStatusFilter(v)}
+                onClick={() => applyFilter(v)}
                 className={cn('rounded-full border px-2.5 py-1 transition',
                   statusFilter === v ? 'border-brand-500 bg-brand-50 font-medium text-brand-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300')}
               >
                 {label}
+                {v === 'all' && <span className="ml-1 text-slate-400">{Object.values(pageData?.counts ?? {}).reduce((a, b) => a + b, 0)}</span>}
                 {v !== 'all' && <span className="ml-1 text-slate-400">{countOf(v)}</span>}
                 {v === 'failed' && countOf('failed') > 0 && statusFilter !== 'failed' && <span className="ml-1 text-rose-500">{countOf('failed')}</span>}
               </button>
             ))}
           </div>
 
-          <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <div className={cn('mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-white transition', isFetching && 'opacity-60')}>
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-400">
                 <tr>
@@ -221,7 +241,7 @@ export function JobsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((j) => (
+                {items.map((j) => (
                   <tr key={j.id} className={j.status === 'failed' ? 'bg-rose-50/40' : ''}>
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-slate-700">{KIND_LABELS[j.kind] ?? j.kind}</div>
@@ -244,15 +264,27 @@ export function JobsPage() {
                     </td>
                   </tr>
                 ))}
-                {allJobs.length > 0 && filtered.length === 0 && (
-                  <tr><td colSpan={7} className="p-10 text-center text-slate-400">该状态下暂无任务</td></tr>
-                )}
-                {allJobs.length === 0 && (
-                  <tr><td colSpan={7} className="p-10 text-center text-slate-400">还没有任务 —— 上传或扫描后，这里会出现「扫描目录 → 计算文件指纹 → 解析 → 更新搜索索引」链路</td></tr>
+                {(total === 0 || items.length === 0) && (
+                  <tr><td colSpan={7} className="p-10 text-center text-slate-400">
+                    {total === 0 && statusFilter === 'all'
+                      ? '还没有任务 —— 上传或扫描后，这里会出现「扫描目录 → 计算文件指纹 → 解析 → 更新搜索索引」链路'
+                      : '该状态下暂无任务'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {total > 0 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+              <span>共 {total} 条任务</span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>上一页</Button>
+                <span className={cn(isFetching && 'opacity-50')}>第 {page} / {totalPages} 页</span>
+                <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>下一页</Button>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="mt-4 space-y-3">
