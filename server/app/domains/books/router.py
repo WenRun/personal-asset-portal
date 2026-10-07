@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,11 +14,12 @@ from app.core.errors import not_found
 from app.core.models import Asset, User, UserProgress
 from app.core.pipeline import build_storage, roots_of
 
-router = APIRouter(prefix="/api/books", tags=["books"])
-progress_router = APIRouter(prefix="/api/progress", tags=["progress"])
+router = APIRouter(prefix="/api/books", tags=["书籍"])
+progress_router = APIRouter(prefix="/api/progress", tags=["阅读进度"])
 
 
-@router.get("/{asset_id}/file")
+@router.get("/{asset_id}/file", summary="书籍文件流",
+            description="登录用户。返回书籍原文件（支持 Range 分段），供 pdf.js / epub.js / 自建阅读器拉取。")
 async def book_file(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """书籍文件流（pdf.js / epub.js 拉取）；需登录。"""
     a = await db.get(Asset, asset_id)
@@ -29,8 +30,10 @@ async def book_file(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: 
                         media_type=a.mime_type or "application/octet-stream")
 
 
-@router.get("/{asset_id}/cover")
-async def book_cover(asset_id: uuid.UUID, size: int = 256, db: AsyncSession = Depends(get_db)):
+@router.get("/{asset_id}/cover", summary="书籍封面",
+            description="公开。WebP 封面，size 支持 256 / 1024；长缓存一年（immutable）。")
+async def book_cover(asset_id: uuid.UUID, size: int = Query(256, description="封面边长档位：256 / 1024"),
+                     db: AsyncSession = Depends(get_db)):
     """公开：封面属于浏览页的一部分（§5.5 同款口径）。"""
     if size not in (256, 1024):
         raise not_found("size 仅支持 256/1024")
@@ -49,7 +52,8 @@ class ProgressBody(BaseModel):
     position: dict
 
 
-@progress_router.post("")
+@progress_router.post("", summary="保存进度",
+                      description="登录用户。保存当前用户在某资产上的阅读 / 观看位置（position 结构由前端自定义，如 {\"seconds\": 123}）。")
 async def save_progress(body: ProgressBody, db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     row = await db.get(UserProgress, {"user_id": user.id, "asset_id": body.asset_id})
     if row is None:
@@ -61,7 +65,8 @@ async def save_progress(body: ProgressBody, db: AsyncSession = Depends(get_db), 
     return {"ok": True}
 
 
-@progress_router.get("")
+@progress_router.get("", summary="读取进度",
+                     description="登录用户。读取当前用户在某资产上的进度；无记录时返回 null。")
 async def get_progress(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     row = await db.get(UserProgress, {"user_id": user.id, "asset_id": asset_id})
     if row is None:
@@ -112,7 +117,8 @@ async def _open_epub_zip(a: Asset, db: AsyncSession) -> tuple[zipfile.ZipFile, s
     return z, opf_dir, manifest, spine, titles
 
 
-@router.get("/{asset_id}/contents")
+@router.get("/{asset_id}/contents", summary="EPUB 章节目录",
+            description="登录用户。解析 EPUB 返回章节列表（index / href / 标题）；仅 epub 支持，其他格式返回 404。")
 async def book_contents(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None or a.asset_type != "book":
@@ -130,7 +136,8 @@ async def book_contents(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     return {"chapters": chapters}
 
 
-@router.get("/{asset_id}/resource")
+@router.get("/{asset_id}/resource", summary="EPUB 内部资源",
+            description="登录用户。按 zip 内相对路径返回章节 XHTML / CSS / 图片等资源，供自建阅读器渲染。")
 async def book_resource(asset_id: uuid.UUID, path: str, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None or a.asset_type != "book":

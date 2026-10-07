@@ -10,12 +10,15 @@ from app.core.db import get_db
 from app.core.registry import ROUTE_TO_TYPE
 from app.core.deps import require_member
 
-router = APIRouter(prefix="/api/search", tags=["search"])
+router = APIRouter(prefix="/api/search", tags=["搜索"])
 
 
-@router.get("")
-async def search(q: str = "", types: str | None = None,
-                 limit: int = 8, _: uuid.UUID = Depends(require_member), db: AsyncSession = Depends(get_db)):
+@router.get("", summary="全局搜索",
+            description="登录用户。通过 Meilisearch multi-search 聚合字体/音乐/视频/书籍/图片五个索引，返回各类命中结果。")
+async def search(q: str = Query("", description="搜索关键词"),
+                 types: str | None = Query(None, description="限定资产类型，逗号分隔（fonts,music,videos,books,images），缺省查全部"),
+                 limit: int = Query(8, description="单个索引返回条数上限，服务端截断为最大 50"),
+                 _: uuid.UUID = Depends(require_member), db: AsyncSession = Depends(get_db)):
     if types:
         wanted = [t.strip() for t in types.split(",") if t.strip() in ROUTE_TO_TYPE]
     else:

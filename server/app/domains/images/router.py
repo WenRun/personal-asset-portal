@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,11 +12,13 @@ from app.core.errors import bad_request, not_found
 from app.core.models import Asset
 from app.domains.images.thumbs import derived_dir
 
-router = APIRouter(prefix="/api/images", tags=["images"])
+router = APIRouter(prefix="/api/images", tags=["图片"])
 
 
-@router.get("/{asset_id}/thumbnail")
-async def thumbnail(asset_id: uuid.UUID, size: int = 256, db: AsyncSession = Depends(get_db)):
+@router.get("/{asset_id}/thumbnail", summary="图片缩略图",
+            description="公开。WebP 缩略图，size 支持 256 / 1024 / 2560 三档；长缓存一年（immutable）。")
+async def thumbnail(asset_id: uuid.UUID, size: int = Query(256, description="缩略图边长档位：256 / 1024 / 2560"),
+                    db: AsyncSession = Depends(get_db)):
     """公开：浏览页网格内的缩略图属于「浏览」的一部分（§5.5 权限口径）。"""
     if size not in (256, 1024, 2560):
         raise bad_request("size 仅支持 256/1024/2560")
@@ -30,7 +32,8 @@ async def thumbnail(asset_id: uuid.UUID, size: int = 256, db: AsyncSession = Dep
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
-@router.get("/{asset_id}/original")
+@router.get("/{asset_id}/original", summary="图片原图",
+            description="登录用户。输出原图文件流（不暴露服务器真实路径）。")
 async def original(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
                    _: object = Depends(require_member)):
     """原图需登录；经存储抽象输出，不暴露真实路径。"""

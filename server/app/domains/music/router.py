@@ -14,10 +14,11 @@ from app.core.errors import bad_request, not_found
 from app.core.models import Asset, MusicAlbum, MusicArtist, MusicTrack
 from app.core.pipeline import build_storage, roots_of
 
-router = APIRouter(prefix="/api/music", tags=["music"])
+router = APIRouter(prefix="/api/music", tags=["音乐"])
 
 
-@router.get("/albums")
+@router.get("/albums", summary="专辑墙",
+            description="公开。返回全部专辑（艺术家 / 年份 / 曲目数 / 总时长 / 格式 / 是否有封面），按年份倒序、名称排序。")
 async def list_albums(db: AsyncSession = Depends(get_db)):
     """专辑墙（公开浏览页）。"""
     rows = (
@@ -47,7 +48,8 @@ async def list_albums(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/tracks")
+@router.get("/tracks", summary="全部曲目（平铺）",
+            description="登录用户。按入库时间倒序返回最近 500 首曲目及其专辑 / 艺术家信息。")
 async def list_tracks(db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """全部曲目平铺（member）。"""
     rows = (
@@ -73,7 +75,8 @@ async def list_tracks(db: AsyncSession = Depends(get_db), _: object = Depends(re
     ]
 
 
-@router.get("/albums/{album_id}")
+@router.get("/albums/{album_id}", summary="专辑详情",
+            description="登录用户。返回专辑信息与曲目列表（按碟号 / 曲目号排序）。")
 async def album_detail(album_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """专辑详情（member）：曲目列表。"""
     al = await db.get(MusicAlbum, album_id)
@@ -103,8 +106,10 @@ async def album_detail(album_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
     }
 
 
-@router.get("/albums/{album_id}/cover")
-async def album_cover(album_id: uuid.UUID, size: int = 256, db: AsyncSession = Depends(get_db)):
+@router.get("/albums/{album_id}/cover", summary="专辑封面",
+            description="公开。取专辑首曲的派生封面图，size 支持 256 / 1024；长缓存一年（immutable）。")
+async def album_cover(album_id: uuid.UUID, size: int = Query(256, description="封面边长档位：256 / 1024"),
+                      db: AsyncSession = Depends(get_db)):
     """公开：专辑封面取首曲派生物（§5.5 同款口径）。"""
     if size not in (256, 1024):
         raise bad_request("size 仅支持 256/1024")
@@ -118,7 +123,8 @@ async def album_cover(album_id: uuid.UUID, size: int = 256, db: AsyncSession = D
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
-@router.get("/{asset_id}/stream")
+@router.get("/{asset_id}/stream", summary="音频流",
+            description="登录用户。返回音频文件流，原生支持 Range 分段请求（206），可直接供 audio 标签播放。")
 async def stream(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """音频流（登录）：FileResponse 原生支持 Range 请求（206 分段）。"""
     a = await db.get(Asset, asset_id)

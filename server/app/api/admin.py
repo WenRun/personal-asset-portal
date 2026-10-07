@@ -3,7 +3,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from app.core.errors import bad_request, not_found
 from app.core.jobs import enqueue
 from app.core.models import Job, Setting, User
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["管理"])
 
 
 # ---------- 扫描 ----------
@@ -23,7 +23,8 @@ class ScanBody(BaseModel):
     root_alias: str
 
 
-@router.post("/scan")
+@router.post("/scan", summary="触发目录扫描",
+             description="管理员。对已注册的资源根目录发起扫描入库任务，返回任务 ID；alias 未注册时返回 400。")
 async def trigger_scan(body: ScanBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     kv = await get_app_settings(db)
     if body.root_alias not in {r["alias"] for r in kv["scan_roots"]}:
@@ -35,8 +36,11 @@ async def trigger_scan(body: ScanBody, db: AsyncSession = Depends(get_db), _: Us
 
 # ---------- 任务中心 ----------
 
-@router.get("/jobs")
-async def list_jobs(status: str | None = None, kind: str | None = None, limit: int = 50,
+@router.get("/jobs", summary="任务列表",
+            description="管理员。按创建时间倒序返回后台任务（扫描 / 指纹 / 索引 / 打包等），可按状态与类型过滤。")
+async def list_jobs(status: str | None = Query(None, description="按状态过滤：queued / running / done / failed"),
+                    kind: str | None = Query(None, description="按任务类型过滤，如 scan_root"),
+                    limit: int = Query(50, description="返回条数上限，服务端截断为最大 200"),
                     db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     cond = []
     if status:
@@ -57,7 +61,8 @@ async def list_jobs(status: str | None = None, kind: str | None = None, limit: i
     ]
 
 
-@router.post("/jobs/{job_id}/retry")
+@router.post("/jobs/{job_id}/retry", summary="重试任务",
+             description="管理员。将任务重置为排队状态、清零重试次数并清除错误信息。")
 async def retry_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     job = await db.get(Job, job_id)
     if job is None:
@@ -81,12 +86,14 @@ class SettingsBody(BaseModel):
     registration_open: bool | None = None
 
 
-@router.get("/settings")
+@router.get("/settings", summary="查看系统设置",
+            description="管理员。返回扫描根目录列表（alias / 路径）与注册开关。")
 async def get_settings_api(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     return await get_app_settings(db)
 
 
-@router.put("/settings")
+@router.put("/settings", summary="修改系统设置",
+            description="管理员。可更新扫描根目录（alias 不得重复，路径自动创建）与注册开关；缺省字段保持不变。")
 async def put_settings_api(body: SettingsBody, db: AsyncSession = Depends(get_db),
                            _: User = Depends(require_admin)):
     async def _upsert(key: str, value) -> None:

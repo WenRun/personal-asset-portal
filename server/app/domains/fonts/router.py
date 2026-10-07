@@ -13,10 +13,11 @@ from app.core.errors import not_found
 from app.core.models import Asset
 from app.core.pipeline import build_storage, roots_of
 
-router = APIRouter(prefix="/api/fonts", tags=["fonts"])
+router = APIRouter(prefix="/api/fonts", tags=["字体"])
 
 
-@router.get("/{asset_id}/file")
+@router.get("/{asset_id}/file", summary="字体原文件流",
+            description="登录用户。原字体文件流，前端用 FontFace 加载预览。")
 async def font_file(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """原字体文件流（前端 FontFace 加载用）；需登录。"""
     a = await db.get(Asset, asset_id)
@@ -27,7 +28,8 @@ async def font_file(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: 
                         media_type=a.mime_type or "font/ttf")
 
 
-@router.get("/{asset_id}/charset")
+@router.get("/{asset_id}/charset", summary="字体字符集",
+            description="登录用户。返回解析出的字符集 JSON；尚未生成时返回 404。")
 async def font_charset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None or a.asset_type != "font":
@@ -40,7 +42,8 @@ async def font_charset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-@router.get("/{asset_id}/preview/specimen")
+@router.get("/{asset_id}/preview/specimen", summary="字体样张图",
+            description="公开。PNG 样张预览图；长缓存一年（immutable）。")
 async def specimen(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """公开：样张图属于浏览页的一部分（§5.5 同款权限口径）。"""
     a = await db.get(Asset, asset_id)

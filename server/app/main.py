@@ -52,7 +52,28 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Asset Portal API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="个人资产门户 API",
+    description="个人资产管理门户（字体 / 音乐 / 视频 / 书籍 / 图片）的后端接口："
+                "浏览、搜索、下载、打包、分享与后台管理。\n\n"
+                "**权限三级**：公开（游客可访问）· 登录（member）· 管理员（admin），各接口的权限口径见其描述。",
+    version="0.1.0",
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "认证", "description": "注册、登录、注销与当前用户信息。"},
+        {"name": "资产", "description": "资产浏览 / 详情 / 下载 / 编辑 / 删除 / 标签挂载 / 上传入库。"},
+        {"name": "标签", "description": "标签的增删改查（读公开、写需管理员）。"},
+        {"name": "搜索", "description": "基于 Meilisearch 的全局聚合搜索（需登录）。"},
+        {"name": "管理", "description": "目录扫描、任务中心与系统设置（管理员）。"},
+        {"name": "图片", "description": "缩略图（公开）与原图（需登录）。"},
+        {"name": "字体", "description": "字体文件流与字符集（需登录），样张预览（公开）。"},
+        {"name": "书籍", "description": "书籍文件流 / 封面 / EPUB 章节与内部资源。"},
+        {"name": "阅读进度", "description": "阅读、观看进度的保存与读取（需登录）。"},
+        {"name": "音乐", "description": "专辑墙（公开）、曲目列表与音频流（需登录）。"},
+        {"name": "视频", "description": "系列墙（公开）、集数与视频流（需登录）、封面与确认队列（管理员）。"},
+        {"name": "打包与分享", "description": "打包下载、分享链接（带过期）与智能集合。"},
+    ],
+)
 app.add_exception_handler(ApiError, api_error_handler)
 app.add_middleware(
     CORSMiddleware,
@@ -63,7 +84,7 @@ app.add_middleware(
 )
 
 
-@app.get("/health")
+@app.get("/health", summary="健康检查", description="服务存活探针，无需鉴权。")
 async def health():
     return {"ok": True}
 

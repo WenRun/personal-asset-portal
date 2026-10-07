@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -15,11 +15,12 @@ from app.core.errors import bad_request, not_found
 from app.core.models import Asset, User, UserProgress, VideoDetail, VideoSeries
 from app.core.pipeline import build_storage, roots_of
 
-router = APIRouter(prefix="/api/videos", tags=["videos"])
-admin_router = APIRouter(prefix="/api/admin", tags=["videos"])
+router = APIRouter(prefix="/api/videos", tags=["视频"])
+admin_router = APIRouter(prefix="/api/admin", tags=["视频"])
 
 
-@router.get("/series")
+@router.get("/series", summary="视频系列墙",
+            description="公开。返回全部系列（集数范围 / 总时长 / 封面），系列未设封面时取任一集的封面。")
 async def list_series(db: AsyncSession = Depends(get_db)):
     """系列墙（公开浏览页）：系列 + 集数/时长/进度汇总。"""
     rows = (
@@ -58,7 +59,8 @@ async def list_series(db: AsyncSession = Depends(get_db)):
     return out
 
 
-@router.get("/series/{series_id}/episodes")
+@router.get("/series/{series_id}/episodes", summary="系列集数列表",
+            description="登录用户。按集数排序返回每集信息（时长 / 观看位置 / 可否在线播放 / 封面），并汇总当前用户的已看集数。")
 async def series_episodes(series_id: uuid.UUID, db: AsyncSession = Depends(get_db),
                           user: User = Depends(require_member)):
     """集数列表（member）：含每集时长与当前用户进度。"""
@@ -93,7 +95,8 @@ async def series_episodes(series_id: uuid.UUID, db: AsyncSession = Depends(get_d
     }
 
 
-@router.get("/cover/{path:path}")
+@router.get("/cover/{path:path}", summary="视频封面图",
+            description="公开。路径由服务端下发，仅允许 derived/videos 目录内的文件；长缓存一年（immutable）。")
 async def series_or_video_cover(path: str):
     """公开：封面帧属浏览页一部分（路径由服务端下发，仅允许 derived/videos 内文件）。"""
     p = (get_settings().data_root / path).resolve()
@@ -105,7 +108,8 @@ async def series_or_video_cover(path: str):
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
-@router.get("/{asset_id}/stream")
+@router.get("/{asset_id}/stream", summary="视频流",
+            description="登录用户。Direct Play 原文件流，支持 Range 分段请求（206）；编码不支持在线播放时返回 400。")
 async def stream(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """视频流（登录，Direct Play）：FileResponse 原生 Range 支持。"""
     a = await db.get(Asset, asset_id)
@@ -125,7 +129,8 @@ class ConfirmBody(BaseModel):
     episode: int
 
 
-@admin_router.post("/confirm")
+@admin_router.post("/confirm", summary="确认视频归属系列",
+                   description="管理员。人工校对识别存疑的视频：绑定系列并写入集数，解除 need_confirm 标记。")
 async def confirm_series(body: ConfirmBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     """入库确认队列（§5.3 need_confirm）：人工校对系列/集数。"""
     a = await db.get(Asset, body.asset_id)
@@ -143,7 +148,8 @@ async def confirm_series(body: ConfirmBody, db: AsyncSession = Depends(get_db), 
     return {"ok": True}
 
 
-@admin_router.get("/confirm")
+@admin_router.get("/confirm", summary="待确认视频列表",
+                  description="管理员。返回所有 need_confirm=true 的视频及其识别提示（命中规则 / 集数存疑）。")
 async def confirm_list(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     rows = (
         await db.execute(
@@ -161,8 +167,10 @@ async def confirm_list(db: AsyncSession = Depends(get_db), _: User = Depends(req
     ]
 
 
-@admin_router.put("/videos/{asset_id}/cover")
-async def pick_cover(asset_id: uuid.UUID, variant: int, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+@admin_router.put("/videos/{asset_id}/cover", summary="更换视频封面帧",
+                  description="管理员。在三张候选封面帧中选择一张作为封面（variant 取 1 / 2 / 3）。")
+async def pick_cover(asset_id: uuid.UUID, variant: int = Query(description="候选封面帧编号：1 / 2 / 3"),
+                     db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     """更换封面帧（1..3）。"""
     if variant not in (1, 2, 3):
         raise bad_request("variant 仅支持 1/2/3")

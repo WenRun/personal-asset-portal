@@ -14,7 +14,7 @@ from app.core.errors import bad_request, conflict, unauthenticated
 from app.core.models import SessionToken, User
 from app.core.security import hash_password, verify_password
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
 class Credentials(BaseModel):
@@ -30,7 +30,8 @@ def _set_cookie(response: Response, token: str, expires: dt.datetime) -> None:
     )
 
 
-@router.post("/register")
+@router.post("/register", summary="注册新账号",
+             description="创建 member 角色用户并自动登录（写入会话 Cookie）。系统设置关闭注册时返回 400。")
 async def register(body: Credentials, response: Response, db: AsyncSession = Depends(get_db)):
     kv = await get_app_settings(db)
     if not kv.get("registration_open", True):
@@ -46,7 +47,8 @@ async def register(body: Credentials, response: Response, db: AsyncSession = Dep
     return {"id": str(user.id), "username": user.username, "role": user.role}
 
 
-@router.post("/login")
+@router.post("/login", summary="登录",
+             description="校验用户名密码，成功后设置会话 Cookie；失败统一返回 401（不区分用户名/密码错误）。")
 async def login(body: Credentials, response: Response, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.username == body.username))).scalar_one_or_none()
     # 统一 401，不区分用户名/密码错误（详细设计 §6.1）
@@ -59,7 +61,7 @@ async def login(body: Credentials, response: Response, db: AsyncSession = Depend
     return {"id": str(user.id), "username": user.username, "role": user.role}
 
 
-@router.post("/logout")
+@router.post("/logout", summary="注销", description="删除服务端会话记录并清除 Cookie。")
 async def logout(request: Request, response: Response, db: AsyncSession = Depends(get_db),
                  user: User | None = Depends(get_current_user)):
     token = request.cookies.get(COOKIE_NAME)
@@ -70,7 +72,8 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
     return {"ok": True}
 
 
-@router.get("/me")
+@router.get("/me", summary="当前用户信息",
+            description="返回当前登录用户的 id / 用户名 / 角色；未登录返回 401。")
 async def me(user: User | None = Depends(get_current_user)):
     if user is None:
         raise unauthenticated()

@@ -4,7 +4,7 @@ import base64
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi import APIRouter, Depends, Path, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, tuple_
@@ -19,12 +19,13 @@ from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
 
-router = APIRouter(prefix="/api", tags=["assets"])
+router = APIRouter(prefix="/api", tags=["资产"])
 
 
 # ---------- 汇总统计 / 最近入库（公开：仪表盘与侧栏用；需在 /{route} 之前声明） ----------
 
-@router.get("/stats")
+@router.get("/stats", summary="仪表盘统计",
+            description="公开。返回五类资产计数（未删除）与任务状态汇总（排队 / 运行 / 失败 / 今日完成）。")
 async def stats(db: AsyncSession = Depends(get_db)):
     type_counts = dict(
         (await db.execute(
@@ -54,8 +55,10 @@ async def stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/recent")
-async def recent(limit: int = 12, db: AsyncSession = Depends(get_db)):
+@router.get("/recent", summary="最近入库",
+            description="公开。按入库时间倒序返回最近的资产卡片（仪表盘与侧栏用）。")
+async def recent(limit: int = Query(12, description="返回条数，默认 12（上限 50，超出自动截断）"),
+                 db: AsyncSession = Depends(get_db)):
     rows = (
         await db.execute(
             select(Asset).where(Asset.deleted_at.is_(None))
@@ -96,13 +99,14 @@ async def _storage(db: AsyncSession) -> LocalStorage:
 
 # ---------- 浏览（公开；访客禁止携带 q —— §6.2/§6.4） ----------
 
-@router.get("/{route}")
+@router.get("/{route}", summary="按类型浏览资产列表",
+            description="公开。游标分页（按入库时间倒序），返回对应类型资产并附带类型专属字段；游客不可搜索（携带 q 时返回 401）。")
 async def list_assets(
-    route: str,
-    cursor: str | None = None,
-    page_size: int = 60,
-    q: str | None = None,
-    favorite: bool | None = None,
+    route: str = Path(description="资产类型路由：fonts / music / videos / books / images"),
+    cursor: str | None = Query(None, description="分页游标，取自上一页返回的 next_cursor"),
+    page_size: int = Query(60, description="每页条数，默认 60（上限 200，超出自动截断）"),
+    q: str | None = Query(None, description="关键词，模糊匹配标题 / 文件名；游客不可用"),
+    favorite: bool | None = Query(None, description="仅看收藏"),
     user: User | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -205,7 +209,8 @@ async def list_assets(
 
 # ---------- 详情（member） ----------
 
-@router.get("/assets/{asset_id}")
+@router.get("/assets/{asset_id}", summary="资产详情",
+            description="登录用户。返回基础信息、标签与类型专属元数据（视频 / 书籍 / 字体 / 图片各自的详情字段）。")
 async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
                        user: User = Depends(require_member)):
     a = await db.get(Asset, asset_id)
@@ -260,7 +265,8 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 
 # ---------- 下载（member；不暴露真实路径） ----------
 
-@router.get("/assets/{asset_id}/download")
+@router.get("/assets/{asset_id}/download", summary="下载资产文件",
+            description="登录用户。以附件形式返回原文件，不暴露服务器真实路径。")
 async def download(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
                    user: User = Depends(require_member)):
     a = await db.get(Asset, asset_id)
@@ -284,7 +290,8 @@ async def _reindex(db: AsyncSession, a: Asset) -> None:
     await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
 
 
-@router.patch("/assets/{asset_id}")
+@router.patch("/assets/{asset_id}", summary="编辑资产元信息",
+              description="管理员。可修改标题 / 备注 / 评分（0-5）/ 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
 async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_admin)):
     a = await db.get(Asset, asset_id)
@@ -299,8 +306,10 @@ async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = 
     return _item(a)
 
 
-@router.delete("/assets/{asset_id}")
-async def delete_asset(asset_id: uuid.UUID, purge: bool = False, delete_file: bool = False,
+@router.delete("/assets/{asset_id}", summary="删除资产",
+               description="管理员。默认软删（可恢复）；purge=true 彻底删除记录并移出搜索索引，delete_file=true 连同源文件一起删除（仅与 purge 同时生效）。")
+async def delete_asset(asset_id: uuid.UUID, purge: bool = Query(False, description="是否彻底删除（默认软删）"),
+                       delete_file: bool = Query(False, description="是否同时删除磁盘文件（需 purge=true）"),
                        db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     a = await db.get(Asset, asset_id)
     if a is None:
@@ -318,7 +327,8 @@ async def delete_asset(asset_id: uuid.UUID, purge: bool = False, delete_file: bo
     return {"ok": True, "purged": purge}
 
 
-@router.post("/assets/{asset_id}/restore")
+@router.post("/assets/{asset_id}/restore", summary="恢复软删资产",
+             description="管理员。清除删除标记并重建搜索索引；已彻底删除（purge）的无法恢复。")
 async def restore_asset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
                         user: User = Depends(require_admin)):
     a = await db.get(Asset, asset_id)
@@ -336,7 +346,8 @@ class TagsBody(BaseModel):
     tag_ids: list[uuid.UUID]
 
 
-@router.post("/assets/{asset_id}/tags")
+@router.post("/assets/{asset_id}/tags", summary="挂载标签",
+             description="管理员。为资产批量挂标签，已挂载的自动跳过。")
 async def attach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_admin)):
     a = await db.get(Asset, asset_id)
@@ -351,7 +362,8 @@ async def attach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = De
     return {"ok": True}
 
 
-@router.delete("/assets/{asset_id}/tags")
+@router.delete("/assets/{asset_id}/tags", summary="移除标签",
+               description="管理员。批量解除资产上的标签挂载。")
 async def detach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_admin)):
     for tid in body.tag_ids:
@@ -364,7 +376,8 @@ async def detach_tags(asset_id: uuid.UUID, body: TagsBody, db: AsyncSession = De
 
 # ---------- 上传入库（admin；与扫描共用同一管道 §4.3） ----------
 
-@router.post("/admin/uploads")
+@router.post("/admin/uploads", summary="上传文件入库",
+             description="管理员。单文件上传，走与目录扫描相同的解析管道（指纹 → 解析 → 派生物 / 索引）；类型不支持或超过大小上限时返回 400。")
 async def upload(file: UploadFile, db: AsyncSession = Depends(get_db),
                  user: User = Depends(require_admin)):
     from app.core.config import get_settings

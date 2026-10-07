@@ -19,8 +19,8 @@ from app.core.models import (
 )
 from app.core.deps import get_current_user, require_admin, require_member
 
-router = APIRouter(prefix="/api", tags=["m6"])
-share_public = APIRouter(prefix="/api/share", tags=["m6"])
+router = APIRouter(prefix="/api", tags=["打包与分享"])
+share_public = APIRouter(prefix="/api/share", tags=["打包与分享"])
 
 
 # ---------- 打包下载 ----------
@@ -31,7 +31,8 @@ class PackBody(BaseModel):
     favorite: bool | None = None
 
 
-@router.post("/download-packs")
+@router.post("/download-packs", summary="创建打包任务",
+             description="登录用户。按 asset_ids 列表，或按类型+收藏筛选创建 ZIP 打包任务（二选一），后台异步生成。")
 async def create_pack(body: PackBody, db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     if body.asset_ids:
         params = {"asset_ids": [str(i) for i in body.asset_ids]}
@@ -47,7 +48,8 @@ async def create_pack(body: PackBody, db: AsyncSession = Depends(get_db), user: 
     return {"id": str(pack.id), "status": pack.status}
 
 
-@router.get("/download-packs")
+@router.get("/download-packs", summary="我的打包任务列表",
+            description="登录用户。返回当前用户最近 50 个打包任务（状态 / 大小 / 文件数 / 错误信息）。")
 async def list_packs(db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     rows = (
         await db.execute(
@@ -64,7 +66,8 @@ async def list_packs(db: AsyncSession = Depends(get_db), user: User = Depends(re
     ]
 
 
-@router.get("/download-packs/{pack_id}/file")
+@router.get("/download-packs/{pack_id}/file", summary="下载打包 ZIP",
+            description="登录用户。仅能下载自己的、状态为 done 的打包结果；未完成时返回 400。")
 async def pack_file(pack_id: uuid.UUID, db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     p = await db.get(DownloadPack, pack_id)
     if p is None or p.user_id != user.id:
@@ -83,7 +86,8 @@ class ShareBody(BaseModel):
     allow_download: bool = False
 
 
-@router.post("/admin/shares")
+@router.post("/admin/shares", summary="创建分享链接",
+             description="管理员。为单个资产生成带过期时间的公开 token 链接，可限制是否允许下载。")
 async def create_share(body: ShareBody, db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     a = await db.get(Asset, body.asset_id)
     if a is None or a.deleted_at is not None:
@@ -98,7 +102,8 @@ async def create_share(body: ShareBody, db: AsyncSession = Depends(get_db), user
     return {"token": token, "url": f"/share/{token}", "expires_hours": body.expires_hours}
 
 
-@router.get("/admin/shares")
+@router.get("/admin/shares", summary="分享链接列表",
+            description="管理员。返回最近 50 条分享链接（对应资产 / 是否可下载 / 过期时间与状态）。")
 async def list_shares(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     rows = (
         await db.execute(
@@ -119,14 +124,16 @@ async def list_shares(db: AsyncSession = Depends(get_db), _: User = Depends(requ
     ]
 
 
-@router.delete("/admin/shares/{token}")
+@router.delete("/admin/shares/{token}", summary="撤销分享链接",
+               description="管理员。立即删除该 token，链接随之失效。")
 async def revoke_share(token: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     await db.execute(delete(ShareLink).where(ShareLink.token == token))
     await db.commit()
     return {"ok": True}
 
 
-@share_public.get("/{token}")
+@share_public.get("/{token}", summary="公开分享预览",
+                  description="无需登录。按 token 返回分享内容的基本信息与预览图地址；链接不存在或已过期返回 404。")
 async def share_view(token: str, db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(ShareLink).where(ShareLink.token == token))).scalar_one_or_none()
     if s is None or s.expires_at <= dt.datetime.now(dt.timezone.utc):
@@ -155,7 +162,8 @@ async def share_view(token: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-@share_public.get("/{token}/download")
+@share_public.get("/{token}/download", summary="公开分享下载",
+                  description="无需登录。下载分享的原文件；链接过期或未开放下载权限时返回 404。")
 async def share_download(token: str, db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(ShareLink).where(ShareLink.token == token))).scalar_one_or_none()
     if s is None or s.expires_at <= dt.datetime.now(dt.timezone.utc) or not s.allow_download:
@@ -178,7 +186,8 @@ class CollectionBody(BaseModel):
     params: dict = Field(default_factory=dict)
 
 
-@router.get("/collections")
+@router.get("/collections", summary="我的智能集合",
+            description="登录用户。返回当前用户保存的筛选集合（名称 / 资产类型 / 筛选参数）。")
 async def list_collections(db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     rows = (
         await db.execute(
@@ -191,7 +200,8 @@ async def list_collections(db: AsyncSession = Depends(get_db), user: User = Depe
     ]
 
 
-@router.post("/collections")
+@router.post("/collections", summary="新建智能集合",
+             description="登录用户。把当前筛选条件（类型 + 参数）保存为命名集合，便于一键复访。")
 async def create_collection(body: CollectionBody, db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     c = SavedCollection(user_id=user.id, name=body.name,
                         asset_type=body.asset_type, params=body.params)
@@ -200,7 +210,8 @@ async def create_collection(body: CollectionBody, db: AsyncSession = Depends(get
     return {"id": str(c.id), "name": c.name}
 
 
-@router.delete("/collections/{cid}")
+@router.delete("/collections/{cid}", summary="删除智能集合",
+               description="登录用户。仅能删除自己创建的集合。")
 async def delete_collection(cid: uuid.UUID, db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
     c = await db.get(SavedCollection, cid)
     if c is None or c.user_id != user.id:

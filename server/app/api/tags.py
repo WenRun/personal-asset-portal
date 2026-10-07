@@ -12,10 +12,10 @@ from app.core.errors import conflict, not_found
 from app.core.models import AssetTag, Tag, User
 from app.core.deps import require_admin
 
-router = APIRouter(prefix="/api/tags", tags=["tags"])
+router = APIRouter(prefix="/api/tags", tags=["标签"])
 
 
-@router.get("")
+@router.get("", summary="标签列表", description="公开。返回全部标签及其挂载的资产数量，按名称排序。")
 async def list_tags(db: AsyncSession = Depends(get_db)):
     rows = (
         await db.execute(
@@ -36,7 +36,7 @@ class TagBody(BaseModel):
     parent_id: uuid.UUID | None = None
 
 
-@router.post("")
+@router.post("", summary="新建标签", description="管理员。标签名全局唯一，重复时返回 409。")
 async def create_tag(body: TagBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     exists = (await db.execute(select(Tag).where(Tag.name == body.name))).scalar_one_or_none()
     if exists is not None:
@@ -47,7 +47,7 @@ async def create_tag(body: TagBody, db: AsyncSession = Depends(get_db), _: User 
     return {"id": str(t.id), "name": t.name}
 
 
-@router.patch("/{tag_id}")
+@router.patch("/{tag_id}", summary="重命名标签", description="管理员。标签不存在时返回 404。")
 async def rename_tag(tag_id: uuid.UUID, body: TagBody, db: AsyncSession = Depends(get_db),
                      _: User = Depends(require_admin)):
     t = await db.get(Tag, tag_id)
@@ -58,7 +58,7 @@ async def rename_tag(tag_id: uuid.UUID, body: TagBody, db: AsyncSession = Depend
     return {"id": str(t.id), "name": t.name}
 
 
-@router.delete("/{tag_id}")
+@router.delete("/{tag_id}", summary="删除标签", description="管理员。同时解除所有资产上的该标签挂载。")
 async def delete_tag(tag_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     await db.execute(delete(Tag).where(Tag.id == tag_id))
     await db.commit()
