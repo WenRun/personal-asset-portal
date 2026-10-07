@@ -209,4 +209,6 @@ PG_CONTAINER=<pg容器名> PG_USER=portal BACKUP_DIR=/vol1/docker/backups ./depl
 | 登录后立即又变未登录 | HTTP 下 `COOKIE_SECURE=true` | `.env` 改 false 后 `docker compose up -d` |
 | 任务中心不实时刷新、要等很久 | NGINX 缓冲了 SSE | 确认 `/api/` location 有 `proxy_buffering off` |
 | server 起不来报连不上 PG/Meili | 网络名/容器名不对，或依赖容器不在该网络 | `docker inspect` 核对第 0 步信息 |
+| 重建 portal 容器后 API 全部 502 | NGINX 静态 proxy_pass 只在加载时解析一次容器 IP，容器重建换 IP 后指向旧地址 | 样例配置已用 `resolver 127.0.0.11` + 变量式 proxy_pass 按请求动态解析；老配置则需 `docker exec nginx nginx -s reload` |
+| 上传的文件在 uploads 目录「找不到」 | 原始文件只读不搬移：上传件固定落在 `uploads/staging/<年-月>/` 子目录 | 到 staging/年-月/ 下找；这是设计行为（§4.2） |
 | 首次构建 npm 失败/超时 | NAS 内存/网络波动 | 重试；或在本机构建后 `docker save/load` 迁移镜像 |
