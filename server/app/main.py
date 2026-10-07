@@ -1,6 +1,8 @@
-"""应用装配：生命周期（建表/引导管理员/Meili 索引）、统一错误、CORS、路由。"""
+"""应用装配：生命周期（迁移/引导管理员/Meili 索引）、统一错误、CORS、路由。"""
 
+import asyncio
 import logging
+import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,18 +17,29 @@ from app.domains.music.router import router as music_router
 from app.domains.videos.router import router as videos_router, admin_router as videos_admin_router
 from app.api.m6 import router as m6_router, share_public as share_public_router
 from app.core.config import get_settings
-from app.core.db import Base, SessionLocal, engine
+from app.core.db import SessionLocal, engine
 from app.core.errors import ApiError, api_error_handler
 from app.core.models import Asset, User  # noqa: F401
 from app.core.security import hash_password
 
 log = logging.getLogger("portal.main")
 
+SERVER_DIR = pathlib.Path(__file__).resolve().parent.parent
+
+
+def _upgrade_database() -> None:
+    """Alembic 迁移到 head（规划 D 决策：表结构变更统一走 migrations/）。"""
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(SERVER_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(SERVER_DIR / "migrations"))
+    command.upgrade(cfg, "head")
+
 
 async def bootstrap() -> None:
-    """建表 + 引导管理员 + 默认设置（幂等）。生产迁移切 Alembic（规划 D 决策）。"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """迁移建表 + 引导管理员 + 默认设置（幂等）。"""
+    await asyncio.to_thread(_upgrade_database)  # 迁移走独立连接，不阻塞事件循环
     async with SessionLocal() as db:
         count = (await db.execute(select(func.count()).select_from(User))).scalar_one()
         s = get_settings()

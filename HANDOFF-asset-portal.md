@@ -62,17 +62,17 @@
 ## 4. 未完成 / 待办清单
 
 **功能缺口（按优先级）**
-1. **标签进搜索索引**：`doc_from_asset`（server/app/core/search.py）中 `tags` 恒为空数组——asset_tags 关联未同步进 Meili 文档；facet/tags 筛选前端也已未接线。
+1. ~~**标签进搜索索引**~~（✅ 2026-10-07 完成：index_meili 查 asset_tags 写入 Meili 文档；rename/delete/detach 标签均触发受影响资产重建；/api/search 支持 tag 过滤 + facet_distribution；/api/{route} 列表支持 tag 过滤且返回 tags；前端搜索页 facet 芯片、四类列表页 ?tag= 过滤、详情页标签可点击、集合跳转修复路由映射并带 q/tag/favorite）
 2. **字族打包下载**（规划 §5.1 承诺 M6）：端点未实现，前端按钮是占位。
-3. **分享按钮下沉**：各详情页目前无入口，需到 工具箱→分享 手动填 UUID；应加 ShareDialog 到五类详情页。
+3. ~~**分享按钮下沉**~~（✅ 2026-10-07 完成：ShareDialog 组件接入五类详情页，admin 可见，支持有效期选择与允许下载开关）
 4. **浏览页批量多选 + 入包**：工具箱只能按筛选打包。
 5. **标签层级树 UI**：目前平铺；递归查询与同级唯一索引已就绪（models.py tags）。
 6. **SSE 任务进度推送**：现为 10s 轮询（设计 §4.3 已有事件格式）。
-7. **LRC 歌词展示**：has_lyrics 已入库、meta.lyrics 已存，前端未渲染。
-8. **智能集合跳转**：列表页已支持 `?q=` 参数，集合点击跳转已接；tags/favorite 参数还没接。
+7. ~~**LRC 歌词展示**~~（✅ 2026-10-07 完成：新增 GET /api/music/{id}/lyrics；播放条歌词面板——LRC 时间轴高亮同步滚动、点击行跳播、纯文本兜底、过滤 [ti:] 等元数据行）
+8. ~~**智能集合跳转**~~（✅ 2026-10-07 完成：见第 1 条；注意列表页 q 关键词仍只有后端支持、前端未读）
 
 **工程债**
-9. **Alembic**：目前 `create_all` 幂等建表；改字段需手工。规划 D 决策要求切 Alembic。
+9. ~~**Alembic**~~（✅ 2026-10-07 完成：migrations/ 异步模板基线 `e256f2a718d5`（21 表，临时库验证升级/降级/零漂移）；lifespan 改为启动时 upgrade head；现有库已 stamp；用法见 server/README.md）
 10. **自动化测试为零**：测试策略在详细设计 §10（pytest + testcontainers + Playwright），当前验证全靠 curl 冒烟 + 浏览器人工。
 11. **Caddy 生产接线**：deploy/Caddyfile 是示例；compose 中无 caddy service。
 12. **前端 chunk 343KB**：epubjs 移除后仍偏大，可做 manualChunks。

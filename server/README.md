@@ -26,7 +26,19 @@ cp .env.example .env        # 复制后把 CHANGEME 改成 postgres-dev 实际�
 .venv/bin/python -m app.core.worker
 ```
 
-首次启动自动：建表 → 创建引导管理员（`BOOTSTRAP_ADMIN_USERNAME/PASSWORD`，默认 admin/admin1234）→ 初始化 Meili 索引与默认扫描根（`DATA_ROOT/library/{fonts,music,videos,books,images,uploads}`）。
+首次启动自动：Alembic 迁移到 head → 创建引导管理员（`BOOTSTRAP_ADMIN_USERNAME/PASSWORD`，默认 admin/admin1234）→ 初始化 Meili 索引与默认扫描根（`DATA_ROOT/library/{fonts,music,videos,books,images,uploads}`）。
+
+## 数据库迁移（Alembic）
+
+表结构变更统一走 `migrations/`（规划 D 决策，2026-10-07 起）：改 `app/core/models.py` 后生成迁移并在下次启动时自动应用：
+
+```bash
+cd server
+DATABASE_URL="postgresql+asyncpg://..." .venv/bin/alembic revision --autogenerate -m "说明"   # 与模型对比生成迁移
+.venv/bin/alembic upgrade head    # 手动应用（应用启动时也会自动 upgrade head）
+```
+
+注意：`migrations/env.py` 经 pydantic-settings 读取 `server/.env`，上述命令需在 `server/` 目录下执行。已有库（历史 create_all 建表）首次接入时执行过一次 `alembic stamp head`，换新库则直接 `upgrade head` 从零建表。
 
 ## 全容器部署
 
