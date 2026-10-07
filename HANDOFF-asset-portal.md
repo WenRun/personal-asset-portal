@@ -75,8 +75,10 @@
 9. ~~**Alembic**~~（✅ 2026-10-07 完成：migrations/ 异步模板基线 `e256f2a718d5`（21 表，临时库验证升级/降级/零漂移）；lifespan 改为启动时 upgrade head；现有库已 stamp；用法见 server/README.md）
 10. **自动化测试为零**：测试策略在详细设计 §10（pytest + testcontainers + Playwright），当前验证全靠 curl 冒烟 + 浏览器人工。
 11. **Caddy 生产接线**：deploy/Caddyfile 是示例；compose 中无 caddy service。
-12. **前端 chunk 343KB**：epubjs 移除后仍偏大，可做 manualChunks。
-13. 移动端：侧栏抽屉可用，详情页/查看器未做小屏适配细化。
+12. ~~**前端 chunk 343KB**~~（✅ 2026-10-07 完成：路由级 lazy + manualChunks，入口 380KB→36.7KB，vendor 双缓存块）
+13. ~~移动端~~（✅ 2026-10-07 完成：详情页侧栏小屏抽屉化、表格滚动+列隐藏、顶栏/页头自适应、歌词按钮全尺寸可见；375px 走查通过）
+
+**工程债余项**：自动化测试（pytest + testcontainers + Playwright）、Caddy 生产接线（compose 补 service）。
 
 **二期规划项（明确延期）**：HLS 转码+字幕、人脸识别/AI 标签（pgvector）、RAW 支持、视频缩略图进度条、分享粒度到集合。
 
