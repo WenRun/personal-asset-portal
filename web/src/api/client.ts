@@ -414,7 +414,7 @@ export const api = {
   font: async (id: string) => toFont(await detailRaw(id)),
 
   // 编辑（admin）
-  patchAsset: (id: string, patch: { title?: string; note?: string; rating?: number; is_favorite?: boolean }) =>
+  patchAsset: (id: string, patch: { title?: string; note?: string; rating?: number; is_favorite?: boolean; tags?: string[] }) =>
     req<RawAsset>(`/api/assets/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   // 删除（admin）：默认软删可恢复；purge 彻底删记录，deleteFile 连源文件一起删
   deleteAsset: (id: string, opts?: { purge?: boolean; deleteFile?: boolean }) =>

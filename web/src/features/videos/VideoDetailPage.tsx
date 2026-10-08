@@ -3,13 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AppWindow, Download, Link2, Maximize, Minimize,
-  Pause, PictureInPicture2, Play, SkipForward, Star, Trash2, Volume2, VolumeX,
+  Pause, Pencil, PictureInPicture2, Play, SkipForward, Star, Trash2, Volume2, VolumeX,
 } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, HueCover } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
+import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
 /** 视频详情（§5.3）：Direct Play <video> 真实播放 + 观看进度云端同步 + 全屏/网页全屏/画中画/倍速/音量控制 + 系列集数平滑切换 */
@@ -19,6 +20,7 @@ export function VideoDetailPage() {
   const qc = useQueryClient()
   const user = useAuth((s) => s.user)
   const isAdmin = user?.role === 'admin'
+  const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
   const { data: video, isLoading: videoLoading } = useQuery({
@@ -464,7 +466,18 @@ export function VideoDetailPage() {
               <span className="ml-0.5 font-mono text-xs font-bold text-amber-500">{rating}.0</span>
             )}
           </div>
-          <Button variant="outline">编辑</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (!isAdmin) {
+                showToast('只有管理员可以编辑资产元数据')
+                return
+              }
+              setEditOpen(true)
+            }}
+          >
+            <Pencil className="h-3.5 w-3.5" />编辑
+          </Button>
           {isAdmin && (
             <Button variant="outline" onClick={() => setShareOpen(true)}>
               <Link2 className="h-3.5 w-3.5" />分享
@@ -828,6 +841,18 @@ export function VideoDetailPage() {
         )}
       </div>
 
+      <EditAssetDialog
+        assetId={video.id}
+        initialTitle={video.title}
+        initialNote={video.note || ''}
+        initialTags={video.tags || []}
+        initialRating={rating}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onSuccess={() => {
+          showToast('资产信息已更新')
+        }}
+      />
       <ShareDialog assetId={video.id} assetTitle={video.title} open={shareOpen} onClose={() => setShareOpen(false)} />
       <DeleteAssetDialog assetId={video.id} assetTitle={video.title} listPath="/videos" open={delOpen} onClose={() => setDelOpen(false)} />
     </div>

@@ -7,12 +7,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Path, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_app_settings, get_current_user, require_admin, require_member
 from app.core.db import get_db
-from app.core.errors import bad_request, not_found, unauthenticated
+from app.core.errors import bad_request, forbidden, not_found, unauthenticated
 from app.core.jobs import enqueue
 from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicTrack, Tag, User, VideoDetail
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
@@ -304,6 +304,7 @@ class AssetPatch(BaseModel):
     note: str | None = None
     rating: int | None = Field(default=None, ge=0, le=5)
     is_favorite: bool | None = None
+    tags: list[str] | None = None
 
 
 async def _reindex(db: AsyncSession, a: Asset) -> None:
@@ -311,22 +312,36 @@ async def _reindex(db: AsyncSession, a: Asset) -> None:
 
 
 @router.patch("/assets/{asset_id}", summary="编辑资产元信息",
-              description="管理员或登录成员。可修改标题 / 备注 / 评分（0-5）/ 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
+              description="管理员或登录成员。可修改标题 / 备注 / 评分（0-5）/ 标签 / 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
 async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_member)):
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None:
         raise not_found()
     # 非管理员仅允许修改评分与收藏标记
-    if user.role != "admin" and (body.title is not None or body.note is not None):
+    if user.role != "admin" and (body.title is not None or body.note is not None or body.tags is not None):
         raise forbidden()
     for field in ("title", "note", "rating", "is_favorite"):
         val = getattr(body, field)
         if val is not None:
             setattr(a, field, val)
+    if body.tags is not None:
+        # 重置资产关联标签
+        await db.execute(delete(AssetTag).where(AssetTag.asset_id == a.id))
+        cleaned = [t.strip() for t in body.tags if t.strip()]
+        for name in cleaned:
+            t = (await db.execute(select(Tag).where(Tag.name == name))).scalar_one_or_none()
+            if t is None:
+                t = Tag(name=name)
+                db.add(t)
+                await db.flush()
+            db.add(AssetTag(asset_id=a.id, tag_id=t.id))
     await db.commit()
     await _reindex(db, a)
-    return _item(a)
+    tags = (
+        await db.execute(select(Tag).join(AssetTag, AssetTag.tag_id == Tag.id).where(AssetTag.asset_id == a.id))
+    ).scalars().all()
+    return {**_item(a), "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
 
 
 @router.delete("/assets/{asset_id}", summary="删除资产",
