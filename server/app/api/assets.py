@@ -311,12 +311,15 @@ async def _reindex(db: AsyncSession, a: Asset) -> None:
 
 
 @router.patch("/assets/{asset_id}", summary="编辑资产元信息",
-              description="管理员。可修改标题 / 备注 / 评分（0-5）/ 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
+              description="管理员或登录成员。可修改标题 / 备注 / 评分（0-5）/ 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
 async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = Depends(get_db),
-                      user: User = Depends(require_admin)):
+                      user: User = Depends(require_member)):
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None:
         raise not_found()
+    # 非管理员仅允许修改评分与收藏标记
+    if user.role != "admin" and (body.title is not None or body.note is not None):
+        raise forbidden()
     for field in ("title", "note", "rating", "is_favorite"):
         val = getattr(body, field)
         if val is not None:

@@ -205,6 +205,7 @@ function toClip(r: RawAsset): Clip {
     series_id: r.series_id ?? null,
     episode: r.episode ?? null,
     cover_url: r.cover_url ?? null,
+    rating: r.rating ?? 0,
   }
 }
 

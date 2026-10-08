@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AppWindow, Download, Link2, Maximize, Minimize,
-  Pause, PictureInPicture2, Play, SkipForward, Trash2, Volume2, VolumeX,
+  Pause, PictureInPicture2, Play, SkipForward, Star, Trash2, Volume2, VolumeX,
 } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAuth } from '@/stores/auth'
@@ -17,7 +17,8 @@ export function VideoDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
   const qc = useQueryClient()
-  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const user = useAuth((s) => s.user)
+  const isAdmin = user?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
   const { data: video, isLoading: videoLoading } = useQuery({
@@ -38,6 +39,17 @@ export function VideoDetailPage() {
   const [pos, setPos] = useState(0)
   const autoPlayNextRef = useRef(false)
   const restoredIdRef = useRef<string | null>(null)
+
+  // 评分状态与操作
+  const [rating, setRating] = useState<number>(0)
+  const [hoverRating, setHoverRating] = useState<number>(0)
+  const [isRatingSaving, setIsRatingSaving] = useState(false)
+
+  useEffect(() => {
+    if (typeof video?.rating === 'number') {
+      setRating(video.rating)
+    }
+  }, [video?.rating])
 
   // 播放器状态（参考 B 站体验）
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -219,6 +231,30 @@ export function VideoDetailPage() {
     nav(`/videos/${assetId}`)
   }
 
+  // 评分操作：点击保存，再次点击同星级可取消
+  const handleRate = async (val: number) => {
+    if (!id) return
+    if (!user) {
+      showToast('请登录后再评分')
+      return
+    }
+    const next = rating === val ? 0 : val
+    setRating(next)
+    setIsRatingSaving(true)
+    try {
+      await api.patchAsset(id, { rating: next })
+      showToast(next > 0 ? `已评分: ${next} 星` : '已取消评分')
+      void qc.invalidateQueries({ queryKey: ['video', id] })
+      void qc.invalidateQueries({ queryKey: ['videos'] })
+    } catch (e) {
+      console.error('Rate video failed', e)
+      showToast('评分保存失败')
+      setRating(video?.rating ?? 0)
+    } finally {
+      setIsRatingSaving(false)
+    }
+  }
+
   // 网页全屏时锁定 body 滚动
   useEffect(() => {
     if (isWebFullscreen) {
@@ -395,7 +431,39 @@ export function VideoDetailPage() {
           <a href={api.downloadUrl(video.id)}>
             <Button variant="outline">下载{isClip ? '视频' : '本集'}</Button>
           </a>
-          {!isClip && <Button variant="outline">★ 评分</Button>}
+          {/* 5 颗黄色小星星评分组件（悬停高亮 + 点击保存） */}
+          <div
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-slate-300"
+            onMouseLeave={() => setHoverRating(0)}
+            title={rating > 0 ? `当前评分: ${rating} 星 (再次点击同星级可取消)` : '点击星星评分 (1-5星)'}
+          >
+            <span className="text-xs font-medium text-slate-400 select-none">评分</span>
+            <div className="flex items-center">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  disabled={isRatingSaving}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onClick={() => void handleRate(star)}
+                  className="p-0.5 transition-transform hover:scale-125 focus:outline-none disabled:opacity-60"
+                  title={`${star} 星`}
+                >
+                  <Star
+                    className={cn(
+                      'h-4 w-4 transition-colors',
+                      star <= (hoverRating || rating)
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'fill-transparent text-slate-300 hover:text-amber-300',
+                    )}
+                  />
+                </button>
+              ))}
+            </div>
+            {rating > 0 && (
+              <span className="ml-0.5 font-mono text-xs font-bold text-amber-500">{rating}.0</span>
+            )}
+          </div>
           <Button variant="outline">编辑</Button>
           {isAdmin && (
             <Button variant="outline" onClick={() => setShareOpen(true)}>
@@ -706,6 +774,7 @@ export function VideoDetailPage() {
               {video.codec && <Badge>{video.codec}</Badge>}
               <Badge>{video.sizeMB}MB</Badge>
               <Badge tone={video.playable ? 'green' : 'amber'}>{video.playable ? '可在线播放' : '仅下载'}</Badge>
+              {rating > 0 && <Badge tone="amber">★ {rating}.0</Badge>}
               <span className="text-slate-400">{fmtDate(video.addedAt)} 入库</span>
             </div>
             {video.note && <p className="mt-3 text-sm leading-relaxed text-slate-600">{video.note}</p>}

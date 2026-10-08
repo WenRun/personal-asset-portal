@@ -93,6 +93,7 @@ export interface Clip {
   series_id?: string | null
   episode?: number | null
   cover_url?: string | null
+  rating?: number
 }
 export type VideoAsset = Series | Clip
 
