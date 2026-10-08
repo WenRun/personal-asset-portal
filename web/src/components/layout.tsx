@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookOpen, Film, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Music,
   Package, Search, Settings, Tag, Type, Wrench, X,
@@ -29,10 +29,45 @@ function Sidebar() {
   const sidebarOpen = useUI((s) => s.sidebarOpen)
   const setSidebar = useUI((s) => s.setSidebar)
   const nav = useNavigate()
+  const qc = useQueryClient()
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15_000 })
   const countOf = (key: string) => {
     if (!key || !stats) return ''
     return String(stats.counts[key as keyof typeof stats.counts] ?? 0)
+  }
+
+  const handleNavClick = (to: string) => {
+    setSidebar(false)
+    // 刷新侧边栏与总览统计数字
+    void qc.invalidateQueries({ queryKey: ['stats'], refetchType: 'all' })
+
+    // 精确刷新资源列表，确保即使已在当前页点击菜单也能立即拉取最新入库资产
+    if (to === '/videos') {
+      void qc.invalidateQueries({ queryKey: ['videos'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['video-series'], refetchType: 'all' })
+    } else if (to === '/music') {
+      void qc.invalidateQueries({ queryKey: ['music-albums'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['music-tracks'], refetchType: 'all' })
+    } else if (to === '/books') {
+      void qc.invalidateQueries({ queryKey: ['books'], refetchType: 'all' })
+    } else if (to === '/images') {
+      void qc.invalidateQueries({ queryKey: ['photos'], refetchType: 'all' })
+    } else if (to === '/fonts') {
+      void qc.invalidateQueries({ queryKey: ['fonts'], refetchType: 'all' })
+    } else if (to === '/') {
+      void qc.invalidateQueries({ queryKey: ['recent'], refetchType: 'all' })
+    } else if (to === '/tags') {
+      void qc.invalidateQueries({ queryKey: ['tags'], refetchType: 'all' })
+    } else if (to === '/jobs') {
+      void qc.invalidateQueries({ queryKey: ['jobs'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['confirm'], refetchType: 'all' })
+    } else if (to === '/tools') {
+      void qc.invalidateQueries({ queryKey: ['packs'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['shares'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['collections'], refetchType: 'all' })
+    } else if (to === '/settings') {
+      void qc.invalidateQueries({ queryKey: ['settings'], refetchType: 'all' })
+    }
   }
 
   const inner = (
@@ -52,7 +87,7 @@ function Sidebar() {
             key={to}
             to={to}
             end={to === '/'}
-            onClick={() => setSidebar(false)}
+            onClick={() => handleNavClick(to)}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 transition',
@@ -66,21 +101,57 @@ function Sidebar() {
           </NavLink>
         ))}
         <div className="mt-3 space-y-1 border-t border-slate-800 pt-3">
-          <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/tags')}>
+          <NavLink
+            to="/tags"
+            onClick={() => handleNavClick('/tags')}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 transition',
+                isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+              )
+            }
+          >
             <Tag className="h-4 w-4" />标签管理
-          </a>
-          <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/jobs')}>
+          </NavLink>
+          <NavLink
+            to="/jobs"
+            onClick={() => handleNavClick('/jobs')}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 transition',
+                isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+              )
+            }
+          >
             <Wrench className="h-4 w-4" />任务中心
             {(stats?.jobs.failed ?? 0) > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{stats?.jobs.failed}</span>}
-          </a>
+          </NavLink>
           {user && (
-            <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/tools')}>
+            <NavLink
+              to="/tools"
+              onClick={() => handleNavClick('/tools')}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 transition',
+                  isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                )
+              }
+            >
               <Package className="h-4 w-4" />工具箱
-            </a>
+            </NavLink>
           )}
-          <a className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => nav('/settings')}>
+          <NavLink
+            to="/settings"
+            onClick={() => handleNavClick('/settings')}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 transition',
+                isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+              )
+            }
+          >
             <Settings className="h-4 w-4" />设置
-          </a>
+          </NavLink>
         </div>
       </nav>
 
@@ -179,8 +250,28 @@ function Topbar() {
 
 export function AppShell() {
   const user = useAuth((s) => s.user)
+  const qc = useQueryClient()
   const setPalette = useUI((s) => s.setPalette)
   const setGate = useUI((s) => s.setGate)
+
+  // 管理员全局监听任务流：一旦扫描/入库/解析任务完成，自动刷新统计数字与各资源列表
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return
+    const unsub = api.jobsStream(() => {
+      // 任务变动：刷新任务与总览统计
+      void qc.invalidateQueries({ queryKey: ['stats'] })
+      // 刷新各资源列表查询，保证只要任务完成，各页面数据全自动同步
+      void qc.invalidateQueries({ queryKey: ['videos'] })
+      void qc.invalidateQueries({ queryKey: ['video-series'] })
+      void qc.invalidateQueries({ queryKey: ['music-albums'] })
+      void qc.invalidateQueries({ queryKey: ['music-tracks'] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['photos'] })
+      void qc.invalidateQueries({ queryKey: ['fonts'] })
+      void qc.invalidateQueries({ queryKey: ['recent'] })
+    })
+    return unsub
+  }, [user, qc])
 
   // 全局 ⌘K / Ctrl+K：访客弹登录引导
   useEffect(() => {

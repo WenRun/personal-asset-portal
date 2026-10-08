@@ -287,6 +287,45 @@ export interface JobPayload {
   target: JobTarget | null
 }
 
+type JobListener = (jobs: JobPayload[]) => void
+type StateListener = (state: 'connecting' | 'live') => void
+
+let sharedJobsEs: EventSource | null = null
+let sharedJobsState: 'connecting' | 'live' = 'connecting'
+const jobListeners = new Set<JobListener>()
+const stateListeners = new Set<StateListener>()
+
+function ensureJobsStream() {
+  if (sharedJobsEs) return
+  sharedJobsState = 'connecting'
+  const es = new EventSource(`${BASE}/api/admin/jobs/stream`, { withCredentials: true })
+  sharedJobsEs = es
+  es.addEventListener('open', () => {
+    sharedJobsState = 'live'
+    stateListeners.forEach((fn) => fn('live'))
+  })
+  es.addEventListener('snapshot', (e) => {
+    sharedJobsState = 'live'
+    stateListeners.forEach((fn) => fn('live'))
+    try {
+      const data = (JSON.parse((e as MessageEvent).data) as { jobs: JobPayload[] }).jobs
+      jobListeners.forEach((fn) => fn(data))
+    } catch { /* 非法载荷忽略，等待下一次快照 */ }
+  })
+  es.addEventListener('error', () => {
+    sharedJobsState = 'connecting'
+    stateListeners.forEach((fn) => fn('connecting'))
+  })
+}
+
+function releaseJobsStream() {
+  if (jobListeners.size === 0 && stateListeners.size === 0 && sharedJobsEs) {
+    sharedJobsEs.close()
+    sharedJobsEs = null
+    sharedJobsState = 'connecting'
+  }
+}
+
 export const api = {
   // 认证
   register: (username: string, password: string) => req<UserPayload>('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, password }) }),
@@ -408,19 +447,20 @@ export const api = {
     return req<JobsPagePayload>(`/api/admin/jobs?${q}`)
   },
   retryJob: (id: string) => req<{ ok: boolean }>(`/api/admin/jobs/${id}/retry`, { method: 'POST' }),
-  /** 任务中心 SSE 订阅：snapshot 事件携带全量任务列表；断线由 EventSource 自动重连（重连后再推快照）。
+  /** 任务中心 SSE 订阅：单例多路复用，snapshot 事件携带全量任务列表；断线由 EventSource 自动重连。
    *  返回取消函数。 */
   jobsStream: (onJobs: (jobs: JobPayload[]) => void, onState?: (state: 'connecting' | 'live') => void): (() => void) => {
-    const es = new EventSource(`${BASE}/api/admin/jobs/stream`, { withCredentials: true })
-    es.addEventListener('open', () => onState?.('live'))
-    es.addEventListener('snapshot', (e) => {
-      onState?.('live')
-      try {
-        onJobs((JSON.parse((e as MessageEvent).data) as { jobs: JobPayload[] }).jobs)
-      } catch { /* 非法载荷忽略，等待下一次快照 */ }
-    })
-    es.addEventListener('error', () => onState?.('connecting'))
-    return () => es.close()
+    jobListeners.add(onJobs)
+    if (onState) {
+      stateListeners.add(onState)
+      onState(sharedJobsState)
+    }
+    ensureJobsStream()
+    return () => {
+      jobListeners.delete(onJobs)
+      if (onState) stateListeners.delete(onState)
+      releaseJobsStream()
+    }
   },
   settings: () => req<{ scan_roots: { alias: string; path: string }[]; registration_open: boolean }>('/api/admin/settings'),
   updateSettings: (patch: { registration_open?: boolean }) => req<unknown>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),

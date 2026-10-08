@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { assetHit } from '@/lib/search'
 import { Badge, HueCover, PageHeader } from '@/components/ui'
 
 export function DashboardPage() {
+  const qc = useQueryClient()
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15_000 })
   const { data: recentRaw } = useQuery({ queryKey: ['recent'], queryFn: () => api.recent(12) })
   const nav = useNavigate()
@@ -19,13 +20,34 @@ export function DashboardPage() {
     { label: '图片', count: stats?.counts.image, to: '/images', hue: 155 },
   ]
 
+  const onCardClick = (to: string) => {
+    if (to === '/videos') {
+      void qc.invalidateQueries({ queryKey: ['videos'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['video-series'], refetchType: 'all' })
+    } else if (to === '/music') {
+      void qc.invalidateQueries({ queryKey: ['music-albums'], refetchType: 'all' })
+      void qc.invalidateQueries({ queryKey: ['music-tracks'], refetchType: 'all' })
+    } else if (to === '/books') {
+      void qc.invalidateQueries({ queryKey: ['books'], refetchType: 'all' })
+    } else if (to === '/images') {
+      void qc.invalidateQueries({ queryKey: ['photos'], refetchType: 'all' })
+    } else if (to === '/fonts') {
+      void qc.invalidateQueries({ queryKey: ['fonts'], refetchType: 'all' })
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl p-6">
       <PageHeader title="仪表盘" sub="资源总览与最近动态" />
 
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
         {cards.map((c) => (
-          <Link key={c.label} to={c.to} className="group rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:shadow-md">
+          <Link
+            key={c.label}
+            to={c.to}
+            onClick={() => onCardClick(c.to)}
+            className="group rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:shadow-md"
+          >
             <div className="flex items-center gap-2">
               <HueCover hue={c.hue} className="h-2.5 w-2.5 rounded-full" />
               <span className="text-xs text-slate-400">{c.label}</span>
