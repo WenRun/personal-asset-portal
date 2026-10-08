@@ -10,7 +10,7 @@ import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
-/** 视频详情（§5.3）：Direct Play <video> 真实播放 + 观看进度云端同步 + 系列集数切换 */
+/** 视频详情（§5.3）：Direct Play <video> 真实播放 + 观看进度云端同步 + 系列集数平滑切换（无刷新 SPA） */
 export function VideoDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -18,27 +18,35 @@ export function VideoDetailPage() {
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
-  const { data: video } = useQuery({ queryKey: ['video', id], queryFn: () => api.video(id!), enabled: !!id })
-  const { data: progress } = useQuery({ queryKey: ['progress', id], queryFn: () => api.getProgress(id!), enabled: !!id })
+  const { data: video, isLoading: videoLoading } = useQuery({
+    queryKey: ['video', id],
+    queryFn: () => api.video(id!),
+    enabled: !!id,
+    placeholderData: (previousData) => previousData,
+  })
+  const { data: progress } = useQuery({
+    queryKey: ['progress', id],
+    queryFn: () => api.getProgress(id!),
+    enabled: !!id,
+  })
   const videoRef = useRef<HTMLVideoElement>(null)
   const [coverFail, setCoverFail] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [pos, setPos] = useState(0)
-  // 系列上下文：从列表页跳转时由路由 state 传入；直接访问时按需取
-  const [series, setSeries] = useState<Awaited<ReturnType<typeof api.seriesEpisodes>> | null>(null)
+  const autoPlayNextRef = useRef(false)
+  const restoredIdRef = useRef<string | null>(null)
+
+  // 系列集数：使用 useQuery 缓存系列列表，切集时 sidebar 常驻无闪烁
+  const seriesId = video?.series_id
+  const { data: series } = useQuery({
+    queryKey: ['video-series-episodes', seriesId],
+    queryFn: () => api.seriesEpisodes(seriesId!),
+    enabled: !!seriesId && video?.kind === 'tutorial',
+    staleTime: 60_000,
+  })
 
   const savedSec = typeof progress?.position?.seconds === 'number' ? progress.position.seconds : 0
   const durationSec = video?.durationSec ?? 0
-
-  // 系列集数（若属于系列）：从系列列表反查
-  useEffect(() => {
-    if (!video || video.kind !== 'tutorial' || !video.series_id) return
-    void api.videoSeries().then((all) => {
-      const s = all.find((x) => x.name === video.title.split(/ S\d+E\d+| EP?\d+$/)[0] || x.id === video.series_id)
-      if (!s) return
-      void api.seriesEpisodes(s.id).then((d) => setSeries(d))
-    })
-  }, [video])
 
   // 播放/暂停
   const toggle = () => {
@@ -48,11 +56,48 @@ export function VideoDetailPage() {
     else v.pause()
   }
 
+  // 视频切集：SPA 无感路由切换，保存上一集进度并标记连播
+  const switchEpisode = (assetId: string, autoPlay = true) => {
+    const v = videoRef.current
+    if (v && id) {
+      void api.saveProgress(id, { seconds: v.currentTime })
+    }
+    autoPlayNextRef.current = autoPlay
+    setPlaying(false)
+    setPos(0)
+    setCoverFail(false)
+    restoredIdRef.current = null
+    nav(`/videos/${assetId}`)
+  }
+
+  // 视频元数据就绪后：恢复上次观看进度，若标记了自动连播则平滑起播
+  const onLoadedMetadata = () => {
+    const v = videoRef.current
+    if (!v || !id) return
+    if (restoredIdRef.current !== id && typeof savedSec === 'number' && savedSec > 5) {
+      if (savedSec < (durationSec || Infinity) - 5) {
+        v.currentTime = savedSec
+        setPos(savedSec)
+      }
+      restoredIdRef.current = id
+    }
+    if (autoPlayNextRef.current) {
+      autoPlayNextRef.current = false
+      void v.play().catch(() => setPlaying(false))
+    }
+  }
+
   // 挂载恢复进度 + 播放器事件（真实播放：timeupdate 驱动，5s 节流上报）
   useEffect(() => {
     const v = videoRef.current
     if (!v || !id) return
-    if (savedSec > 5 && savedSec < (durationSec || Infinity) - 5) v.currentTime = savedSec
+    if (restoredIdRef.current !== id && typeof savedSec === 'number' && savedSec > 5) {
+      if (savedSec < (durationSec || Infinity) - 5) {
+        v.currentTime = savedSec
+        setPos(savedSec)
+      }
+      restoredIdRef.current = id
+    }
     let last = 0
     const onTime = () => {
       setPos(v.currentTime)
@@ -63,7 +108,17 @@ export function VideoDetailPage() {
     }
     const onPause = () => { setPlaying(false); void api.saveProgress(id, { seconds: v.currentTime }) }
     const onPlay = () => setPlaying(true)
-    const onEnded = () => { setPlaying(false); void api.saveProgress(id, { seconds: 0 }) }
+    const onEnded = () => {
+      setPlaying(false)
+      void api.saveProgress(id, { seconds: 0 })
+      // 系列连播：本集播完自动切下一集
+      if (series && video?.kind === 'tutorial') {
+        const idx = series.episodes.findIndex((e) => e.asset_id === id)
+        if (idx >= 0 && idx + 1 < series.episodes.length) {
+          switchEpisode(series.episodes[idx + 1].asset_id, true)
+        }
+      }
+    }
     v.addEventListener('timeupdate', onTime)
     v.addEventListener('pause', onPause)
     v.addEventListener('play', onPlay)
@@ -75,19 +130,14 @@ export function VideoDetailPage() {
       v.removeEventListener('ended', onEnded)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, video, progress])
+  }, [id, video, progress, series])
 
-  if (!video) return <div className="p-6 text-slate-400">加载中…</div>
+  if (!video && videoLoading) return <div className="p-6 text-slate-400">加载中…</div>
+  if (!video) return <div className="p-6 text-slate-400">视频不存在或已被删除</div>
 
   const resume = savedSec > 5 && pos === 0
   const pct = durationSec ? (pos / durationSec) * 100 : 0
   const isClip = video.kind === 'clip'
-
-  const switchEpisode = (assetId: string) => {
-    qc.invalidateQueries({ queryKey: ['video', assetId] })
-    window.history.replaceState(null, '', `/videos/${assetId}`)
-    window.location.reload()
-  }
 
   return (
     <div className="p-4 md:p-6">
@@ -102,11 +152,13 @@ export function VideoDetailPage() {
                 <HueCover hue={video.hue} className="aspect-video" />
               ) : (
                 <video
+                  key={video.id}
                   ref={videoRef}
                   src={api.videoStreamUrl(video.id)}
                   poster={video.cover_url ? API_BASE + video.cover_url : undefined}
                   className="aspect-video w-full"
                   onClick={toggle}
+                  onLoadedMetadata={onLoadedMetadata}
                   onError={() => setCoverFail(true)}
                   controls={false}
                 />
