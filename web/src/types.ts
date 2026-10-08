@@ -140,6 +140,7 @@ export interface Photo {
   hue: number
   displayH: number
   tags: string[]
+  note?: string
   rating: number
   favorite: boolean
 }

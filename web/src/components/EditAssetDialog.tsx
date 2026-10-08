@@ -88,6 +88,8 @@ export function EditAssetDialog({
       void qc.invalidateQueries({ queryKey: ['videos'] })
       void qc.invalidateQueries({ queryKey: ['font', assetId] })
       void qc.invalidateQueries({ queryKey: ['fonts'] })
+      void qc.invalidateQueries({ queryKey: ['photo', assetId] })
+      void qc.invalidateQueries({ queryKey: ['photos'] })
       void qc.invalidateQueries({ queryKey: ['tags'] })
       void qc.invalidateQueries()
       onSuccess?.()

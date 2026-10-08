@@ -1,22 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Download, Info, Pencil, Share2, Trash2, X } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, HueCover, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
+import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { cn } from '@/lib/utils'
 
 export function ImageDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
-  const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const qc = useQueryClient()
+  const user = useAuth((s) => s.user)
+  const isAdmin = user?.role === 'admin'
+  const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
   const [exifOpen, setExifOpen] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  const showToast = (text: string) => {
+    setToastMsg(text)
+    window.setTimeout(() => setToastMsg((curr) => (curr === text ? null : curr)), 2000)
+  }
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
   const [rating, setRating] = useState<number | null>(null)
   const [viewerFail, setViewerFail] = useState(false)
@@ -26,6 +36,32 @@ export function ImageDetailPage() {
   const photo = photos?.[idx]
   const atFirst = idx === 0
   const atLast = photos != null && idx === photos.length - 1
+
+  // 同步评分状态
+  useEffect(() => {
+    setRating(photo?.rating ?? null)
+  }, [photo?.id, photo?.rating])
+
+  // 评分操作：点击打分，再次点击同星级可取消
+  const handleRate = async (newVal: number) => {
+    if (!photo) return
+    if (!user) {
+      showToast('请登录后再评分')
+      return
+    }
+    const currentR = rating ?? photo.rating ?? 0
+    const next = currentR === newVal ? 0 : newVal
+    setRating(next)
+    try {
+      await api.patchAsset(photo.id, { rating: next })
+      showToast(next > 0 ? `已评分: ${next} 星` : '已取消评分')
+      void qc.invalidateQueries({ queryKey: ['photos'] })
+    } catch (e) {
+      console.error('Rate photo failed', e)
+      showToast('评分保存失败')
+      setRating(photo.rating ?? 0)
+    }
+  }
 
   // 胶片条：当前缩略图滚动到条中央
   useEffect(() => {
@@ -46,19 +82,38 @@ export function ImageDetailPage() {
         <span className="font-mono text-sm text-slate-400">{photo.fileName}</span>
         <Badge className="bg-slate-800 text-slate-400">相册：{photo.album}</Badge>
         <div className="ml-auto flex items-center gap-1">
-          <button className="rounded-lg p-2 hover:bg-slate-800"><Download className="h-4 w-4" /></button>
+          <a
+            href={api.downloadUrl(photo.id)}
+            download
+            className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white transition"
+            title="下载原图"
+          >
+            <Download className="h-4 w-4" />
+          </a>
           {isAdmin && (
-            <button className="rounded-lg p-2 hover:bg-slate-800" title="生成公开分享链接" onClick={() => setShareOpen(true)}>
+            <button className="rounded-lg p-2 hover:bg-slate-800 transition" title="生成公开分享链接" onClick={() => setShareOpen(true)}>
               <Share2 className="h-4 w-4" />
             </button>
           )}
-          <button className="rounded-lg p-2 hover:bg-slate-800"><Pencil className="h-4 w-4" /></button>
+          <button
+            className="rounded-lg p-2 hover:bg-slate-800 transition"
+            title="编辑图片信息"
+            onClick={() => {
+              if (!isAdmin) {
+                showToast('只有管理员可以编辑图片元信息')
+                return
+              }
+              setEditOpen(true)
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
           {isAdmin && (
-            <button className="rounded-lg p-2 text-slate-400 hover:bg-rose-900/40 hover:text-rose-300" title="删除该图片" onClick={() => setDelOpen(true)}>
+            <button className="rounded-lg p-2 text-slate-400 hover:bg-rose-900/40 hover:text-rose-300 transition" title="删除该图片" onClick={() => setDelOpen(true)}>
               <Trash2 className="h-4 w-4" />
             </button>
           )}
-          <button className="rounded-lg p-2 hover:bg-slate-800 lg:hidden" title="详细信息（EXIF/标签）" onClick={() => setExifOpen(true)}>
+          <button className="rounded-lg p-2 hover:bg-slate-800 lg:hidden transition" title="详细信息（EXIF/标签）" onClick={() => setExifOpen(true)}>
             <Info className="h-4 w-4" />
           </button>
         </div>
@@ -140,11 +195,14 @@ export function ImageDetailPage() {
             <div>
               <div className="font-bold">{photo.title}</div>
               <div className="mt-0.5 text-xs text-slate-400">{(photo.takenAt ?? "").slice(0, 19).replace("T", " ")} 拍摄</div>
+              {photo.note && (
+                <p className="mt-2 text-xs leading-relaxed text-slate-600 break-words">{photo.note}</p>
+              )}
               <a href={api.downloadUrl(photo.id)} className="mt-2 block w-full rounded-lg bg-brand-600 py-1.5 text-center text-xs font-medium text-white hover:bg-brand-700">下载原图 {photo.sizeMB}MB</a>
             </div>
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">评分</div>
-              <RatingStars value={rating ?? photo.rating} onChange={setRating} />
+              <RatingStars value={rating ?? photo.rating} onChange={(v) => void handleRate(v)} />
             </section>
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">EXIF</div>
@@ -176,7 +234,18 @@ export function ImageDetailPage() {
                     <Badge>{t}</Badge>
                   </button>
                 ))}
-                <button className="rounded border border-dashed border-slate-300 px-2 py-0.5 text-slate-400 hover:border-brand-400 hover:text-brand-600">+ 添加</button>
+                <button
+                  className="rounded border border-dashed border-slate-300 px-2 py-0.5 text-slate-400 hover:border-brand-400 hover:text-brand-600 transition"
+                  onClick={() => {
+                    if (!isAdmin) {
+                      showToast('只有管理员可以管理标签')
+                      return
+                    }
+                    setEditOpen(true)
+                  }}
+                >
+                  + 添加
+                </button>
               </div>
             </section>
             <section>
@@ -192,10 +261,30 @@ export function ImageDetailPage() {
       </div>
 
       {photo && (
+        <EditAssetDialog
+          assetId={photo.id}
+          initialTitle={photo.title}
+          initialNote={photo.note || ''}
+          initialTags={photo.tags || []}
+          initialRating={rating ?? photo.rating ?? 0}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSuccess={() => {
+            showToast('图片信息已更新')
+          }}
+        />
+      )}
+      {photo && (
         <ShareDialog assetId={photo.id} assetTitle={photo.title} open={shareOpen} onClose={() => setShareOpen(false)} />
       )}
       {photo && (
         <DeleteAssetDialog assetId={photo.id} assetTitle={photo.title} listPath="/images" open={delOpen} onClose={() => setDelOpen(false)} />
+      )}
+
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-lg bg-slate-900/90 px-4 py-2 text-xs font-medium text-white shadow-lg backdrop-blur transition-all">
+          {toastMsg}
+        </div>
       )}
     </div>
   )

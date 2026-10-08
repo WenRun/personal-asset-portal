@@ -235,6 +235,7 @@ function toPhoto(r: RawAsset): Photo {
     // 瀑布流高度：按真实宽高比派生；无 EXIF 尺寸时退回哈希伪随机
     displayH: w > 0 && h > 0 ? Math.min(440, Math.max(120, Math.round((300 * h) / w))) : 170 + (hueFromId(r.id) % 140),
     tags: (r.tags ?? []).map((t) => t.name),
+    note: r.note ?? '',
     rating: r.rating ?? 0,
     favorite: r.is_favorite,
   }
