@@ -202,6 +202,9 @@ function toClip(r: RawAsset): Clip {
     codec: r.video_codec ?? '',
     tags: (r.tags ?? []).map((t) => t.name),
     note: r.note ?? '',
+    series_id: r.series_id ?? null,
+    episode: r.episode ?? null,
+    cover_url: r.cover_url ?? null,
   }
 }
 

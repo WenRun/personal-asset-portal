@@ -17,5 +17,8 @@ web/dist/
 # 系统
 .DS_Store
 
+# 本地 GUI 测试截图（浏览器自动化验证产物，不入库）
+gui-test-screenshots/
+
 # IDE
 .idea/
