@@ -46,6 +46,7 @@ export function VideoDetailPage() {
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
   const [rate, setRate] = useState(1)
+  const [speedOpen, setSpeedOpen] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [toastText, setToastText] = useState<string | null>(null)
   const [scrubHover, setScrubHover] = useState<{ time: number; pct: number } | null>(null)
@@ -249,6 +250,14 @@ export function VideoDetailPage() {
       v.removeEventListener('leavepictureinpicture', onLeave)
     }
   }, [video])
+
+  // 点击外部关闭倍速浮层
+  useEffect(() => {
+    if (!speedOpen) return
+    const closeMenu = () => setSpeedOpen(false)
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [speedOpen])
 
   // 键盘快捷键（参考 B 站：空格暂停、F 全屏、W 网页全屏、P 画中画、M 静音、左右快进退、上下音量）
   useEffect(() => {
@@ -462,6 +471,13 @@ export function VideoDetailPage() {
 
               {/* 底部控制栏：参考哔哩哔哩（鼠标静止自动隐藏、进度条 hover 预览、倍速、音量滑动、画中画、网页全屏、全屏） */}
               <div
+                onMouseEnter={() => {
+                  if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current)
+                  setControlsVisible(true)
+                }}
+                onMouseLeave={() => {
+                  resetHideTimer()
+                }}
                 className={cn(
                   'absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-4 pb-3 pt-12 transition-opacity duration-300',
                   !controlsVisible && playing ? 'opacity-0 pointer-events-none' : 'opacity-100',
@@ -536,32 +552,60 @@ export function VideoDetailPage() {
                       </span>
                     )}
 
-                    {/* 倍速选择菜单 */}
-                    <div className="relative group/speed">
+                    {/* 倍速选择菜单（支持悬停呼出与点击固定，带连贯触控区域） */}
+                    <div
+                      className="relative group/speed py-1"
+                      onMouseEnter={() => {
+                        if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current)
+                        setControlsVisible(true)
+                      }}
+                    >
                       <button
-                        className="rounded px-1.5 py-0.5 text-xs font-medium text-white/90 hover:bg-white/15 transition select-none"
-                        title="播放倍速"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSpeedOpen((prev) => !prev)
+                        }}
+                        className={cn(
+                          'rounded px-1.5 py-0.5 text-xs font-medium text-white/90 hover:bg-white/15 transition select-none',
+                          (speedOpen || rate !== 1) && 'text-brand-400 bg-white/10 font-bold',
+                        )}
+                        title="播放倍速（点击或悬停切换）"
                       >
                         {rate === 1 ? '倍速' : `${rate}x`}
                       </button>
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/speed:flex flex-col bg-slate-900/95 backdrop-blur-md rounded-lg py-1 px-1 shadow-2xl border border-white/10 z-30 min-w-[60px]">
-                        {[2.0, 1.5, 1.25, 1.0, 0.75, 0.5].map((r) => (
-                          <button
-                            key={r}
-                            onClick={(e) => { e.stopPropagation(); changeRate(r) }}
-                            className={cn(
-                              'px-2 py-1 text-xs rounded text-center transition hover:bg-white/20',
-                              rate === r ? 'text-brand-400 font-bold bg-white/10' : 'text-white/80',
-                            )}
-                          >
-                            {r}x
-                          </button>
-                        ))}
+
+                      {/* 浮层面板：用 pb-2 作为连贯的触控桥，消除按钮与选项间的悬停盲区 */}
+                      <div
+                        className={cn(
+                          'absolute bottom-full left-1/2 -translate-x-1/2 pb-2 z-30',
+                          speedOpen ? 'block' : 'hidden group-hover/speed:block',
+                        )}
+                      >
+                        <div className="flex flex-col bg-slate-900/95 backdrop-blur-md rounded-lg py-1 px-1 shadow-2xl border border-white/10 min-w-[64px]">
+                          {[2.0, 1.5, 1.25, 1.0, 0.75, 0.5].map((r) => (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                changeRate(r)
+                                setSpeedOpen(false)
+                              }}
+                              className={cn(
+                                'px-2.5 py-1 text-xs rounded text-center transition hover:bg-white/20',
+                                rate === r ? 'text-brand-400 font-bold bg-white/10' : 'text-white/80',
+                              )}
+                            >
+                              {r}x
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
                     {/* 音量控制（hover 滑动条） */}
-                    <div className="flex items-center gap-1 group/vol">
+                    <div className="flex items-center group/vol py-1">
                       <button
                         onClick={toggleMute}
                         title={muted ? '取消静音 (M)' : '静音 (M)'}
@@ -569,7 +613,7 @@ export function VideoDetailPage() {
                       >
                         {muted || volume === 0 ? <VolumeX className="h-4 w-4 text-rose-400" /> : <Volume2 className="h-4 w-4" />}
                       </button>
-                      <div className="w-0 overflow-hidden group-hover/vol:w-16 transition-all duration-200 flex items-center">
+                      <div className="w-0 overflow-hidden group-hover/vol:w-16 transition-all duration-200 flex items-center pl-1">
                         <input
                           type="range"
                           min="0"
