@@ -383,7 +383,32 @@ export function VideoDetailPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <BackLink to="/videos">视频墙</BackLink>
+      {/* 顶栏：左侧返回“视频墙”，右侧操作按钮组 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <BackLink to="/videos">视频墙</BackLink>
+        <div className="flex flex-wrap items-center gap-2">
+          {video.playable ? (
+            <Button onClick={toggle}>{playing ? '暂停' : '播放'}</Button>
+          ) : (
+            <Button disabled>仅下载（不支持在线播放）</Button>
+          )}
+          <a href={api.downloadUrl(video.id)}>
+            <Button variant="outline">下载{isClip ? '视频' : '本集'}</Button>
+          </a>
+          {!isClip && <Button variant="outline">★ 评分</Button>}
+          <Button variant="outline">编辑</Button>
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setShareOpen(true)}>
+              <Link2 className="h-3.5 w-3.5" />分享
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" className="text-rose-600 hover:bg-rose-50" onClick={() => setDelOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" />删除
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="mt-4 flex flex-col gap-6 xl:flex-row">
         <div className="min-w-0 flex-1 space-y-4">
@@ -691,29 +716,6 @@ export function VideoDetailPage() {
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {video.playable ? (
-              <Button onClick={toggle}>{playing ? '暂停' : '播放'}</Button>
-            ) : (
-              <Button disabled>仅下载（不支持在线播放）</Button>
-            )}
-            <a href={api.downloadUrl(video.id)}>
-              <Button variant="outline">下载{isClip ? '视频' : '本集'}</Button>
-            </a>
-            {!isClip && <Button variant="outline">★ 评分</Button>}
-            <Button variant="outline">编辑</Button>
-            {isAdmin && (
-              <Button variant="outline" onClick={() => setShareOpen(true)}>
-                <Link2 className="h-3.5 w-3.5" />分享
-              </Button>
-            )}
-            {isAdmin && (
-              <Button variant="outline" className="text-rose-600 hover:bg-rose-50" onClick={() => setDelOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5" />删除
-              </Button>
-            )}
           </div>
         </div>
 
