@@ -153,6 +153,8 @@ function toFont(r: RawAsset): FontFamily {
     id: r.id,
     family: r.family ?? r.title,
     familyEn: '',
+    title: r.title,
+    note: r.note ?? '',
     variable: !!r.is_variable,
     axes: (r.meta?.variable_axes as FontFamily['axes']) ?? [],
     files: [{ styleName: r.style ?? `W${r.weight ?? 400}`, weight: r.weight ?? 400, italic: !!r.italic, format: ext || 'TTF', sizeMB: +(r.size_bytes / 1048576).toFixed(1) }],

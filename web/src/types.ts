@@ -15,6 +15,8 @@ export interface FontFamily {
   id: string
   family: string
   familyEn: string
+  title?: string
+  note?: string
   variable: boolean
   axes: FontAxis[]
   files: FontFile[]

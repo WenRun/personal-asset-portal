@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Heart, Info, Link2, Trash2, X } from 'lucide-react'
+import { Heart, Info, Link2, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { useAuth } from '@/stores/auth'
@@ -9,6 +9,7 @@ import { useFontFace } from '@/lib/useFontFace'
 import { BackLink, Badge, Button } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
+import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { cn } from '@/lib/utils'
 
 /** 字体详情（§5.1）：同字族字重列表 + FontFace 实时样张 + 可变轴 + 字符集覆盖率 */
@@ -16,9 +17,16 @@ export function FontDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
+  const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  const showToast = (text: string) => {
+    setToastMsg(text)
+    window.setTimeout(() => setToastMsg((curr) => (curr === text ? null : curr)), 2000)
+  }
   const { data: font } = useQuery({ queryKey: ['font', id], queryFn: () => api.font(id!), enabled: !!id })
   const { data: allFonts } = useQuery({ queryKey: ['fonts'], queryFn: () => api.fonts() })
   const { data: charset } = useQuery({
@@ -148,7 +156,18 @@ export function FontDetailPage() {
             <a href={api.fontFamilyPackUrl(font.id)} className="flex-1" title={`下载 ${font.family} 全部 ${siblings?.length ?? 1} 个字重文件的 ZIP`}>
               <Button className="w-full">下载字族 (.zip)</Button>
             </a>
-            <Button variant="outline">编辑</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!isAdmin) {
+                  showToast('只有管理员可以编辑字体元信息')
+                  return
+                }
+                setEditOpen(true)
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />编辑
+            </Button>
             {isAdmin && <Button variant="outline" title="生成公开分享链接" onClick={() => setShareOpen(true)}><Link2 className="h-3.5 w-3.5" />分享</Button>}
             {isAdmin && <Button variant="outline" className="text-rose-600 hover:bg-rose-50" title="删除该字体" onClick={() => setDelOpen(true)}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
@@ -197,7 +216,34 @@ export function FontDetailPage() {
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">设计者</dt><dd>{font.designer || '—'}</dd></div>
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">许可</dt><dd>{font.license ? <span className="line-clamp-2 text-xs text-slate-500">{font.license}</span> : '—'}</dd></div>
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">语言</dt><dd className="flex flex-wrap gap-1.5">{font.languages.map((l) => <Badge key={l}>{l}</Badge>)}</dd></div>
-              <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">标签</dt><dd className="flex flex-wrap gap-1.5">{font.tags.map((t) => <button key={t} className="transition hover:opacity-75" title={`查看「${t}」标签下的字体`} onClick={() => nav(`/fonts?tag=${encodeURIComponent(t)}`)}><Badge>{t}</Badge></button>)}<button className="text-xs text-slate-400 hover:text-brand-600">+ 添加</button></dd></div>
+              <div className="flex py-2">
+                <dt className="w-20 shrink-0 text-slate-400">标签</dt>
+                <dd className="flex flex-wrap items-center gap-1.5">
+                  {font.tags.map((t) => (
+                    <button key={t} className="transition hover:opacity-75" title={`查看「${t}」标签下的字体`} onClick={() => nav(`/fonts?tag=${encodeURIComponent(t)}`)}>
+                      <Badge>{t}</Badge>
+                    </button>
+                  ))}
+                  <button
+                    className="text-xs text-slate-400 hover:text-brand-600 transition"
+                    onClick={() => {
+                      if (!isAdmin) {
+                        showToast('只有管理员可以编辑标签')
+                        return
+                      }
+                      setEditOpen(true)
+                    }}
+                  >
+                    + 添加
+                  </button>
+                </dd>
+              </div>
+              {font.note && (
+                <div className="flex py-2">
+                  <dt className="w-20 shrink-0 text-slate-400">备注</dt>
+                  <dd className="text-slate-600 leading-relaxed break-words">{font.note}</dd>
+                </div>
+              )}
             </dl>
           </section>
 
@@ -212,10 +258,30 @@ export function FontDetailPage() {
       </aside>
 
       {font && (
+        <EditAssetDialog
+          assetId={current?.id ?? font.id}
+          initialTitle={current?.family || current?.title || font.family}
+          initialNote={current?.note || font.note || ''}
+          initialTags={current?.tags || font.tags || []}
+          initialRating={current?.rating || font.rating || 0}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSuccess={() => {
+            showToast('字体信息已更新')
+          }}
+        />
+      )}
+      {font && (
         <ShareDialog assetId={font.id} assetTitle={font.family} open={shareOpen} onClose={() => setShareOpen(false)} />
       )}
       {font && (
         <DeleteAssetDialog assetId={font.id} assetTitle={font.family} listPath="/fonts" open={delOpen} onClose={() => setDelOpen(false)} />
+      )}
+
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-lg bg-slate-900/90 px-4 py-2 text-xs font-medium text-white shadow-lg backdrop-blur transition-all">
+          {toastMsg}
+        </div>
       )}
     </div>
   )
