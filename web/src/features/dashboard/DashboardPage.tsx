@@ -1,8 +1,34 @@
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
-import { assetHit } from '@/lib/search'
+import { api, API_BASE } from '@/api/client'
+import { assetHit, type Hit } from '@/lib/search'
 import { Badge, HueCover, PageHeader } from '@/components/ui'
+
+function RecentCardCover({ hit }: { hit: Hit }) {
+  const [failed, setFailed] = useState(false)
+  const fullCoverUrl = hit.coverUrl ? (hit.coverUrl.startsWith('http') ? hit.coverUrl : `${API_BASE}${hit.coverUrl}`) : null
+
+  if (fullCoverUrl && !failed) {
+    return (
+      <div className="relative aspect-square overflow-hidden rounded-lg bg-slate-100 shadow-sm transition hover:opacity-90">
+        <img
+          src={fullCoverUrl}
+          alt={hit.title}
+          loading="lazy"
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <HueCover hue={hit.hue ?? 245} className="grid aspect-square place-items-center rounded-lg text-2xl text-white/90 transition hover:opacity-90">
+      <span>{hit.glyph ?? '·'}</span>
+    </HueCover>
+  )
+}
 
 export function DashboardPage() {
   const qc = useQueryClient()
@@ -66,11 +92,9 @@ export function DashboardPage() {
           </div>
           <div className="grid grid-cols-4 gap-2">
             {recent.slice(0, 8).map((h) => (
-              <div key={h.to} className="cursor-pointer" onClick={() => nav(h.to)}>
-                <HueCover hue={h.hue ?? 245} className="grid aspect-square place-items-center rounded-lg text-2xl text-white/90 transition hover:opacity-90">
-                  <span>{h.glyph ?? '·'}</span>
-                </HueCover>
-                <div className="mt-1 truncate text-xs font-medium">{h.title}</div>
+              <div key={h.to} className="group cursor-pointer" onClick={() => nav(h.to)}>
+                <RecentCardCover hit={h} />
+                <div className="mt-1 truncate text-xs font-medium group-hover:text-brand-600">{h.title}</div>
                 <div className="truncate text-[10px] text-slate-400">{h.sub}</div>
               </div>
             ))}

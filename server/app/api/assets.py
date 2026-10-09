@@ -14,7 +14,7 @@ from app.core.deps import get_app_settings, get_current_user, require_admin, req
 from app.core.db import get_db
 from app.core.errors import bad_request, forbidden, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicTrack, Tag, User, VideoDetail
+from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicAlbum, MusicTrack, Tag, User, VideoDetail
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -66,7 +66,43 @@ async def recent(limit: int = Query(12, description="返回条数，默认 12（
             .limit(max(1, min(limit, 50)))
         )
     ).scalars().all()
-    return [_item(a) for a in rows]
+
+    # 批量解析封面，避免 N+1
+    video_ids = [a.id for a in rows if a.asset_type == "video"]
+    video_cover_map: dict[uuid.UUID, str] = {}
+    if video_ids:
+        v_rows = (await db.execute(
+            select(VideoDetail.asset_id, VideoDetail.cover_path)
+            .where(VideoDetail.asset_id.in_(video_ids))
+        )).all()
+        video_cover_map = {aid: f"/api/videos/cover/{cp}" for aid, cp in v_rows if cp}
+
+    music_ids = [a.id for a in rows if a.asset_type == "music"]
+    music_cover_map: dict[uuid.UUID, str] = {}
+    if music_ids:
+        m_rows = (await db.execute(
+            select(MusicTrack.asset_id, MusicAlbum.id)
+            .join(MusicAlbum, MusicAlbum.id == MusicTrack.album_id)
+            .where(MusicTrack.asset_id.in_(music_ids), MusicAlbum.cover_path.isnot(None))
+        )).all()
+        music_cover_map = {aid: f"/api/music/albums/{alb_id}/cover?size=256" for aid, alb_id in m_rows}
+
+    items = []
+    for a in rows:
+        it = _item(a)
+        if a.asset_type == "image":
+            it["cover_url"] = f"/api/images/{a.id}/thumbnail?size=256"
+        elif a.asset_type == "book":
+            it["cover_url"] = f"/api/books/{a.id}/cover?size=256"
+        elif a.asset_type == "font":
+            it["cover_url"] = f"/api/fonts/{a.id}/preview/specimen"
+        elif a.asset_type == "video":
+            it["cover_url"] = video_cover_map.get(a.id)
+        elif a.asset_type == "music":
+            it["cover_url"] = music_cover_map.get(a.id)
+        items.append(it)
+
+    return items
 
 
 def _cursor_encode(created_at: datetime, id_: uuid.UUID) -> str:
@@ -89,6 +125,7 @@ def _item(a: Asset) -> dict:
         "title": a.title, "file_name": a.file_name, "size_bytes": a.size_bytes,
         "mime_type": a.mime_type, "rating": a.rating, "is_favorite": a.is_favorite,
         "note": a.note, "created_at": a.created_at.isoformat(),
+        "cover_url": None,
     }
 
 

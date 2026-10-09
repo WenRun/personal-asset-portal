@@ -22,3 +22,4 @@ gui-test-screenshots/
 
 # IDE
 .idea/
+.zcode/

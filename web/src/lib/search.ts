@@ -8,6 +8,7 @@ export interface Hit {
   sub: string
   hue?: number
   glyph?: string
+  coverUrl?: string | null
 }
 
 export const GROUP_LABEL: Record<AssetType, string> = {
@@ -39,6 +40,7 @@ export function assetHit(r: RawAsset): Hit {
     sub: subs[type],
     hue: hueFromId(r.id),
     glyph: GLYPH[type],
+    coverUrl: r.cover_url ?? null,
   }
 }
 
