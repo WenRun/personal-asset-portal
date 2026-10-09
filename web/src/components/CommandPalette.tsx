@@ -21,6 +21,7 @@ export function CommandPalette() {
   const [sel, setSel] = useState(0)
   const nav = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 150)
@@ -49,19 +50,59 @@ export function CommandPalette() {
     }
   }, [open])
 
-  if (!open) return null
-
   const go = (hit?: Hit) => {
-    if (!hit) return
     setPalette(false)
-    nav(hit.to)
+    if (hit) {
+      nav(hit.to)
+    } else if (debounced.trim()) {
+      nav(`/search?q=${encodeURIComponent(debounced.trim())}`)
+    } else {
+      nav('/search')
+    }
   }
 
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(s + 1, flat.length - 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); go(flat[sel]) }
-  }
+  // 全局键盘监听：无论焦点是否在 input 上，ESC 均可关闭，上下键导航，Enter 确认
+  useEffect(() => {
+    if (!open) return
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setPalette(false)
+        return
+      }
+
+      // 输入法组词合成期间不截获
+      if (e.isComposing) return
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (flat.length > 0) {
+          setSel((s) => (s + 1) % flat.length)
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (flat.length > 0) {
+          setSel((s) => (s - 1 + flat.length) % flat.length)
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        go(flat[sel])
+      }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [open, flat, sel, debounced])
+
+  // 键盘导航联动滚动条，确保高亮项始终在视口内
+  useEffect(() => {
+    if (!open) return
+    const activeEl = listRef.current?.querySelector('[data-active="true"]')
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'nearest' })
+    }
+  }, [sel, open])
+
+  if (!open) return null
 
   let idx = -1
   return (
@@ -73,15 +114,20 @@ export function CommandPalette() {
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={onKey}
             placeholder="搜索字体、音乐、视频、书籍、图片…"
             className="flex-1 text-lg outline-none placeholder:text-slate-300"
           />
           <span className="text-[10px] text-slate-400">Meilisearch</span>
-          <kbd className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-400">ESC</kbd>
+          <kbd
+            onClick={() => setPalette(false)}
+            className="cursor-pointer rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            title="按 ESC 退出"
+          >
+            ESC
+          </kbd>
         </div>
 
-        <div className="max-h-[52vh] overflow-y-auto p-2 text-sm" onKeyDown={onKey}>
+        <div ref={listRef} className="max-h-[52vh] overflow-y-auto p-2 text-sm">
           {flat.length === 0 && (
             <div className="py-10 text-center text-slate-400">{debounced ? `没有匹配「${debounced}」的资源` : '输入关键词，或回车浏览最近资源'}</div>
           )}
@@ -97,11 +143,15 @@ export function CommandPalette() {
                 {list.map((hit) => {
                   idx += 1
                   const active = idx === sel
+                  const currentIdx = idx
                   return (
                     <div
                       key={hit.to}
+                      data-active={active ? 'true' : 'false'}
                       className={cn('flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition', active ? 'bg-brand-50' : 'hover:bg-slate-50')}
-                      onMouseEnter={() => setSel(flat.findIndex((x) => x.to === hit.to))}
+                      onMouseMove={() => {
+                        if (currentIdx !== sel) setSel(currentIdx)
+                      }}
                       onClick={() => go(hit)}
                     >
                       <HueCover hue={hit.hue ?? 245} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white">
