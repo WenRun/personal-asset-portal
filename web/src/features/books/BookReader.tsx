@@ -12,6 +12,7 @@ import {
   Maximize2,
   Minimize2,
   Moon,
+  Palette,
   RotateCcw,
   Search,
   Sun,
@@ -63,7 +64,7 @@ const THEMES: Record<ReaderTheme, ThemeConfig> = {
     barText: '#4c3f30',
     cardBg: '#ece3d2',
     activeBg: '#ded2be',
-    pdfFilter: 'sepia(0.25) brightness(0.97)',
+    pdfFilter: 'sepia(0.35) brightness(0.96)',
   },
   green: {
     id: 'green',
@@ -75,7 +76,7 @@ const THEMES: Record<ReaderTheme, ThemeConfig> = {
     barText: '#2e4830',
     cardBg: '#d6ebd4',
     activeBg: '#c3dbbf',
-    pdfFilter: 'hue-rotate(55deg) brightness(0.96)',
+    pdfFilter: 'sepia(0.35) hue-rotate(70deg) saturate(1.2) brightness(0.96)',
   },
   night: {
     id: 'night',
@@ -87,7 +88,7 @@ const THEMES: Record<ReaderTheme, ThemeConfig> = {
     barText: '#e4e4e7',
     cardBg: '#232328',
     activeBg: '#3f3f46',
-    pdfFilter: 'invert(0.88) hue-rotate(180deg) brightness(0.95)',
+    pdfFilter: 'invert(0.88) hue-rotate(180deg) brightness(0.95) contrast(1.05)',
   },
 }
 
@@ -136,6 +137,7 @@ export function BookReader({
   const [showToc, setShowToc] = useState(false)
   const [tocFilter, setTocFilter] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [pdfZoom, setPdfZoom] = useState<number>(100)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // 保存排版偏好
@@ -217,6 +219,28 @@ export function BookReader({
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
+          {/* 快速主题色彩切换指示 (日间 / 羊皮纸 / 豆沙绿 / 深夜) */}
+          <div
+            className="hidden sm:flex items-center gap-1 rounded-xl border p-1"
+            style={{ borderColor: curTheme.barBorder }}
+          >
+            {(Object.keys(THEMES) as ReaderTheme[]).map((tKey) => {
+              const cfg = THEMES[tKey]
+              const isCur = theme === tKey
+              return (
+                <button
+                  key={tKey}
+                  onClick={() => setTheme(tKey)}
+                  className={`h-5 w-5 rounded-full transition-transform ${
+                    isCur ? 'scale-110 ring-2 ring-brand-500' : 'opacity-70 hover:scale-105 hover:opacity-100'
+                  }`}
+                  style={{ backgroundColor: cfg.bg, border: `1px solid ${cfg.barBorder}` }}
+                  title={`切换为「${cfg.name}」主题`}
+                />
+              )
+            })}
+          </div>
+
           {/* 目录抽屉按钮 */}
           <button
             onClick={() => {
@@ -232,22 +256,20 @@ export function BookReader({
             <span className="hidden md:inline">目录</span>
           </button>
 
-          {/* 流式排版 Aa 设置按钮 */}
-          {!isPdf && (
-            <button
-              onClick={() => {
-                setShowSettings((v) => !v)
-                setShowToc(false)
-              }}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                showSettings ? 'bg-black/10 dark:bg-white/15' : 'hover:bg-black/5 dark:hover:bg-white/10'
-              }`}
-              title="排版与主题设置"
-            >
-              <Type className="h-4 w-4" />
-              <span className="hidden md:inline">排版</span>
-            </button>
-          )}
+          {/* 主题与排版设置按钮 (PDF 模式显示「主题」，流式模式显示「排版」) */}
+          <button
+            onClick={() => {
+              setShowSettings((v) => !v)
+              setShowToc(false)
+            }}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              showSettings ? 'bg-black/10 dark:bg-white/15' : 'hover:bg-black/5 dark:hover:bg-white/10'
+            }`}
+            title={isPdf ? '护眼主题与显示设置' : '排版与护眼主题设置'}
+          >
+            {isPdf ? <Palette className="h-4 w-4" /> : <Type className="h-4 w-4" />}
+            <span className="hidden md:inline">{isPdf ? '主题' : '排版'}</span>
+          </button>
 
           {/* 阅读模式快速切换 */}
           {!isPdf && (
@@ -340,14 +362,16 @@ export function BookReader({
           }}
         >
           <div className="mb-3 flex items-center justify-between border-b pb-2" style={{ borderColor: curTheme.barBorder }}>
-            <span className="text-xs font-bold tracking-wider opacity-80">阅读排版与护眼主题</span>
-            <button onClick={() => setShowSettings(false)} className="rounded p-1 hover:bg-black/5">
+            <span className="text-xs font-bold tracking-wider opacity-80">
+              {isPdf ? 'PDF 护眼主题与显示设置' : '阅读排版与护眼主题'}
+            </span>
+            <button onClick={() => setShowSettings(false)} className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10">
               <X className="h-4 w-4" />
             </button>
           </div>
 
           <div className="space-y-4 text-xs">
-            {/* 主题选择 */}
+            {/* 主题选择 (通用) */}
             <div>
               <div className="mb-2 font-medium opacity-70">色彩主题</div>
               <div className="grid grid-cols-4 gap-2">
@@ -373,99 +397,136 @@ export function BookReader({
               </div>
             </div>
 
-            {/* 字号调节 */}
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="font-medium opacity-70">字号大小</span>
-                <span className="font-mono text-xs">{fontSize}px</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 flex-1 text-xs"
-                  disabled={fontSize <= 13}
-                  onClick={() => setFontSize((s) => Math.max(13, s - 1))}
-                >
-                  A- 缩小
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 flex-1 text-xs"
-                  disabled={fontSize >= 25}
-                  onClick={() => setFontSize((s) => Math.min(25, s + 1))}
-                >
-                  A+ 放大
-                </Button>
-              </div>
-            </div>
+            {isPdf ? (
+              <>
+                {/* PDF 专属缩放控制 */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="font-medium opacity-70">页面缩放</span>
+                    <span className="font-mono text-xs">{pdfZoom}%</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[75, 100, 125, 150].map((z) => (
+                      <button
+                        key={z}
+                        onClick={() => setPdfZoom(z)}
+                        className={`rounded-lg py-1.5 text-center font-medium transition ${
+                          pdfZoom === z ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                        }`}
+                      >
+                        {z}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* 行间距 */}
-            <div>
-              <div className="mb-1.5 font-medium opacity-70">行距</div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: '紧凑', val: 1.5 },
-                  { label: '舒适', val: 1.8 },
-                  { label: '宽松', val: 2.1 },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    onClick={() => setLineHeight(item.val)}
-                    className={`rounded-lg py-1.5 text-center font-medium transition ${
-                      lineHeight === item.val ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+                {/* PDF 护眼模式温馨提示 */}
+                <div className="rounded-xl border border-black/5 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5">
+                  <div className="flex items-start gap-2 text-[11px] leading-relaxed opacity-80">
+                    <span className="shrink-0 text-base">💡</span>
+                    <span>
+                      PDF 采用高精度版面栅格化渲染。切换色彩主题将自动应用自适应滤镜，在完整保留原版排版与图表的同时，实现柔和暖阳与深夜暗色反色护眼。
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* 字号调节 */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="font-medium opacity-70">字号大小</span>
+                    <span className="font-mono text-xs">{fontSize}px</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 flex-1 text-xs"
+                      disabled={fontSize <= 13}
+                      onClick={() => setFontSize((s) => Math.max(13, s - 1))}
+                    >
+                      A- 缩小
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 flex-1 text-xs"
+                      disabled={fontSize >= 25}
+                      onClick={() => setFontSize((s) => Math.min(25, s + 1))}
+                    >
+                      A+ 放大
+                    </Button>
+                  </div>
+                </div>
 
-            {/* 字体族 */}
-            <div>
-              <div className="mb-1.5 font-medium opacity-70">字体风格</div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'sans', label: '无衬线' },
-                  { id: 'serif', label: '宋体' },
-                  { id: 'kai', label: '楷体' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setFontFamily(item.id as ReaderFontFamily)}
-                    className={`rounded-lg py-1.5 text-center font-medium transition ${
-                      fontFamily === item.id ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+                {/* 行间距 */}
+                <div>
+                  <div className="mb-1.5 font-medium opacity-70">行距</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: '紧凑', val: 1.5 },
+                      { label: '舒适', val: 1.8 },
+                      { label: '宽松', val: 2.1 },
+                    ].map((item) => (
+                      <button
+                        key={item.label}
+                        onClick={() => setLineHeight(item.val)}
+                        className={`rounded-lg py-1.5 text-center font-medium transition ${
+                          lineHeight === item.val ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* 版心宽度 */}
-            <div>
-              <div className="mb-1.5 font-medium opacity-70">版心宽度</div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'max-w-xl', label: '紧凑' },
-                  { id: 'max-w-3xl', label: '适中' },
-                  { id: 'max-w-5xl', label: '宽版' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setMaxWidth(item.id)}
-                    className={`rounded-lg py-1.5 text-center font-medium transition ${
-                      maxWidth === item.id ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+                {/* 字体族 */}
+                <div>
+                  <div className="mb-1.5 font-medium opacity-70">字体风格</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'sans', label: '无衬线' },
+                      { id: 'serif', label: '宋体' },
+                      { id: 'kai', label: '楷体' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setFontFamily(item.id as ReaderFontFamily)}
+                        className={`rounded-lg py-1.5 text-center font-medium transition ${
+                          fontFamily === item.id ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 版心宽度 */}
+                <div>
+                  <div className="mb-1.5 font-medium opacity-70">版心宽度</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'max-w-xl', label: '紧凑' },
+                      { id: 'max-w-3xl', label: '适中' },
+                      { id: 'max-w-5xl', label: '宽版' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setMaxWidth(item.id)}
+                        className={`rounded-lg py-1.5 text-center font-medium transition ${
+                          maxWidth === item.id ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -476,6 +537,8 @@ export function BookReader({
           <PdfReaderCore
             book={book}
             theme={theme}
+            zoomLevel={pdfZoom}
+            onZoomChange={setPdfZoom}
             showBars={showBars}
             onToggleBars={() => setShowBars((b) => !b)}
             onProgress={onProgress}
@@ -911,18 +974,21 @@ function FlowReaderCore({
 function PdfReaderCore({
   book,
   theme,
+  zoomLevel,
+  onZoomChange,
   showBars,
   onToggleBars,
   onProgress,
 }: {
   book: Book
   theme: ReaderTheme
+  zoomLevel: number
+  onZoomChange: React.Dispatch<React.SetStateAction<number>>
   showBars: boolean
   onToggleBars: () => void
   onProgress: (p: { pct: number; chapter?: number }) => void
 }) {
   const [currentPage, setCurrentPage] = useState(1)
-  const [zoomLevel, setZoomLevel] = useState<number>(100)
   const [imgLoading, setImgLoading] = useState(true)
   const [imgError, setImgError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
@@ -1038,9 +1104,9 @@ function PdfReaderCore({
               setImgLoading(false)
               setImgError(true)
             }}
-            className={`max-h-[85vh] max-w-full rounded-md shadow-2xl transition-all duration-150 ${
-              imgLoading ? 'opacity-20' : 'opacity-100'
-            }`}
+            className={`max-h-[85vh] max-w-full rounded-md transition-all duration-150 ${
+              theme === 'night' ? 'ring-1 ring-white/15' : 'shadow-2xl'
+            } ${imgLoading ? 'opacity-20' : 'opacity-100'}`}
             style={{
               transform: `scale(${zoomLevel / 100})`,
               filter: curTheme.pdfFilter || 'none',
@@ -1124,7 +1190,7 @@ function PdfReaderCore({
         <div className="flex items-center gap-2">
           {/* 缩放按钮 */}
           <button
-            onClick={() => setZoomLevel((z) => Math.max(50, z - 15))}
+            onClick={() => onZoomChange((z) => Math.max(50, z - 15))}
             className="rounded p-1 opacity-70 hover:opacity-100"
             title="缩小"
           >
@@ -1132,7 +1198,7 @@ function PdfReaderCore({
           </button>
           <span className="text-[11px] font-mono opacity-70">{zoomLevel}%</span>
           <button
-            onClick={() => setZoomLevel((z) => Math.min(200, z + 15))}
+            onClick={() => onZoomChange((z) => Math.min(200, z + 15))}
             className="rounded p-1 opacity-70 hover:opacity-100"
             title="放大"
           >
