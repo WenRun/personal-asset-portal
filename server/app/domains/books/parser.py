@@ -211,10 +211,64 @@ def _txt_to_epub_bytes(text: str, title: str, author: str = "") -> bytes:
     return buf.getvalue()
 
 
+def _split_mobi_html(raw_html: str, title_hint: str) -> list[tuple[str, str]]:
+    """智能拆分 MOBI HTML：优先漫画按 pagebreak 切分，小说按回/章/节切分，长篇按段落回退"""
+    # 策略 A: 漫画/画册按 <mbp:pagebreak> 切分
+    pb_parts = re.split(r"<mbp:pagebreak[^>]*>", raw_html, flags=re.I)
+    pb_valid = [p.strip() for p in pb_parts if len(re.sub(r"<[^>]+>|\s+", "", p)) > 0 or "<img" in p.lower()]
+    if len(pb_valid) >= 2:
+        return [(f"第 {i + 1} 页", part) for i, part in enumerate(pb_valid)]
+
+    # 策略 B: 传统小说按章节标题切分
+    chap_pattern = re.compile(
+        r"<(?:p|h[1-6]|div)[^>]*>\s*(?:(?:[^\n<]{0,25}\s+)?(第[0-9一二三四五六七八九十百千]+[回章节卷部篇][^\n<，。！？]{1,50}|Chapter\s+[0-9]+[^\n<]{0,40}|序言|前言|楔子|尾声|后记))\s*</(?:p|h[1-6]|div)>",
+        re.I,
+    )
+    matches = list(chap_pattern.finditer(raw_html))
+    if len(matches) >= 2:
+        chapters = []
+        if matches[0].start() > 0:
+            pre = raw_html[:matches[0].start()].strip()
+            if len(re.sub(r"<[^>]+>|\s+", "", pre)) > 20:
+                chapters.append(("序言 / 前言", pre))
+        for i, m in enumerate(matches):
+            ch_title = m.group(1).strip()
+            start = m.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(raw_html)
+            content = raw_html[start:end].strip()
+            chapters.append((ch_title, content))
+        return chapters
+
+    # 策略 C: 超长无结构单页文本按段落分块（约 3500 字一节）
+    if len(raw_html) > 25000:
+        p_tags = re.findall(r"(<p[^>]*>[\s\S]*?</p>)", raw_html, re.I)
+        if len(p_tags) >= 10:
+            chapters = []
+            chunk = []
+            chunk_len = 0
+            ch_idx = 1
+            for p in p_tags:
+                chunk.append(p)
+                chunk_len += len(re.sub(r"<[^>]+>", "", p))
+                if chunk_len >= 3500:
+                    chapters.append((f"第 {ch_idx} 节", "".join(chunk)))
+                    ch_idx += 1
+                    chunk = []
+                    chunk_len = 0
+            if chunk:
+                chapters.append((f"第 {ch_idx} 节", "".join(chunk)))
+            if len(chapters) >= 2:
+                return chapters
+
+    return [("正文", raw_html)]
+
+
 def _mobi7_to_epub_bytes(mobi7_dir: Path, title: str, author: str = "") -> bytes:
-    """将解包出的旧版 mobi7 目录转换为标准 EPUB 字节流"""
+    """将解包出的旧版 mobi7 目录转换为标准多章节 EPUB 字节流，递归包含所有图片资源"""
     html_file = mobi7_dir / "book.html"
     raw_html = html_file.read_text(encoding="utf-8", errors="ignore") if html_file.exists() else "<html><body><p>正文</p></body></html>"
+
+    chapters = _split_mobi_html(raw_html, title)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
@@ -226,21 +280,47 @@ def _mobi7_to_epub_bytes(mobi7_dir: Path, title: str, author: str = "") -> bytes
 
         manifest_items = [
             '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
-            '<item id="c0" href="chapter_0.xhtml" media-type="application/xhtml+xml"/>',
         ]
+        spine_items = []
+        nav_items = []
 
-        for f in mobi7_dir.iterdir():
-            if f.is_file() and f.name != "book.html":
-                ext = f.suffix.lower()
-                mtype = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png" if ext == ".png" else "application/octet-stream"
-                z.write(f, f"OEBPS/{f.name}")
-                manifest_items.append(f'<item id="img_{f.stem}" href="{f.name}" media-type="{mtype}"/>')
+        # 1. 递归写入 mobi7 目录下所有图片/样式资产 (保持 Images/ 相对路径)
+        asset_count = 0
+        for root, dirs, files in os.walk(mobi7_dir):
+            for f in files:
+                if f in ("book.html", "toc.ncx", "content.opf"):
+                    continue
+                fpath = Path(root) / f
+                rel = fpath.relative_to(mobi7_dir).as_posix()
+                z.write(fpath, f"OEBPS/{rel}")
+                ext = fpath.suffix.lower()
+                mtype = (
+                    "image/jpeg" if ext in (".jpg", ".jpeg")
+                    else "image/png" if ext == ".png"
+                    else "image/gif" if ext == ".gif"
+                    else "image/webp" if ext == ".webp"
+                    else "image/svg+xml" if ext == ".svg"
+                    else "text/css" if ext == ".css"
+                    else "application/octet-stream"
+                )
+                manifest_items.append(f'<item id="asset_{asset_count}" href="{rel}" media-type="{mtype}"/>')
+                asset_count += 1
 
-        xhtml = f"""<?xml version="1.0" encoding="utf-8"?>
+        # 2. 写入拆分后的各个章节 XHTML
+        for idx, (ch_title, ch_body) in enumerate(chapters):
+            href = f"chapter_{idx}.xhtml"
+            manifest_items.append(f'<item id="c_{idx}" href="{href}" media-type="application/xhtml+xml"/>')
+            spine_items.append(f'<itemref idref="c_{idx}"/>')
+            safe_title = html.escape(ch_title)
+            nav_items.append(
+                f'<navPoint id="np_{idx}" playOrder="{idx + 1}"><navLabel><text>{safe_title}</text></navLabel><content src="{href}"/></navPoint>'
+            )
+
+            xhtml = f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <title>{html.escape(title)}</title>
+  <title>{safe_title}</title>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <style type="text/css">
     body {{ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.8; margin: 1em; }}
@@ -248,10 +328,10 @@ def _mobi7_to_epub_bytes(mobi7_dir: Path, title: str, author: str = "") -> bytes
   </style>
 </head>
 <body>
-  {raw_html}
+  {ch_body}
 </body>
 </html>"""
-        z.writestr("OEBPS/chapter_0.xhtml", xhtml)
+            z.writestr(f"OEBPS/{href}", xhtml)
 
         opf = f"""<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="2.0">
@@ -264,7 +344,7 @@ def _mobi7_to_epub_bytes(mobi7_dir: Path, title: str, author: str = "") -> bytes
     {''.join(manifest_items)}
   </manifest>
   <spine toc="ncx">
-    <itemref idref="c0"/>
+    {''.join(spine_items)}
   </spine>
 </package>"""
         z.writestr("OEBPS/content.opf", opf)
@@ -273,13 +353,12 @@ def _mobi7_to_epub_bytes(mobi7_dir: Path, title: str, author: str = "") -> bytes
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <docTitle><text>{html.escape(title)}</text></docTitle>
   <navMap>
-    <navPoint id="np0" playOrder="1">
-      <navLabel><text>正文</text></navLabel>
-      <content src="chapter_0.xhtml"/>
-    </navPoint>
+    {''.join(nav_items)}
   </navMap>
 </ncx>"""
         z.writestr("OEBPS/toc.ncx", ncx)
+
+    return buf.getvalue()
 
     return buf.getvalue()
 
@@ -419,7 +498,25 @@ def _parse_mobi_azw3(path: Path, meta: dict, title_hint: str, ext: str) -> dict:
         elif os.path.exists(extracted):
             extracted_path = Path(extracted)
             target_dir = extracted_path.parent if extracted_path.is_file() else extracted_path
-            epub_bytes = _mobi7_to_epub_bytes(target_dir, title_hint, "")
+            mobi_title = title_hint
+            mobi_author = ""
+            opf_file = target_dir / "content.opf"
+            if opf_file.exists():
+                try:
+                    opf_tree = ET.fromstring(opf_file.read_bytes())
+                    t_el = opf_tree.find(".//{http://purl.org/dc/elements/1.1/}title")
+                    if t_el is not None and t_el.text and t_el.text.strip():
+                        mobi_title = t_el.text.strip()
+                    a_el = opf_tree.find(".//{http://purl.org/dc/elements/1.1/}creator")
+                    if a_el is not None and a_el.text and a_el.text.strip():
+                        mobi_author = a_el.text.strip()
+                except Exception:
+                    pass
+            epub_bytes = _mobi7_to_epub_bytes(target_dir, mobi_title, mobi_author)
+            if mobi_title and mobi_title != title_hint:
+                parsed_meta["title"] = mobi_title
+            if mobi_author:
+                parsed_meta.setdefault("fields", {})["authors"] = [mobi_author]
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 

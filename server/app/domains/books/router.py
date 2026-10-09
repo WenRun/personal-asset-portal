@@ -242,15 +242,23 @@ async def pdf_page(asset_id: uuid.UUID, page_num: int, dpi: int = Query(150, ge=
 
     import pymupdf
 
-    doc = pymupdf.open(str(raw_path))
-    if page_num < 1 or page_num > doc.page_count:
-        doc.close()
-        raise not_found(f"页码超出范围: 1..{doc.page_count}")
+    doc = None
+    try:
+        doc = pymupdf.open(str(raw_path))
+        if page_num < 1 or page_num > doc.page_count:
+            raise not_found(f"页码超出范围: 1..{doc.page_count}")
 
-    page = doc[page_num - 1]
-    pix = page.get_pixmap(dpi=dpi)
-    data = pix.tobytes("webp")
-    doc.close()
+        page = doc[page_num - 1]
+        pix = page.get_pixmap(dpi=dpi)
+        try:
+            data = pix.tobytes("jpg")
+            media = "image/jpeg"
+        except Exception:
+            data = pix.tobytes("png")
+            media = "image/png"
 
-    return Response(content=data, media_type="image/webp",
-                    headers={"Cache-Control": "public, max-age=86400"})
+        return Response(content=data, media_type=media,
+                        headers={"Cache-Control": "public, max-age=86400"})
+    finally:
+        if doc is not None:
+            doc.close()

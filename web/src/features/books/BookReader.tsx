@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlignJustify,
@@ -8,9 +8,11 @@ import {
   ChevronRight,
   Columns,
   List,
+  Loader2,
   Maximize2,
   Minimize2,
   Moon,
+  RotateCcw,
   Search,
   Sun,
   Type,
@@ -533,13 +535,17 @@ function FlowReaderCore({
   onToggleBars: () => void
   onProgress: (p: { pct: number; chapter?: number }) => void
 }) {
-  const [chapterIdx, setChapterIdx] = useState(() => Math.min(Math.max(0, initialChapter), Math.max(0, chapters.length - 1)))
+  const [chapterIdx, setChapterIdx] = useState(() =>
+    Math.min(Math.max(0, initialChapter), Math.max(0, chapters.length - 1))
+  )
   const [pageIndex, setPageIndex] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const [targetPageOnLoad, setTargetPageOnLoad] = useState<number | 'last' | null>(null)
 
-  const viewportRef = useRef<HTMLDivElement>(null)
-  const contentWrapperRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const contentInnerRef = useRef<HTMLDivElement>(null)
+  const lastWheelTime = useRef(0)
+  const isScrollingToPage = useRef(false)
 
   // 监听外部目录跳章事件
   useEffect(() => {
@@ -547,8 +553,7 @@ function FlowReaderCore({
       const { chapter } = (e as CustomEvent<{ chapter: number }>).detail
       if (chapter >= 0 && chapter < chapters.length) {
         setChapterIdx(chapter)
-        setPageIndex(0)
-        scrollRef.current?.scrollTo({ top: 0 })
+        setTargetPageOnLoad(0)
       }
     }
     window.addEventListener('reader-jump-chapter', handleJump)
@@ -573,28 +578,61 @@ function FlowReaderCore({
       .replace(/javascript:/gi, '')
   }, [rawHtml])
 
-  // 计算多栏仿真分页的页数
-  useLayoutEffect(() => {
-    if (mode !== 'paged' || !viewportRef.current || !contentWrapperRef.current || !rawHtml) return
+  // 计算视口几何尺寸与真实总页数
+  const recomputePages = useCallback(() => {
+    const container = containerRef.current
+    if (!container) return
+    const viewportH = container.clientHeight
+    const contentH = container.scrollHeight
+    if (viewportH <= 0) return
 
-    const computePages = () => {
-      const vp = viewportRef.current
-      const cw = contentWrapperRef.current
-      if (!vp || !cw) return
-      const vpWidth = vp.clientWidth
-      const scrollW = cw.scrollWidth
-      const pages = Math.max(1, Math.ceil(scrollW / vpWidth))
-      setTotalPages(pages)
+    const pageStep = Math.max(160, viewportH - 80)
+    const maxScroll = Math.max(0, contentH - viewportH)
+    const pages = maxScroll === 0 ? 1 : Math.max(1, Math.ceil(maxScroll / pageStep) + 1)
+    setTotalPages(pages)
+
+    if (targetPageOnLoad === 'last') {
+      const lastPage = pages - 1
+      setPageIndex(lastPage)
+      container.scrollTo({ top: maxScroll, behavior: 'auto' })
+      setTargetPageOnLoad(null)
+    } else if (typeof targetPageOnLoad === 'number') {
+      const target = Math.min(pages - 1, targetPageOnLoad)
+      setPageIndex(target)
+      container.scrollTo({ top: Math.min(maxScroll, target * pageStep), behavior: 'auto' })
+      setTargetPageOnLoad(null)
+    } else {
       setPageIndex((cur) => Math.min(cur, pages - 1))
     }
+  }, [targetPageOnLoad])
 
-    const timer = setTimeout(computePages, 100)
-    window.addEventListener('resize', computePages)
+  // 监听内容高度变化（排版调整、图片加载完成、窗口缩放）
+  useLayoutEffect(() => {
+    if (isLoading || !safeHtml) return
+    recomputePages()
+
+    const container = containerRef.current
+    const inner = contentInnerRef.current
+    if (!container || !inner) return
+
+    const ro = new ResizeObserver(() => {
+      recomputePages()
+    })
+    ro.observe(inner)
+
+    const imgs = inner.querySelectorAll('img')
+    imgs.forEach((img) => {
+      if (!img.complete) {
+        img.addEventListener('load', recomputePages, { once: true })
+      }
+    })
+
+    window.addEventListener('resize', recomputePages)
     return () => {
-      clearTimeout(timer)
-      window.removeEventListener('resize', computePages)
+      ro.disconnect()
+      window.removeEventListener('resize', recomputePages)
     }
-  }, [mode, rawHtml, fontSize, lineHeight, maxWidth, fontFamily])
+  }, [safeHtml, isLoading, fontSize, lineHeight, maxWidth, fontFamily, recomputePages])
 
   // 进度上报与页码同步
   useEffect(() => {
@@ -606,48 +644,85 @@ function FlowReaderCore({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapterIdx, pageIndex, totalPages, chapters.length])
 
-  // 翻页动作
+  // 滚动时反查当前阅读所在页
+  const handleScroll = () => {
+    if (isScrollingToPage.current) return
+    const container = containerRef.current
+    if (!container) return
+    const viewportH = container.clientHeight
+    const pageStep = Math.max(160, viewportH - 80)
+    const curTop = container.scrollTop
+    const detected = Math.min(totalPages - 1, Math.round(curTop / pageStep))
+    setPageIndex((prev) => (prev !== detected ? detected : prev))
+  }
+
+  // 翻页操作（平滑位移一屏）
+  const scrollToPage = (p: number) => {
+    const container = containerRef.current
+    if (!container) return
+    const viewportH = container.clientHeight
+    const contentH = container.scrollHeight
+    const maxScroll = Math.max(0, contentH - viewportH)
+    const pageStep = Math.max(160, viewportH - 80)
+    const targetTop = Math.min(maxScroll, p * pageStep)
+
+    isScrollingToPage.current = true
+    container.scrollTo({ top: targetTop, behavior: 'smooth' })
+    setPageIndex(p)
+    setTimeout(() => {
+      isScrollingToPage.current = false
+    }, 350)
+  }
+
   const goPrevPage = () => {
-    if (mode === 'paged') {
-      if (pageIndex > 0) {
-        setPageIndex((p) => p - 1)
-      } else if (chapterIdx > 0) {
-        setChapterIdx((c) => c - 1)
-        setPageIndex(9999) // 触发切章后自动定位于上一章末尾
-      }
-    } else {
-      if (chapterIdx > 0) {
-        setChapterIdx((c) => c - 1)
-        scrollRef.current?.scrollTo({ top: 0 })
-      }
+    if (pageIndex > 0) {
+      scrollToPage(pageIndex - 1)
+    } else if (chapterIdx > 0) {
+      setTargetPageOnLoad('last')
+      setChapterIdx((c) => c - 1)
     }
   }
 
   const goNextPage = () => {
-    if (mode === 'paged') {
-      if (pageIndex < totalPages - 1) {
-        setPageIndex((p) => p + 1)
-      } else if (chapterIdx < chapters.length - 1) {
-        setChapterIdx((c) => c + 1)
-        setPageIndex(0)
-      }
-    } else {
-      if (chapterIdx < chapters.length - 1) {
-        setChapterIdx((c) => c + 1)
-        scrollRef.current?.scrollTo({ top: 0 })
-      }
+    if (pageIndex < totalPages - 1) {
+      scrollToPage(pageIndex + 1)
+    } else if (chapterIdx < chapters.length - 1) {
+      setTargetPageOnLoad(0)
+      setChapterIdx((c) => c + 1)
+    }
+  }
+
+  // 滚轮翻页（防抖控制：每次滚动触发一页翻页，末尾切下一章）
+  const handleWheel = (e: React.WheelEvent) => {
+    if (mode === 'scroll') return
+    const now = Date.now()
+    if (now - lastWheelTime.current < 260) return
+    if (e.deltaY > 25) {
+      lastWheelTime.current = now
+      goNextPage()
+    } else if (e.deltaY < -25) {
+      lastWheelTime.current = now
+      goPrevPage()
     }
   }
 
   // 键盘快捷键监听
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+      if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) {
         e.preventDefault()
         goNextPage()
-      } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
+      } else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) {
         e.preventDefault()
         goPrevPage()
+      } else if (e.key === ']' && chapterIdx < chapters.length - 1) {
+        e.preventDefault()
+        setTargetPageOnLoad(0)
+        setChapterIdx((c) => c + 1)
+      } else if (e.key === '[' && chapterIdx > 0) {
+        e.preventDefault()
+        setTargetPageOnLoad(0)
+        setChapterIdx((c) => c - 1)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -669,97 +744,112 @@ function FlowReaderCore({
   const curTheme = THEMES[theme]
 
   return (
-    <div className="relative h-full w-full select-none">
-      {/* 仿真分页模式 (Paged Mode) */}
-      {mode === 'paged' ? (
-        <div ref={viewportRef} className="relative h-full w-full overflow-hidden px-8 py-10 sm:px-16 md:px-24">
+    <div className="relative h-full w-full select-none overflow-hidden">
+      {/* 仿真分页与滚动通用阅读视口 */}
+      <div
+        ref={containerRef}
+        onWheel={handleWheel}
+        onScroll={handleScroll}
+        className={`relative h-full w-full overflow-y-auto ${
+          mode === 'paged'
+            ? 'scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
+            : ''
+        }`}
+      >
+        <div
+          ref={contentInnerRef}
+          className={`mx-auto min-h-full px-8 py-10 sm:px-16 md:px-24 ${maxWidth}`}
+          style={fontStyle}
+        >
           {isLoading ? (
-            <div className="flex h-full items-center justify-center text-sm opacity-50">加载章节中…</div>
+            <div className="flex h-64 items-center justify-center text-sm opacity-50">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 加载章节中…
+            </div>
           ) : (
             <div
-              className={`mx-auto h-full ${maxWidth}`}
-              style={{
-                columnWidth: '100%',
-                columnGap: '80px',
-                columnFill: 'auto',
-                ...fontStyle,
-              }}
-            >
-              <div
-                ref={contentWrapperRef}
-                className="h-full transition-transform duration-300 ease-out"
-                style={{
-                  transform: `translateX(calc(-${pageIndex} * (100% + 80px)))`,
-                }}
-              >
-                <div
-                  className="prose prose-slate max-w-none dark:prose-invert [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-[70vh] [&_img]:rounded-lg [&_p]:my-3 [&_p]:indent-8 [&_h1]:mb-6 [&_h1]:text-center [&_h1]:text-2xl [&_h2]:mb-4 [&_h2]:text-center [&_h2]:text-xl"
-                  dangerouslySetInnerHTML={{ __html: safeHtml }}
-                />
-              </div>
-            </div>
+              className="prose prose-slate max-w-none dark:prose-invert [&_img]:mx-auto [&_img]:my-6 [&_img]:max-h-[85vh] [&_img]:w-auto [&_img]:rounded-lg [&_p]:my-4 [&_p]:indent-8 [&_h1]:mb-8 [&_h1]:text-center [&_h1]:text-2xl [&_h2]:mb-6 [&_h2]:text-center [&_h2]:text-xl"
+              dangerouslySetInnerHTML={{ __html: safeHtml }}
+            />
           )}
 
-          {/* 交互点击区域：左侧 25% 上一页，中间 50% 唤起控制条，右侧 25% 下一页 */}
-          <div
-            className="absolute top-0 bottom-0 left-0 z-20 w-1/4 cursor-w-resize"
-            onClick={goPrevPage}
-            title="点击翻到上一页 (←)"
-          />
-          <div
-            className="absolute top-0 bottom-0 left-1/4 z-10 w-2/4 cursor-pointer"
-            onClick={onToggleBars}
-            title="点击切换工具栏"
-          />
-          <div
-            className="absolute top-0 bottom-0 right-0 z-20 w-1/4 cursor-e-resize"
-            onClick={goNextPage}
-            title="点击翻到下一页 (→)"
-          />
-        </div>
-      ) : (
-        /* 长卷连续滚动模式 (Scroll Mode) */
-        <div ref={scrollRef} className="relative h-full w-full overflow-y-auto px-6 py-12 md:px-16">
-          <div className={`mx-auto ${maxWidth}`} style={fontStyle}>
-            {isLoading ? (
-              <div className="flex h-64 items-center justify-center text-sm opacity-50">加载章节中…</div>
-            ) : (
-              <div
-                className="prose prose-slate max-w-none dark:prose-invert [&_img]:mx-auto [&_img]:my-6 [&_img]:max-h-[80vh] [&_img]:rounded-lg [&_p]:my-4 [&_p]:indent-8 [&_h1]:mb-8 [&_h1]:text-center [&_h1]:text-2xl [&_h2]:mb-6 [&_h2]:text-center [&_h2]:text-xl"
-                dangerouslySetInnerHTML={{ __html: safeHtml }}
-              />
-            )}
-
-            <div className="mt-16 flex items-center justify-between border-t py-8 opacity-80" style={{ borderColor: curTheme.barBorder }}>
+          {/* 连续滚动模式下的章末翻章提示条 */}
+          {mode === 'scroll' && !isLoading && (
+            <div
+              className="mt-16 flex items-center justify-between border-t py-8 opacity-80"
+              style={{ borderColor: curTheme.barBorder }}
+            >
               <Button
                 variant="outline"
                 disabled={chapterIdx <= 0}
                 onClick={() => {
                   setChapterIdx((c) => Math.max(0, c - 1))
-                  scrollRef.current?.scrollTo({ top: 0 })
+                  containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
               >
                 <ChevronLeft className="h-4 w-4" /> 上一章
               </Button>
-              <span className="text-xs">
-                {curChapter?.title ?? `第 ${chapterIdx + 1} 节`}
-              </span>
+              <span className="text-xs">{curChapter?.title ?? `第 ${chapterIdx + 1} 节`}</span>
               <Button
                 variant="outline"
                 disabled={chapterIdx >= chapters.length - 1}
                 onClick={() => {
                   setChapterIdx((c) => Math.min(chapters.length - 1, c + 1))
-                  scrollRef.current?.scrollTo({ top: 0 })
+                  containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
               >
                 下一章 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-          </div>
+          )}
         </div>
+      </div>
+
+      {/* 仿真分页模式交互热区：左 20% 上一页，中 60% 控制栏，右 20% 下一页 */}
+      {mode === 'paged' && (
+        <>
+          <div
+            className="absolute top-0 bottom-0 left-0 z-20 w-1/5 cursor-w-resize"
+            onClick={goPrevPage}
+            title="点击翻到上一页 (← / 滚轮上滑)"
+          />
+          <div
+            className="absolute top-0 bottom-0 left-[20%] z-10 w-3/5 cursor-pointer"
+            onClick={onToggleBars}
+            title="点击呼出 / 隐藏控制栏"
+          />
+          <div
+            className="absolute top-0 bottom-0 right-0 z-20 w-1/5 cursor-e-resize"
+            onClick={goNextPage}
+            title="点击翻到下一页 (→ / 滚轮下滑)"
+          />
+
+          {/* 悬浮翻页箭头按钮（大屏鼠标滑过显示） */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              goPrevPage()
+            }}
+            disabled={chapterIdx <= 0 && pageIndex <= 0}
+            className="absolute left-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+            title="上一页"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              goNextPage()
+            }}
+            disabled={chapterIdx >= chapters.length - 1 && pageIndex >= totalPages - 1}
+            className="absolute right-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+            title="下一页"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        </>
       )}
 
-      {/* 底部悬浮信息与进度条 */}
+      {/* 底部悬浮控制与进度栏 */}
       <footer
         className={`absolute bottom-0 left-0 right-0 z-30 flex h-12 items-center justify-between border-t px-4 backdrop-blur-md transition-all duration-200 ${
           showBars ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
@@ -774,11 +864,12 @@ function FlowReaderCore({
           <Button
             size="sm"
             variant="ghost"
-            disabled={chapterIdx <= 0}
-            onClick={() => setChapterIdx((c) => Math.max(0, c - 1))}
+            disabled={chapterIdx <= 0 && pageIndex <= 0}
+            onClick={goPrevPage}
             className="h-7 px-2"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />上一章
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {mode === 'paged' ? (pageIndex === 0 ? '上一章' : '上一页') : '上一章'}
           </Button>
         </div>
 
@@ -800,11 +891,12 @@ function FlowReaderCore({
           <Button
             size="sm"
             variant="ghost"
-            disabled={chapterIdx >= chapters.length - 1}
-            onClick={() => setChapterIdx((c) => Math.min(chapters.length - 1, c + 1))}
+            disabled={chapterIdx >= chapters.length - 1 && pageIndex >= totalPages - 1}
+            onClick={goNextPage}
             className="h-7 px-2"
           >
-            下一章<ChevronRight className="h-3.5 w-3.5" />
+            {mode === 'paged' ? (pageIndex >= totalPages - 1 ? '下一章' : '下一页') : '下一章'}
+            <ChevronRight className="h-3.5 w-3.5" />
           </Button>
         </div>
       </footer>
@@ -831,6 +923,11 @@ function PdfReaderCore({
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [zoomLevel, setZoomLevel] = useState<number>(100)
+  const [imgLoading, setImgLoading] = useState(true)
+  const [imgError, setImgError] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
+
+  const lastWheelTime = useRef(0)
 
   const { data: meta } = useQuery({
     queryKey: ['book-pdf-meta', book.id],
@@ -859,6 +956,12 @@ function PdfReaderCore({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, totalPages])
 
+  // 页面切换时重置加载状态
+  useEffect(() => {
+    setImgLoading(true)
+    setImgError(false)
+  }, [currentPage, retryKey])
+
   // 预加载下一页
   useEffect(() => {
     if (currentPage < totalPages) {
@@ -870,13 +973,26 @@ function PdfReaderCore({
   const goPrev = () => setCurrentPage((p) => Math.max(1, p - 1))
   const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1))
 
+  // 鼠标滚轮翻页（防抖控制）
+  const handleWheel = (e: React.WheelEvent) => {
+    const now = Date.now()
+    if (now - lastWheelTime.current < 260) return
+    if (e.deltaY > 25) {
+      lastWheelTime.current = now
+      goNext()
+    } else if (e.deltaY < -25) {
+      lastWheelTime.current = now
+      goPrev()
+    }
+  }
+
   // 键盘翻页监听
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+      if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) {
         e.preventDefault()
         goNext()
-      } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
+      } else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) {
         e.preventDefault()
         goPrev()
       }
@@ -888,25 +1004,55 @@ function PdfReaderCore({
   const curTheme = THEMES[theme]
 
   return (
-    <div className="relative flex h-full w-full select-none flex-col items-center justify-center overflow-auto p-4 sm:p-6">
-      {/* PDF 页面图像 */}
+    <div
+      onWheel={handleWheel}
+      className="relative flex h-full w-full select-none flex-col items-center justify-center overflow-auto p-4 sm:p-6"
+    >
+      {/* PDF 页面图像与交互区 */}
       <div className="relative flex min-h-0 max-w-full flex-1 items-center justify-center">
-        <img
-          key={currentPage}
-          src={api.pdfPageUrl(book.id, currentPage)}
-          alt={`第 ${currentPage} 页`}
-          className="max-h-[85vh] max-w-full rounded-md shadow-2xl transition-all duration-150"
-          style={{
-            transform: `scale(${zoomLevel / 100})`,
-            filter: curTheme.pdfFilter || 'none',
-          }}
-        />
+        {imgLoading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center text-sm opacity-50 pointer-events-none">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 加载页面中…
+          </div>
+        )}
+
+        {imgError ? (
+          <div className="z-10 flex flex-col items-center justify-center rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-center text-xs text-red-500">
+            <p className="mb-3 font-medium">第 {currentPage} 页图像渲染失败</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setRetryKey((k) => k + 1)}
+              className="h-8 gap-1"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> 重新渲染
+            </Button>
+          </div>
+        ) : (
+          <img
+            key={`${currentPage}-${retryKey}`}
+            src={api.pdfPageUrl(book.id, currentPage)}
+            alt={`第 ${currentPage} 页`}
+            onLoad={() => setImgLoading(false)}
+            onError={() => {
+              setImgLoading(false)
+              setImgError(true)
+            }}
+            className={`max-h-[85vh] max-w-full rounded-md shadow-2xl transition-all duration-150 ${
+              imgLoading ? 'opacity-20' : 'opacity-100'
+            }`}
+            style={{
+              transform: `scale(${zoomLevel / 100})`,
+              filter: curTheme.pdfFilter || 'none',
+            }}
+          />
+        )}
 
         {/* 交互点击翻页区 */}
         <div
           className="absolute top-0 bottom-0 left-0 z-20 w-1/4 cursor-w-resize"
           onClick={goPrev}
-          title="点击翻到上一页 (←)"
+          title="点击翻到上一页 (← / 滚轮上滑)"
         />
         <div
           className="absolute top-0 bottom-0 left-1/4 z-10 w-2/4 cursor-pointer"
@@ -916,8 +1062,32 @@ function PdfReaderCore({
         <div
           className="absolute top-0 bottom-0 right-0 z-20 w-1/4 cursor-e-resize"
           onClick={goNext}
-          title="点击翻到下一页 (→)"
+          title="点击翻到下一页 (→ / 滚轮下滑)"
         />
+
+        {/* 悬浮翻页箭头按钮 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            goPrev()
+          }}
+          disabled={currentPage <= 1}
+          className="absolute left-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+          title="上一页"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            goNext()
+          }}
+          disabled={currentPage >= totalPages}
+          className="absolute right-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+          title="下一页"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
       </div>
 
       {/* 底部悬浮翻页控制栏 */}
