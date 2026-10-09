@@ -241,6 +241,36 @@ export function BookReader({
             })}
           </div>
 
+          {/* PDF 专属顶部快捷缩放控件 */}
+          {isPdf && (
+            <div
+              className="flex items-center gap-1 rounded-lg border px-1.5 py-1 text-xs"
+              style={{ borderColor: curTheme.barBorder }}
+            >
+              <button
+                onClick={() => setPdfZoom((z) => Math.max(50, z - 15))}
+                className="rounded p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+                title="缩小 (快捷键 - / Ctrl+滚轮下)"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setPdfZoom(100)}
+                className="min-w-[42px] px-1 text-center font-mono text-[11px] font-medium opacity-80 transition hover:opacity-100 hover:underline"
+                title="重置为 100% 原始大小 (快捷键 0)"
+              >
+                {pdfZoom}%
+              </button>
+              <button
+                onClick={() => setPdfZoom((z) => Math.min(250, z + 15))}
+                className="rounded p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+                title="放大 (快捷键 + / Ctrl+滚轮上 / 双击)"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* 目录抽屉按钮 */}
           <button
             onClick={() => {
@@ -993,6 +1023,12 @@ function PdfReaderCore({
   const [imgError, setImgError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
 
+  // 放大后的拖拽平移状态
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [isDraggingActive, setIsDraggingActive] = useState(false)
+  const isDragging = useRef(false)
+  const dragStart = useRef({ x: 0, y: 0 })
+  const hasDragged = useRef(false)
   const lastWheelTime = useRef(0)
 
   const { data: meta } = useQuery({
@@ -1022,11 +1058,19 @@ function PdfReaderCore({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, totalPages])
 
-  // 页面切换时重置加载状态
+  // 页面切换时重置加载状态与平移偏移
   useEffect(() => {
     setImgLoading(true)
     setImgError(false)
+    setPanOffset({ x: 0, y: 0 })
   }, [currentPage, retryKey])
+
+  // 重置缩放比例为 100% 时自动归零平移
+  useEffect(() => {
+    if (zoomLevel === 100) {
+      setPanOffset({ x: 0, y: 0 })
+    }
+  }, [zoomLevel])
 
   // 预加载下一页
   useEffect(() => {
@@ -1039,8 +1083,20 @@ function PdfReaderCore({
   const goPrev = () => setCurrentPage((p) => Math.max(1, p - 1))
   const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1))
 
-  // 鼠标滚轮翻页（防抖控制）
+  // 鼠标滚轮缩放与翻页
   const handleWheel = (e: React.WheelEvent) => {
+    // 1. 优先捕获触控板双指缩放手势或 Ctrl/Cmd + 鼠标滚轮缩放
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      if (e.deltaY < 0) {
+        onZoomChange((z) => Math.min(250, z + 10))
+      } else if (e.deltaY > 0) {
+        onZoomChange((z) => Math.max(50, z - 10))
+      }
+      return
+    }
+
+    // 2. 普通滚轮：上下翻页（带 260ms 防抖控制）
     const now = Date.now()
     if (now - lastWheelTime.current < 260) return
     if (e.deltaY > 25) {
@@ -1052,7 +1108,7 @@ function PdfReaderCore({
     }
   }
 
-  // 键盘翻页监听
+  // 键盘快捷键监听（翻页与缩放）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) {
@@ -1061,21 +1117,84 @@ function PdfReaderCore({
       } else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) {
         e.preventDefault()
         goPrev()
+      } else if (['+', '=', 'Add'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        onZoomChange((z) => Math.min(250, z + 15))
+      } else if (['-', '_', 'Subtract'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        onZoomChange((z) => Math.max(50, z - 15))
+      } else if (e.key === '0' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        onZoomChange(100)
+        setPanOffset({ x: 0, y: 0 })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   })
 
+  // 放大状态下的拖拽平移处理
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomLevel > 100 && e.button === 0) {
+      isDragging.current = true
+      dragStart.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y }
+      hasDragged.current = false
+      setIsDraggingActive(true)
+    }
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging.current && zoomLevel > 100) {
+      const newX = e.clientX - dragStart.current.x
+      const newY = e.clientY - dragStart.current.y
+      if (Math.abs(newX - panOffset.x) > 4 || Math.abs(newY - panOffset.y) > 4) {
+        hasDragged.current = true
+      }
+      setPanOffset({ x: newX, y: newY })
+    }
+  }
+
+  const handleMouseUp = () => {
+    isDragging.current = false
+    setIsDraggingActive(false)
+  }
+
+  // 双击快速放大/还原
+  const handleDoubleClick = () => {
+    if (zoomLevel <= 100) {
+      onZoomChange(150)
+    } else {
+      onZoomChange(100)
+      setPanOffset({ x: 0, y: 0 })
+    }
+  }
+
+  const handleCenterClick = () => {
+    if (hasDragged.current) {
+      hasDragged.current = false
+      return
+    }
+    onToggleBars()
+  }
+
   const curTheme = THEMES[theme]
 
   return (
     <div
       onWheel={handleWheel}
-      className="relative flex h-full w-full select-none flex-col items-center justify-center overflow-hidden p-4 sm:p-6"
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      className={`relative flex h-full w-full select-none flex-col items-center justify-center overflow-hidden p-4 sm:p-6 ${
+        zoomLevel > 100 ? (isDraggingActive ? 'cursor-grabbing' : 'cursor-grab') : ''
+      }`}
     >
       {/* PDF 页面图像展示区 */}
-      <div className="relative flex min-h-0 max-w-full flex-1 items-center justify-center overflow-auto">
+      <div
+        className="relative flex min-h-0 max-w-full flex-1 items-center justify-center overflow-hidden"
+        onDoubleClick={handleDoubleClick}
+      >
         {imgLoading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center text-sm opacity-50 pointer-events-none">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 加载页面中…
@@ -1104,31 +1223,47 @@ function PdfReaderCore({
               setImgLoading(false)
               setImgError(true)
             }}
-            className={`max-h-[85vh] max-w-full rounded-md transition-all duration-150 ${
+            className={`max-h-[85vh] max-w-full rounded-md ${
               theme === 'night' ? 'ring-1 ring-white/15' : 'shadow-2xl'
             } ${imgLoading ? 'opacity-20' : 'opacity-100'}`}
             style={{
-              transform: `scale(${zoomLevel / 100})`,
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel / 100})`,
+              transformOrigin: 'center center',
+              transition: isDraggingActive ? 'none' : 'transform 150ms ease-out',
               filter: curTheme.pdfFilter || 'none',
             }}
+            draggable={false}
           />
         )}
       </div>
 
-      {/* 屏幕级交互点击翻页区：左 20% 上一页，中 60% 控制栏，右 20% 下一页（与其他格式完全一致） */}
+      {/* 屏幕级交互点击翻页区：左 20% 上一页，中 60% 控制栏/双击缩放，右 20% 下一页 */}
       <div
         className="absolute top-0 bottom-0 left-0 z-20 w-1/5 cursor-w-resize"
-        onClick={goPrev}
+        onClick={() => {
+          if (hasDragged.current) {
+            hasDragged.current = false
+            return
+          }
+          goPrev()
+        }}
         title="点击翻到上一页 (← / 滚轮上滑)"
       />
       <div
         className="absolute top-0 bottom-0 left-[20%] z-10 w-3/5 cursor-pointer"
-        onClick={onToggleBars}
-        title="点击呼出 / 隐藏控制栏"
+        onClick={handleCenterClick}
+        onDoubleClick={handleDoubleClick}
+        title="点击切换控制栏，双击快速缩放"
       />
       <div
         className="absolute top-0 bottom-0 right-0 z-20 w-1/5 cursor-e-resize"
-        onClick={goNext}
+        onClick={() => {
+          if (hasDragged.current) {
+            hasDragged.current = false
+            return
+          }
+          goNext()
+        }}
         title="点击翻到下一页 (→ / 滚轮下滑)"
       />
 
@@ -1191,16 +1326,25 @@ function PdfReaderCore({
           {/* 缩放按钮 */}
           <button
             onClick={() => onZoomChange((z) => Math.max(50, z - 15))}
-            className="rounded p-1 opacity-70 hover:opacity-100"
-            title="缩小"
+            className="rounded p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+            title="缩小 (快捷键 - / Ctrl+滚轮下)"
           >
             <ZoomOut className="h-3.5 w-3.5" />
           </button>
-          <span className="text-[11px] font-mono opacity-70">{zoomLevel}%</span>
           <button
-            onClick={() => onZoomChange((z) => Math.min(200, z + 15))}
-            className="rounded p-1 opacity-70 hover:opacity-100"
-            title="放大"
+            onClick={() => {
+              onZoomChange(100)
+              setPanOffset({ x: 0, y: 0 })
+            }}
+            className="min-w-[42px] px-1 text-center font-mono text-[11px] font-medium opacity-80 transition hover:opacity-100 hover:underline"
+            title="点击重置为 100% 原始大小 (快捷键 0)"
+          >
+            {zoomLevel}%
+          </button>
+          <button
+            onClick={() => onZoomChange((z) => Math.min(250, z + 15))}
+            className="rounded p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+            title="放大 (快捷键 + / Ctrl+滚轮上 / 双击)"
           >
             <ZoomIn className="h-3.5 w-3.5" />
           </button>
