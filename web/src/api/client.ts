@@ -135,7 +135,7 @@ function toBook(r: RawAsset): Book {
     year: r.pub_year ?? new Date(r.created_at).getFullYear(),
     isbn: r.isbn ?? '',
     series: r.series_name ? { name: r.series_name, idx: r.series_index ?? 1, total: 0 } : undefined,
-    formats: [{ kind: (ext.toUpperCase() || 'EPUB') as Book['formats'][number]['kind'], sizeMB: +(r.size_bytes / 1048576).toFixed(1), readable: ['epub', 'pdf'].includes(ext) }],
+    formats: [{ kind: (ext.toUpperCase() || 'EPUB') as Book['formats'][number]['kind'], sizeMB: +(r.size_bytes / 1048576).toFixed(1), readable: ['epub', 'pdf', 'mobi', 'azw3', 'txt'].includes(ext) }],
     progressPct: 0,
     lastChapter: undefined,
     rating: r.rating ?? 0,
@@ -353,6 +353,8 @@ export const api = {
   bookFileUrl: (id: string) => `${BASE}/api/books/${id}/file`,
   bookCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/books/${id}/cover?size=${size}`,
   bookContents: (id: string) => req<{ chapters: { index: number; href: string; title: string }[] }>(`/api/books/${id}/contents`),
+  pdfMeta: (id: string) => req<{ page_count: number; toc: { level: number; title: string; page: number }[] }>(`/api/books/${id}/pdf/meta`),
+  pdfPageUrl: (id: string, pageNum: number, dpi = 150) => `${BASE}/api/books/${id}/pdf/page/${pageNum}?dpi=${dpi}`,
   bookResource: async (id: string, path: string) => {
     const res = await fetch(`${BASE}/api/books/${id}/resource?path=${encodeURIComponent(path)}`, { credentials: 'include' })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)

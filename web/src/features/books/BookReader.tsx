@@ -1,0 +1,1051 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  AlignJustify,
+  BookOpen,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Columns,
+  List,
+  Maximize2,
+  Minimize2,
+  Moon,
+  Search,
+  Sun,
+  Type,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react'
+import { api } from '@/api/client'
+import { Button } from '@/components/ui'
+import type { Book } from '@/types'
+
+export type ReaderTheme = 'day' | 'sepia' | 'green' | 'night'
+export type ReaderMode = 'paged' | 'scroll'
+export type ReaderFontFamily = 'sans' | 'serif' | 'kai'
+
+interface ThemeConfig {
+  id: ReaderTheme
+  name: string
+  bg: string
+  text: string
+  barBg: string
+  barBorder: string
+  barText: string
+  cardBg: string
+  activeBg: string
+  pdfFilter?: string
+}
+
+const THEMES: Record<ReaderTheme, ThemeConfig> = {
+  day: {
+    id: 'day',
+    name: '日间',
+    bg: '#ffffff',
+    text: '#1e293b',
+    barBg: 'rgba(255, 255, 255, 0.95)',
+    barBorder: '#e2e8f0',
+    barText: '#334155',
+    cardBg: '#f8fafc',
+    activeBg: '#e2e8f0',
+  },
+  sepia: {
+    id: 'sepia',
+    name: '羊皮纸',
+    bg: '#f6f1e7',
+    text: '#3c3226',
+    barBg: 'rgba(244, 237, 224, 0.95)',
+    barBorder: '#ded2be',
+    barText: '#4c3f30',
+    cardBg: '#ece3d2',
+    activeBg: '#ded2be',
+    pdfFilter: 'sepia(0.25) brightness(0.97)',
+  },
+  green: {
+    id: 'green',
+    name: '豆沙绿',
+    bg: '#e8f2e7',
+    text: '#223624',
+    barBg: 'rgba(224, 238, 222, 0.95)',
+    barBorder: '#c3dbbf',
+    barText: '#2e4830',
+    cardBg: '#d6ebd4',
+    activeBg: '#c3dbbf',
+    pdfFilter: 'hue-rotate(55deg) brightness(0.96)',
+  },
+  night: {
+    id: 'night',
+    name: '深夜',
+    bg: '#141417',
+    text: '#d4d4d8',
+    barBg: 'rgba(28, 28, 32, 0.95)',
+    barBorder: '#3f3f46',
+    barText: '#e4e4e7',
+    cardBg: '#232328',
+    activeBg: '#3f3f46',
+    pdfFilter: 'invert(0.88) hue-rotate(180deg) brightness(0.95)',
+  },
+}
+
+export function BookReader({
+  book,
+  format,
+  initialChapter,
+  initialPct,
+  onClose,
+  onProgress,
+}: {
+  book: Book
+  format: string
+  initialChapter: number
+  initialPct: number
+  onClose: () => void
+  onProgress: (p: { pct: number; chapter?: number }) => void
+}) {
+  const isPdf = format.toUpperCase() === 'PDF'
+
+  // 用户排版偏好本地持久化
+  const [theme, setTheme] = useState<ReaderTheme>(() => {
+    return (localStorage.getItem('portal_reader_theme') as ReaderTheme) || 'sepia'
+  })
+  const [mode, setMode] = useState<ReaderMode>(() => {
+    return (localStorage.getItem('portal_reader_mode') as ReaderMode) || 'paged'
+  })
+  const [fontSize, setFontSize] = useState<number>(() => {
+    const s = localStorage.getItem('portal_reader_fontSize')
+    return s ? Number(s) : 17
+  })
+  const [lineHeight, setLineHeight] = useState<number>(() => {
+    const s = localStorage.getItem('portal_reader_lineHeight')
+    return s ? Number(s) : 1.8
+  })
+  const [maxWidth, setMaxWidth] = useState<string>(() => {
+    return localStorage.getItem('portal_reader_maxWidth') || 'max-w-3xl'
+  })
+  const [fontFamily, setFontFamily] = useState<ReaderFontFamily>(() => {
+    return (localStorage.getItem('portal_reader_fontFamily') as ReaderFontFamily) || 'sans'
+  })
+
+  // 界面状态
+  const [showBars, setShowBars] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showToc, setShowToc] = useState(false)
+  const [tocFilter, setTocFilter] = useState('')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // 保存排版偏好
+  useEffect(() => {
+    localStorage.setItem('portal_reader_theme', theme)
+    localStorage.setItem('portal_reader_mode', mode)
+    localStorage.setItem('portal_reader_fontSize', String(fontSize))
+    localStorage.setItem('portal_reader_lineHeight', String(lineHeight))
+    localStorage.setItem('portal_reader_maxWidth', maxWidth)
+    localStorage.setItem('portal_reader_fontFamily', fontFamily)
+  }, [theme, mode, fontSize, lineHeight, maxWidth, fontFamily])
+
+  // 全屏切换
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      void containerRef.current?.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {})
+    } else {
+      void document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {})
+    }
+  }
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
+  // 流式书籍（EPUB / TXT / MOBI / AZW3）查询
+  const { data: contents } = useQuery({
+    queryKey: ['book-contents', book.id],
+    queryFn: () => api.bookContents(book.id),
+    enabled: !isPdf,
+  })
+  const chapters = contents?.chapters ?? []
+
+  // PDF 元数据查询
+  const { data: pdfMeta } = useQuery({
+    queryKey: ['book-pdf-meta', book.id],
+    queryFn: () => api.pdfMeta(book.id),
+    enabled: isPdf,
+  })
+
+  const curTheme = THEMES[theme]
+
+  return (
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-50 flex h-screen w-screen select-none flex-col overflow-hidden transition-colors duration-300"
+      style={{ backgroundColor: curTheme.bg, color: curTheme.text }}
+    >
+      {/* 顶部悬浮控制栏 */}
+      <header
+        className={`absolute top-0 left-0 right-0 z-30 flex h-14 items-center justify-between border-b px-4 backdrop-blur-md transition-all duration-200 ${
+          showBars ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
+        }`}
+        style={{
+          backgroundColor: curTheme.barBg,
+          borderColor: curTheme.barBorder,
+          color: curTheme.barText,
+        }}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:hover:bg-white/10"
+            title="退出阅读 (Esc)"
+          >
+            <X className="h-4 w-4" />
+            <span className="hidden sm:inline">退出</span>
+          </button>
+          <div className="h-4 w-[1px] bg-slate-300 dark:bg-zinc-700" />
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-semibold">{book.title}</span>
+            <span className="text-[11px] opacity-70">
+              {book.author ? `${book.author} · ` : ''}
+              {format.toUpperCase()} 格式
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* 目录抽屉按钮 */}
+          <button
+            onClick={() => {
+              setShowToc((v) => !v)
+              setShowSettings(false)
+            }}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              showToc ? 'bg-black/10 dark:bg-white/15' : 'hover:bg-black/5 dark:hover:bg-white/10'
+            }`}
+            title="查看目录 (TOC)"
+          >
+            <List className="h-4 w-4" />
+            <span className="hidden md:inline">目录</span>
+          </button>
+
+          {/* 流式排版 Aa 设置按钮 */}
+          {!isPdf && (
+            <button
+              onClick={() => {
+                setShowSettings((v) => !v)
+                setShowToc(false)
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                showSettings ? 'bg-black/10 dark:bg-white/15' : 'hover:bg-black/5 dark:hover:bg-white/10'
+              }`}
+              title="排版与主题设置"
+            >
+              <Type className="h-4 w-4" />
+              <span className="hidden md:inline">排版</span>
+            </button>
+          )}
+
+          {/* 阅读模式快速切换 */}
+          {!isPdf && (
+            <button
+              onClick={() => setMode((m) => (m === 'paged' ? 'scroll' : 'paged'))}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10"
+              title={mode === 'paged' ? '当前为仿真分页，点击切换为连续滚动' : '当前为连续滚动，点击切换为仿真分页'}
+            >
+              {mode === 'paged' ? <Columns className="h-4 w-4" /> : <AlignJustify className="h-4 w-4" />}
+              <span className="hidden lg:inline">{mode === 'paged' ? '仿真翻页' : '连续滚动'}</span>
+            </button>
+          )}
+
+          {/* 全屏切换 */}
+          <button
+            onClick={toggleFullscreen}
+            className="rounded-lg p-2 transition hover:bg-black/5 dark:hover:bg-white/10"
+            title={isFullscreen ? '退出全屏 (F)' : '沉浸全屏阅读 (F)'}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+        </div>
+      </header>
+
+      {/* 目录抽屉 (TOC Drawer) */}
+      {showToc && (
+        <aside
+          className="absolute top-14 bottom-0 left-0 z-40 flex w-80 max-w-[85vw] flex-col border-r shadow-2xl backdrop-blur-xl transition-transform duration-200"
+          style={{
+            backgroundColor: curTheme.barBg,
+            borderColor: curTheme.barBorder,
+            color: curTheme.barText,
+          }}
+        >
+          <div className="flex items-center justify-between border-b p-3" style={{ borderColor: curTheme.barBorder }}>
+            <span className="text-xs font-bold tracking-wider opacity-80">书籍目录大纲</span>
+            <button
+              onClick={() => setShowToc(false)}
+              className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="border-b p-2" style={{ borderColor: curTheme.barBorder }}>
+            <div className="relative flex items-center">
+              <Search className="absolute left-2.5 h-3.5 w-3.5 opacity-50" />
+              <input
+                type="text"
+                placeholder="搜索章节标题…"
+                value={tocFilter}
+                onChange={(e) => setTocFilter(e.target.value)}
+                className="w-full rounded-md bg-black/5 py-1.5 pr-2 pl-8 text-xs outline-none focus:ring-1 focus:ring-brand-500 dark:bg-white/10"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2">
+            {isPdf ? (
+              <PdfTocList
+                toc={pdfMeta?.toc ?? []}
+                filter={tocFilter}
+                onSelect={(page) => {
+                  window.dispatchEvent(new CustomEvent('reader-jump-pdf', { detail: { page } }))
+                  setShowToc(false)
+                }}
+              />
+            ) : (
+              <FlowTocList
+                chapters={chapters}
+                filter={tocFilter}
+                onSelect={(idx) => {
+                  window.dispatchEvent(new CustomEvent('reader-jump-chapter', { detail: { chapter: idx } }))
+                  setShowToc(false)
+                }}
+              />
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* 排版设置抽屉/面板 */}
+      {showSettings && (
+        <div
+          className="absolute top-16 right-4 z-40 w-80 rounded-2xl border p-4 shadow-2xl backdrop-blur-xl transition-all"
+          style={{
+            backgroundColor: curTheme.barBg,
+            borderColor: curTheme.barBorder,
+            color: curTheme.barText,
+          }}
+        >
+          <div className="mb-3 flex items-center justify-between border-b pb-2" style={{ borderColor: curTheme.barBorder }}>
+            <span className="text-xs font-bold tracking-wider opacity-80">阅读排版与护眼主题</span>
+            <button onClick={() => setShowSettings(false)} className="rounded p-1 hover:bg-black/5">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="space-y-4 text-xs">
+            {/* 主题选择 */}
+            <div>
+              <div className="mb-2 font-medium opacity-70">色彩主题</div>
+              <div className="grid grid-cols-4 gap-2">
+                {(Object.keys(THEMES) as ReaderTheme[]).map((tKey) => {
+                  const cfg = THEMES[tKey]
+                  const isCur = theme === tKey
+                  return (
+                    <button
+                      key={tKey}
+                      onClick={() => setTheme(tKey)}
+                      className={`flex flex-col items-center gap-1 rounded-xl p-2 transition ${
+                        isCur ? 'ring-2 ring-brand-500 ring-offset-2' : 'hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: cfg.bg, color: cfg.text, border: `1px solid ${cfg.barBorder}` }}
+                    >
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full" style={{ backgroundColor: cfg.activeBg }}>
+                        {isCur && <Check className="h-3 w-3" />}
+                      </div>
+                      <span className="text-[11px] font-medium">{cfg.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 字号调节 */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="font-medium opacity-70">字号大小</span>
+                <span className="font-mono text-xs">{fontSize}px</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 flex-1 text-xs"
+                  disabled={fontSize <= 13}
+                  onClick={() => setFontSize((s) => Math.max(13, s - 1))}
+                >
+                  A- 缩小
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 flex-1 text-xs"
+                  disabled={fontSize >= 25}
+                  onClick={() => setFontSize((s) => Math.min(25, s + 1))}
+                >
+                  A+ 放大
+                </Button>
+              </div>
+            </div>
+
+            {/* 行间距 */}
+            <div>
+              <div className="mb-1.5 font-medium opacity-70">行距</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: '紧凑', val: 1.5 },
+                  { label: '舒适', val: 1.8 },
+                  { label: '宽松', val: 2.1 },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => setLineHeight(item.val)}
+                    className={`rounded-lg py-1.5 text-center font-medium transition ${
+                      lineHeight === item.val ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 字体族 */}
+            <div>
+              <div className="mb-1.5 font-medium opacity-70">字体风格</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'sans', label: '无衬线' },
+                  { id: 'serif', label: '宋体' },
+                  { id: 'kai', label: '楷体' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setFontFamily(item.id as ReaderFontFamily)}
+                    className={`rounded-lg py-1.5 text-center font-medium transition ${
+                      fontFamily === item.id ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 版心宽度 */}
+            <div>
+              <div className="mb-1.5 font-medium opacity-70">版心宽度</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'max-w-xl', label: '紧凑' },
+                  { id: 'max-w-3xl', label: '适中' },
+                  { id: 'max-w-5xl', label: '宽版' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setMaxWidth(item.id)}
+                    className={`rounded-lg py-1.5 text-center font-medium transition ${
+                      maxWidth === item.id ? 'bg-brand-500 text-white' : 'bg-black/5 hover:bg-black/10 dark:bg-white/10'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 主阅读内容区域 */}
+      <main className="relative flex-1 overflow-hidden">
+        {isPdf ? (
+          <PdfReaderCore
+            book={book}
+            theme={theme}
+            showBars={showBars}
+            onToggleBars={() => setShowBars((b) => !b)}
+            onProgress={onProgress}
+          />
+        ) : (
+          <FlowReaderCore
+            book={book}
+            format={format}
+            chapters={chapters}
+            initialChapter={initialChapter}
+            mode={mode}
+            theme={theme}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            fontFamily={fontFamily}
+            maxWidth={maxWidth}
+            showBars={showBars}
+            onToggleBars={() => setShowBars((b) => !b)}
+            onProgress={onProgress}
+          />
+        )}
+      </main>
+    </div>
+  )
+}
+
+// ==========================================
+// 流式书籍渲染核心（EPUB / TXT / MOBI / AZW3）
+// ==========================================
+
+function FlowReaderCore({
+  book,
+  format,
+  chapters,
+  initialChapter,
+  mode,
+  theme,
+  fontSize,
+  lineHeight,
+  fontFamily,
+  maxWidth,
+  showBars,
+  onToggleBars,
+  onProgress,
+}: {
+  book: Book
+  format: string
+  chapters: { index: number; href: string; title: string }[]
+  initialChapter: number
+  mode: ReaderMode
+  theme: ReaderTheme
+  fontSize: number
+  lineHeight: number
+  fontFamily: ReaderFontFamily
+  maxWidth: string
+  showBars: boolean
+  onToggleBars: () => void
+  onProgress: (p: { pct: number; chapter?: number }) => void
+}) {
+  const [chapterIdx, setChapterIdx] = useState(() => Math.min(Math.max(0, initialChapter), Math.max(0, chapters.length - 1)))
+  const [pageIndex, setPageIndex] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const contentWrapperRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // 监听外部目录跳章事件
+  useEffect(() => {
+    const handleJump = (e: Event) => {
+      const { chapter } = (e as CustomEvent<{ chapter: number }>).detail
+      if (chapter >= 0 && chapter < chapters.length) {
+        setChapterIdx(chapter)
+        setPageIndex(0)
+        scrollRef.current?.scrollTo({ top: 0 })
+      }
+    }
+    window.addEventListener('reader-jump-chapter', handleJump)
+    return () => window.removeEventListener('reader-jump-chapter', handleJump)
+  }, [chapters.length])
+
+  const curChapter = chapters[chapterIdx]
+
+  // 拉取章节 HTML 内容
+  const { data: rawHtml, isLoading } = useQuery({
+    queryKey: ['chapter-resource', book.id, curChapter?.href],
+    queryFn: () => (curChapter ? api.bookResource(book.id, curChapter.href) : ''),
+    enabled: !!curChapter,
+  })
+
+  // 清洗与优化 HTML
+  const safeHtml = useMemo(() => {
+    if (!rawHtml) return ''
+    return rawHtml
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/javascript:/gi, '')
+  }, [rawHtml])
+
+  // 计算多栏仿真分页的页数
+  useLayoutEffect(() => {
+    if (mode !== 'paged' || !viewportRef.current || !contentWrapperRef.current || !rawHtml) return
+
+    const computePages = () => {
+      const vp = viewportRef.current
+      const cw = contentWrapperRef.current
+      if (!vp || !cw) return
+      const vpWidth = vp.clientWidth
+      const scrollW = cw.scrollWidth
+      const pages = Math.max(1, Math.ceil(scrollW / vpWidth))
+      setTotalPages(pages)
+      setPageIndex((cur) => Math.min(cur, pages - 1))
+    }
+
+    const timer = setTimeout(computePages, 100)
+    window.addEventListener('resize', computePages)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', computePages)
+    }
+  }, [mode, rawHtml, fontSize, lineHeight, maxWidth, fontFamily])
+
+  // 进度上报与页码同步
+  useEffect(() => {
+    if (chapters.length === 0) return
+    const chProgress = chapterIdx / chapters.length
+    const pageProgress = totalPages > 1 ? (pageIndex / totalPages) * (1 / chapters.length) : 0
+    const pct = Math.min(100, Math.round((chProgress + pageProgress) * 1000) / 10)
+    onProgress({ pct, chapter: chapterIdx })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterIdx, pageIndex, totalPages, chapters.length])
+
+  // 翻页动作
+  const goPrevPage = () => {
+    if (mode === 'paged') {
+      if (pageIndex > 0) {
+        setPageIndex((p) => p - 1)
+      } else if (chapterIdx > 0) {
+        setChapterIdx((c) => c - 1)
+        setPageIndex(9999) // 触发切章后自动定位于上一章末尾
+      }
+    } else {
+      if (chapterIdx > 0) {
+        setChapterIdx((c) => c - 1)
+        scrollRef.current?.scrollTo({ top: 0 })
+      }
+    }
+  }
+
+  const goNextPage = () => {
+    if (mode === 'paged') {
+      if (pageIndex < totalPages - 1) {
+        setPageIndex((p) => p + 1)
+      } else if (chapterIdx < chapters.length - 1) {
+        setChapterIdx((c) => c + 1)
+        setPageIndex(0)
+      }
+    } else {
+      if (chapterIdx < chapters.length - 1) {
+        setChapterIdx((c) => c + 1)
+        scrollRef.current?.scrollTo({ top: 0 })
+      }
+    }
+  }
+
+  // 键盘快捷键监听
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+        e.preventDefault()
+        goNextPage()
+      } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
+        e.preventDefault()
+        goPrevPage()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  })
+
+  // 字体样式
+  const fontStyle = {
+    fontSize: `${fontSize}px`,
+    lineHeight: lineHeight,
+    fontFamily:
+      fontFamily === 'serif'
+        ? '"Songti SC", STSong, "Noto Serif SC", SimSun, serif'
+        : fontFamily === 'kai'
+          ? '"Kaiti SC", STKaiti, "Noto Sans CJK SC", KaiTi, serif'
+          : '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+  }
+
+  const curTheme = THEMES[theme]
+
+  return (
+    <div className="relative h-full w-full select-none">
+      {/* 仿真分页模式 (Paged Mode) */}
+      {mode === 'paged' ? (
+        <div ref={viewportRef} className="relative h-full w-full overflow-hidden px-8 py-10 sm:px-16 md:px-24">
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center text-sm opacity-50">加载章节中…</div>
+          ) : (
+            <div
+              className={`mx-auto h-full ${maxWidth}`}
+              style={{
+                columnWidth: '100%',
+                columnGap: '80px',
+                columnFill: 'auto',
+                ...fontStyle,
+              }}
+            >
+              <div
+                ref={contentWrapperRef}
+                className="h-full transition-transform duration-300 ease-out"
+                style={{
+                  transform: `translateX(calc(-${pageIndex} * (100% + 80px)))`,
+                }}
+              >
+                <div
+                  className="prose prose-slate max-w-none dark:prose-invert [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-[70vh] [&_img]:rounded-lg [&_p]:my-3 [&_p]:indent-8 [&_h1]:mb-6 [&_h1]:text-center [&_h1]:text-2xl [&_h2]:mb-4 [&_h2]:text-center [&_h2]:text-xl"
+                  dangerouslySetInnerHTML={{ __html: safeHtml }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 交互点击区域：左侧 25% 上一页，中间 50% 唤起控制条，右侧 25% 下一页 */}
+          <div
+            className="absolute top-0 bottom-0 left-0 z-20 w-1/4 cursor-w-resize"
+            onClick={goPrevPage}
+            title="点击翻到上一页 (←)"
+          />
+          <div
+            className="absolute top-0 bottom-0 left-1/4 z-10 w-2/4 cursor-pointer"
+            onClick={onToggleBars}
+            title="点击切换工具栏"
+          />
+          <div
+            className="absolute top-0 bottom-0 right-0 z-20 w-1/4 cursor-e-resize"
+            onClick={goNextPage}
+            title="点击翻到下一页 (→)"
+          />
+        </div>
+      ) : (
+        /* 长卷连续滚动模式 (Scroll Mode) */
+        <div ref={scrollRef} className="relative h-full w-full overflow-y-auto px-6 py-12 md:px-16">
+          <div className={`mx-auto ${maxWidth}`} style={fontStyle}>
+            {isLoading ? (
+              <div className="flex h-64 items-center justify-center text-sm opacity-50">加载章节中…</div>
+            ) : (
+              <div
+                className="prose prose-slate max-w-none dark:prose-invert [&_img]:mx-auto [&_img]:my-6 [&_img]:max-h-[80vh] [&_img]:rounded-lg [&_p]:my-4 [&_p]:indent-8 [&_h1]:mb-8 [&_h1]:text-center [&_h1]:text-2xl [&_h2]:mb-6 [&_h2]:text-center [&_h2]:text-xl"
+                dangerouslySetInnerHTML={{ __html: safeHtml }}
+              />
+            )}
+
+            <div className="mt-16 flex items-center justify-between border-t py-8 opacity-80" style={{ borderColor: curTheme.barBorder }}>
+              <Button
+                variant="outline"
+                disabled={chapterIdx <= 0}
+                onClick={() => {
+                  setChapterIdx((c) => Math.max(0, c - 1))
+                  scrollRef.current?.scrollTo({ top: 0 })
+                }}
+              >
+                <ChevronLeft className="h-4 w-4" /> 上一章
+              </Button>
+              <span className="text-xs">
+                {curChapter?.title ?? `第 ${chapterIdx + 1} 节`}
+              </span>
+              <Button
+                variant="outline"
+                disabled={chapterIdx >= chapters.length - 1}
+                onClick={() => {
+                  setChapterIdx((c) => Math.min(chapters.length - 1, c + 1))
+                  scrollRef.current?.scrollTo({ top: 0 })
+                }}
+              >
+                下一章 <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 底部悬浮信息与进度条 */}
+      <footer
+        className={`absolute bottom-0 left-0 right-0 z-30 flex h-12 items-center justify-between border-t px-4 backdrop-blur-md transition-all duration-200 ${
+          showBars ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+        }`}
+        style={{
+          backgroundColor: curTheme.barBg,
+          borderColor: curTheme.barBorder,
+          color: curTheme.barText,
+        }}
+      >
+        <div className="flex items-center gap-2 text-xs">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={chapterIdx <= 0}
+            onClick={() => setChapterIdx((c) => Math.max(0, c - 1))}
+            className="h-7 px-2"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />上一章
+          </Button>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center gap-3 px-4">
+          <span className="truncate text-xs opacity-80">
+            {curChapter?.title ?? `第 ${chapterIdx + 1} 节`}
+          </span>
+          {mode === 'paged' && (
+            <span className="shrink-0 font-mono text-[11px] opacity-70">
+              第 {pageIndex + 1} / {totalPages} 页
+            </span>
+          )}
+          <span className="shrink-0 font-mono text-[11px] font-semibold text-brand-600 dark:text-brand-400">
+            {chapters.length > 0 ? Math.round(((chapterIdx + 1) / chapters.length) * 100) : 0}%
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={chapterIdx >= chapters.length - 1}
+            onClick={() => setChapterIdx((c) => Math.min(chapters.length - 1, c + 1))}
+            className="h-7 px-2"
+          >
+            下一章<ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </footer>
+    </div>
+  )
+}
+
+// ==========================================
+// PDF 高清极速分页渲染核心
+// ==========================================
+
+function PdfReaderCore({
+  book,
+  theme,
+  showBars,
+  onToggleBars,
+  onProgress,
+}: {
+  book: Book
+  theme: ReaderTheme
+  showBars: boolean
+  onToggleBars: () => void
+  onProgress: (p: { pct: number; chapter?: number }) => void
+}) {
+  const [currentPage, setCurrentPage] = useState(1)
+  const [zoomLevel, setZoomLevel] = useState<number>(100)
+
+  const { data: meta } = useQuery({
+    queryKey: ['book-pdf-meta', book.id],
+    queryFn: () => api.pdfMeta(book.id),
+  })
+
+  const totalPages = meta?.page_count ?? 1
+
+  // 监听外部跳转 PDF 页码事件
+  useEffect(() => {
+    const handleJump = (e: Event) => {
+      const { page } = (e as CustomEvent<{ page: number }>).detail
+      if (page >= 1 && page <= totalPages) {
+        setCurrentPage(page)
+      }
+    }
+    window.addEventListener('reader-jump-pdf', handleJump)
+    return () => window.removeEventListener('reader-jump-pdf', handleJump)
+  }, [totalPages])
+
+  // 上报阅读进度
+  useEffect(() => {
+    if (totalPages <= 0) return
+    const pct = Math.min(100, Math.round((currentPage / totalPages) * 1000) / 10)
+    onProgress({ pct, chapter: currentPage })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, totalPages])
+
+  // 预加载下一页
+  useEffect(() => {
+    if (currentPage < totalPages) {
+      const img = new Image()
+      img.src = api.pdfPageUrl(book.id, currentPage + 1)
+    }
+  }, [book.id, currentPage, totalPages])
+
+  const goPrev = () => setCurrentPage((p) => Math.max(1, p - 1))
+  const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1))
+
+  // 键盘翻页监听
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+        e.preventDefault()
+        goNext()
+      } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
+        e.preventDefault()
+        goPrev()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  })
+
+  const curTheme = THEMES[theme]
+
+  return (
+    <div className="relative flex h-full w-full select-none flex-col items-center justify-center overflow-auto p-4 sm:p-6">
+      {/* PDF 页面图像 */}
+      <div className="relative flex min-h-0 max-w-full flex-1 items-center justify-center">
+        <img
+          key={currentPage}
+          src={api.pdfPageUrl(book.id, currentPage)}
+          alt={`第 ${currentPage} 页`}
+          className="max-h-[85vh] max-w-full rounded-md shadow-2xl transition-all duration-150"
+          style={{
+            transform: `scale(${zoomLevel / 100})`,
+            filter: curTheme.pdfFilter || 'none',
+          }}
+        />
+
+        {/* 交互点击翻页区 */}
+        <div
+          className="absolute top-0 bottom-0 left-0 z-20 w-1/4 cursor-w-resize"
+          onClick={goPrev}
+          title="点击翻到上一页 (←)"
+        />
+        <div
+          className="absolute top-0 bottom-0 left-1/4 z-10 w-2/4 cursor-pointer"
+          onClick={onToggleBars}
+          title="点击切换工具栏"
+        />
+        <div
+          className="absolute top-0 bottom-0 right-0 z-20 w-1/4 cursor-e-resize"
+          onClick={goNext}
+          title="点击翻到下一页 (→)"
+        />
+      </div>
+
+      {/* 底部悬浮翻页控制栏 */}
+      <footer
+        className={`absolute bottom-0 left-0 right-0 z-30 flex h-12 items-center justify-between border-t px-4 backdrop-blur-md transition-all duration-200 ${
+          showBars ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+        }`}
+        style={{
+          backgroundColor: curTheme.barBg,
+          borderColor: curTheme.barBorder,
+          color: curTheme.barText,
+        }}
+      >
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" disabled={currentPage <= 1} onClick={goPrev} className="h-7 px-2">
+            <ChevronLeft className="h-3.5 w-3.5" />上一页
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs font-mono">
+          <input
+            type="range"
+            min={1}
+            max={totalPages}
+            value={currentPage}
+            onChange={(e) => setCurrentPage(Number(e.target.value))}
+            className="w-32 accent-brand-600 sm:w-56"
+          />
+          <span>
+            第 {currentPage} / {totalPages} 页 ({Math.round((currentPage / totalPages) * 100)}%)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* 缩放按钮 */}
+          <button
+            onClick={() => setZoomLevel((z) => Math.max(50, z - 15))}
+            className="rounded p-1 opacity-70 hover:opacity-100"
+            title="缩小"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <span className="text-[11px] font-mono opacity-70">{zoomLevel}%</span>
+          <button
+            onClick={() => setZoomLevel((z) => Math.min(200, z + 15))}
+            className="rounded p-1 opacity-70 hover:opacity-100"
+            title="放大"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+
+          <Button size="sm" variant="ghost" disabled={currentPage >= totalPages} onClick={goNext} className="h-7 px-2">
+            下一页<ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </footer>
+    </div>
+  )
+}
+
+// ==========================================
+// 目录组件辅助函数
+// ==========================================
+
+function FlowTocList({
+  chapters,
+  filter,
+  onSelect,
+}: {
+  chapters: { index: number; href: string; title: string }[]
+  filter: string
+  onSelect: (idx: number) => void
+}) {
+  const filtered = chapters.filter((c) =>
+    filter ? c.title.toLowerCase().includes(filter.toLowerCase()) : true
+  )
+
+  if (filtered.length === 0) {
+    return <div className="py-8 text-center text-xs opacity-50">未匹配到相关章节</div>
+  }
+
+  return (
+    <ul className="space-y-1 text-xs">
+      {filtered.map((chap) => (
+        <li key={chap.index}>
+          <button
+            onClick={() => onSelect(chap.index)}
+            className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left transition hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <span className="truncate">{chap.title}</span>
+            <span className="ml-2 font-mono text-[10px] opacity-40">#{chap.index + 1}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function PdfTocList({
+  toc,
+  filter,
+  onSelect,
+}: {
+  toc: { level: number; title: string; page: number }[]
+  filter: string
+  onSelect: (page: number) => void
+}) {
+  const filtered = toc.filter((item) =>
+    filter ? item.title.toLowerCase().includes(filter.toLowerCase()) : true
+  )
+
+  if (filtered.length === 0) {
+    return <div className="py-8 text-center text-xs opacity-50">未发现 PDF 书签目录</div>
+  }
+
+  return (
+    <ul className="space-y-1 text-xs">
+      {filtered.map((item, idx) => (
+        <li key={idx} style={{ paddingLeft: `${Math.max(0, (item.level - 1) * 12)}px` }}>
+          <button
+            onClick={() => onSelect(item.page)}
+            className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left transition hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <span className="truncate">{item.title}</span>
+            <span className="ml-2 font-mono text-[10px] opacity-50">P.{item.page}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}

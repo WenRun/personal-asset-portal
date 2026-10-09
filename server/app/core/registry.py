@@ -26,7 +26,7 @@ def _register(exts: tuple[str, ...], asset_type: str) -> None:
 _register((".ttf", ".otf", ".woff", ".woff2"), "font")
 _register((".mp3", ".flac", ".m4a", ".ogg", ".wav"), "music")
 _register((".mp4", ".mkv", ".mov", ".webm", ".avi"), "video")
-_register((".epub", ".pdf", ".mobi", ".azw3"), "book")
+_register((".epub", ".pdf", ".mobi", ".azw3", ".txt"), "book")
 _register((".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"), "image")
 
 MIME_OVERRIDES = {

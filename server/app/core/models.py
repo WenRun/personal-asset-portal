@@ -200,7 +200,7 @@ class BookDetail(Base):
     series_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     series_index: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     language: Mapped[str | None] = mapped_column(Text, nullable=True)
-    format: Mapped[str | None] = mapped_column(Text, nullable=True)  # epub|pdf|mobi|azw3
+    format: Mapped[str | None] = mapped_column(Text, nullable=True)  # epub|pdf|mobi|azw3|txt
     pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 

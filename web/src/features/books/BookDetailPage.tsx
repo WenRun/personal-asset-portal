@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Download, Link2, Trash2, X } from 'lucide-react'
+import { Download, Link2, Pencil, Trash2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { useAuth } from '@/stores/auth'
-import { BackLink, Badge, Button, Modal, RatingStars } from '@/components/ui'
+import { BackLink, Badge, Button, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
+import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { fmtDate } from '@/lib/utils'
-import type { Book } from '@/types'
+import { BookReader } from './BookReader'
 
-/** 书籍详情（§5.4）：真实元数据 + 自建 epub 章节阅读器 / 原生 PDF + 服务端进度（user_progress） */
+/** 书籍详情：多格式支持（EPUB / PDF / MOBI / AZW3 / TXT）+ 现代电子阅读器 + 元数据编辑 */
 export function BookDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -18,6 +19,7 @@ export function BookDetailPage() {
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   const [shareOpen, setShareOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const { data: book } = useQuery({ queryKey: ['book', id], queryFn: () => api.book(id!), enabled: !!id })
   const { data: progress } = useQuery({ queryKey: ['progress', id], queryFn: () => api.getProgress(id!), enabled: !!id })
   const [readerOpen, setReaderOpen] = useState(false)
@@ -28,11 +30,18 @@ export function BookDetailPage() {
   const savedPct = typeof progress?.position?.pct === 'number' ? progress.position.pct : null
   const savedChapter = typeof progress?.position?.chapter === 'number' ? progress.position.chapter : null
   const pct = savedPct ?? book.progressPct
-  const readable = book.formats.find((f) => f.readable)
+  const readable = book.formats.find((f) => f.readable) || book.formats[0]
 
   const savePage = (p: { pct: number; chapter?: number }) => {
     void api.saveProgress(book.id, { pct: p.pct, ...(p.chapter !== undefined ? { chapter: p.chapter } : {}) })
     void qc.invalidateQueries({ queryKey: ['progress', book.id] })
+  }
+
+  const handleRatingChange = (val: number) => {
+    setRating(val)
+    void api.patchAsset(book.id, { rating: val }).then(() => {
+      void qc.invalidateQueries({ queryKey: ['book', book.id] })
+    })
   }
 
   return (
@@ -51,10 +60,31 @@ export function BookDetailPage() {
             {book.formats.map((f) => (
               <div key={f.kind} className={`flex items-center justify-between px-3 py-2.5 ${f.readable ? '' : 'opacity-70'}`}>
                 <div>
-                  <Badge tone={f.kind === 'EPUB' ? 'green' : f.kind === 'PDF' ? 'brand' : 'amber'}>{f.kind}</Badge>
-                  <div className="mt-0.5 text-xs text-slate-400">{f.sizeMB}MB · {f.readable ? '可在线阅读' : '仅下载'}</div>
+                  <Badge
+                    tone={
+                      f.kind === 'EPUB'
+                        ? 'green'
+                        : f.kind === 'PDF'
+                          ? 'brand'
+                          : f.kind === 'TXT'
+                            ? 'violet'
+                            : 'amber'
+                    }
+                  >
+                    {f.kind}
+                  </Badge>
+                  <div className="mt-0.5 text-xs text-slate-400">
+                    {f.sizeMB}MB · {f.readable ? '可在线阅读' : '仅下载'}
+                  </div>
                 </div>
-                <a href={api.downloadUrl(book.id)} className="text-slate-400 transition hover:text-brand-600"><Download className="h-4 w-4" /></a>
+                <a
+                  href={api.downloadUrl(book.id)}
+                  download
+                  className="text-slate-400 transition hover:text-brand-600"
+                  title="下载书籍原文件"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
               </div>
             ))}
           </div>
@@ -63,31 +93,60 @@ export function BookDetailPage() {
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
             {book.series && (
-              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">系列 · {book.series.name} 第 {book.series.idx} 部</span>
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">
+                系列 · {book.series.name} 第 {book.series.idx} 部
+              </span>
             )}
             {book.tags.map((t) => (
-              <button key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 transition hover:bg-brand-50 hover:text-brand-700" title={`查看「${t}」标签下的书籍`} onClick={() => nav(`/books?tag=${encodeURIComponent(t)}`)}>
+              <button
+                key={t}
+                className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 transition hover:bg-brand-50 hover:text-brand-700"
+                title={`查看「${t}」标签下的书籍`}
+                onClick={() => nav(`/books?tag=${encodeURIComponent(t)}`)}
+              >
                 {t}
               </button>
             ))}
+            {isAdmin && (
+              <button
+                onClick={() => setEditOpen(true)}
+                className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-slate-400 transition hover:border-brand-500 hover:text-brand-600"
+              >
+                + 添加标签
+              </button>
+            )}
           </div>
           <h1 className="text-2xl font-bold">{book.title}</h1>
           <div className="mt-1 text-sm text-slate-500">
             {book.author || '作者未知'} · {book.publisher || '出版社未知'} · {book.year}
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <RatingStars value={rating ?? book.rating} onChange={setRating} />
-            <span className="text-xs text-slate-400">{rating ?? book.rating}.0 · 我的评分</span>
-            {isAdmin && (
-              <Button variant="outline" size="sm" className="ml-auto" onClick={() => setShareOpen(true)}>
-                <Link2 className="h-3.5 w-3.5" />分享
-              </Button>
-            )}
-            {isAdmin && (
-              <Button variant="outline" size="sm" className="text-rose-600 hover:bg-rose-50" title="删除该书籍" onClick={() => setDelOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
+            <RatingStars value={rating ?? book.rating} onChange={handleRatingChange} />
+            <span className="text-xs text-slate-400">{(rating ?? book.rating)}.0 · 我的评分</span>
+
+            <div className="ml-auto flex items-center gap-2">
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} title="编辑书籍元信息">
+                  <Pencil className="h-3.5 w-3.5" />编辑
+                </Button>
+              )}
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+                  <Link2 className="h-3.5 w-3.5" />分享
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-rose-600 hover:bg-rose-50"
+                  title="删除该书籍"
+                  onClick={() => setDelOpen(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
@@ -113,122 +172,65 @@ export function BookDetailPage() {
           <div className="mt-5">
             <div className="mb-1.5 text-xs font-semibold text-slate-400">简介</div>
             <p className="text-sm leading-relaxed text-slate-600">
-              {book.desc || '（简介随元数据入库；可在「编辑」中手动维护备注）'}
+              {book.desc || '（简介随元数据入库；可在「编辑」中手动维护备注与简介）'}
             </p>
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
             <div className="mb-2 text-xs font-semibold text-slate-400">元数据</div>
             <dl className="divide-y divide-slate-100 text-sm">
-              <div className="flex py-2"><dt className="w-24 shrink-0 text-slate-400">ISBN</dt><dd className="font-mono text-xs leading-5">{book.isbn || '—'}</dd></div>
-              <div className="flex py-2"><dt className="w-24 shrink-0 text-slate-400">语言</dt><dd>{book.language || '—'}</dd></div>
-              <div className="flex py-2"><dt className="w-24 shrink-0 text-slate-400">文件</dt><dd>{book.formats.map((f) => f.kind).join(' / ')} · 共 {book.formats.reduce((s, f) => s + f.sizeMB, 0).toFixed(1)}MB</dd></div>
-              <div className="flex py-2"><dt className="w-24 shrink-0 text-slate-400">入库时间</dt><dd>{fmtDate(book.createdAt)}</dd></div>
+              <div className="flex py-2">
+                <dt className="w-24 shrink-0 text-slate-400">ISBN</dt>
+                <dd className="font-mono text-xs leading-5">{book.isbn || '—'}</dd>
+              </div>
+              <div className="flex py-2">
+                <dt className="w-24 shrink-0 text-slate-400">语言</dt>
+                <dd>{book.language || '—'}</dd>
+              </div>
+              <div className="flex py-2">
+                <dt className="w-24 shrink-0 text-slate-400">文件</dt>
+                <dd>
+                  {book.formats.map((f) => f.kind).join(' / ')} · 共 {book.formats.reduce((s, f) => s + f.sizeMB, 0).toFixed(1)}MB
+                </dd>
+              </div>
+              <div className="flex py-2">
+                <dt className="w-24 shrink-0 text-slate-400">入库时间</dt>
+                <dd>{fmtDate(book.createdAt)}</dd>
+              </div>
             </dl>
           </div>
         </div>
       </div>
 
       {readerOpen && readable && (
-        <ReaderModal book={book} format={readable.kind} initialChapter={savedChapter ?? 0} initialPct={pct}
-          onClose={() => setReaderOpen(false)} onProgress={savePage} />
+        <BookReader
+          book={book}
+          format={readable.kind}
+          initialChapter={savedChapter ?? 0}
+          initialPct={pct}
+          onClose={() => setReaderOpen(false)}
+          onProgress={savePage}
+        />
+      )}
+
+      {editOpen && (
+        <EditAssetDialog
+          assetId={book.id}
+          initialTitle={book.title}
+          initialNote={book.desc}
+          initialTags={book.tags}
+          initialRating={book.rating}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSuccess={() => {
+            void qc.invalidateQueries({ queryKey: ['book', book.id] })
+            void qc.invalidateQueries({ queryKey: ['books'] })
+          }}
+        />
       )}
 
       <ShareDialog assetId={book.id} assetTitle={book.title} open={shareOpen} onClose={() => setShareOpen(false)} />
       <DeleteAssetDialog assetId={book.id} assetTitle={book.title} listPath="/books" open={delOpen} onClose={() => setDelOpen(false)} />
     </div>
-  )
-}
-
-/** 清理章节 HTML：去脚本与内联事件（个人库内容，最小化防护） */
-function sanitizeChapterHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript:/gi, '')
-}
-
-function ReaderModal({ book, format, initialChapter, initialPct, onClose, onProgress }: {
-  book: Book
-  format: string
-  initialChapter: number
-  initialPct: number
-  onClose: () => void
-  onProgress: (p: { pct: number; chapter?: number }) => void
-}) {
-  const isEpub = format === 'EPUB'
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [chapter, setChapter] = useState(initialChapter)
-  const [pct, setPct] = useState(initialPct)
-  const { data: contents } = useQuery({
-    queryKey: ['book-contents', book.id],
-    queryFn: () => api.bookContents(book.id),
-    enabled: isEpub,
-  })
-  const chapters = contents?.chapters ?? []
-  const current = chapters[chapter]
-
-  const { data: html } = useQuery({
-    queryKey: ['chapter-html', book.id, current?.href],
-    queryFn: () => api.bookResource(book.id, current!.href),
-    enabled: isEpub && !!current,
-  })
-
-  // 切章 → 存进度 + 回顶部
-  useEffect(() => {
-    if (!isEpub || chapters.length === 0) return
-    const p = Math.round(((chapter + 1) / chapters.length) * 1000) / 10
-    setPct(Math.min(p, 100))
-    onProgress({ pct: Math.min(p, 100), chapter })
-    scrollRef.current?.scrollTo({ top: 0 })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapter, chapters.length, isEpub])
-
-  return (
-    <Modal open onClose={onClose} className="fixed inset-0 m-0 h-full w-full max-w-none rounded-none bg-white">
-      <div className="flex h-full flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-200 px-4">
-          <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600" onClick={onClose}>
-            <X className="h-4 w-4" />关闭阅读器
-          </button>
-          <div className="truncate text-sm font-medium">{book.title}</div>
-          <span className="ml-auto shrink-0 font-mono text-xs text-slate-400">
-            {format} · {isEpub && current ? current.title : ''} · {Math.round(pct)}%
-          </span>
-        </div>
-
-        {format === 'PDF' ? (
-          <iframe src={api.bookFileUrl(book.id)} title={book.title} className="min-h-0 flex-1" />
-        ) : (
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-2xl px-6 py-10 text-[15px] leading-8 text-slate-700 [&_h1]:mb-6 [&_h1]:text-xl [&_h1]:font-bold [&_p]:mb-4">
-              {html
-                ? <div dangerouslySetInnerHTML={{ __html: sanitizeChapterHtml(html) }} />
-                : <div className="py-20 text-center text-slate-300">章节加载中…</div>}
-            </div>
-          </div>
-        )}
-
-        <div className="flex h-12 shrink-0 items-center gap-4 border-t border-slate-200 px-4">
-          {isEpub ? (
-            <>
-              <Button variant="outline" disabled={chapter <= 0}
-                onClick={() => setChapter((c) => Math.max(0, c - 1))}>
-                <ChevronLeft className="h-4 w-4" />上一节
-              </Button>
-              <div className="h-1 flex-1 rounded-full bg-slate-100">
-                <div className="h-1 rounded-full bg-brand-500 transition-all" style={{ width: `${Math.max(pct, 1)}%` }} />
-              </div>
-              <Button disabled={chapter >= chapters.length - 1}
-                onClick={() => setChapter((c) => Math.min(chapters.length - 1, c + 1))}>
-                下一节<ChevronRight className="h-4 w-4" />
-              </Button>
-            </>
-          ) : (
-            <div className="flex-1 text-center text-xs text-slate-400">PDF 由浏览器内置阅读器分页</div>
-          )}
-        </div>
-      </div>
-    </Modal>
   )
 }

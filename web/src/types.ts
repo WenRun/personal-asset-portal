@@ -100,7 +100,7 @@ export interface Clip {
 export type VideoAsset = Series | Clip
 
 // ---- 书籍 ----
-export interface BookFormat { kind: 'EPUB' | 'PDF' | 'MOBI' | 'AZW3'; sizeMB: number; readable: boolean }
+export interface BookFormat { kind: 'EPUB' | 'PDF' | 'MOBI' | 'AZW3' | 'TXT'; sizeMB: number; readable: boolean }
 export interface Book {
   id: string
   title: string

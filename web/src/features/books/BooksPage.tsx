@@ -71,7 +71,7 @@ export function BooksPage() {
     <div className="p-4 md:p-6">
       <PageHeader
         title="书籍"
-        sub={`${books?.length ?? 0} 本（epub/pdf 元数据与封面已解析 · mobi/azw3 仅下载）`}
+        sub={`${books?.length ?? 0} 本（支持 EPUB / PDF / MOBI / AZW3 / TXT 在线阅读与章节翻页）`}
         right={user && (
           <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
             <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
