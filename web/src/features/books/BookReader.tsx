@@ -1072,10 +1072,10 @@ function PdfReaderCore({
   return (
     <div
       onWheel={handleWheel}
-      className="relative flex h-full w-full select-none flex-col items-center justify-center overflow-auto p-4 sm:p-6"
+      className="relative flex h-full w-full select-none flex-col items-center justify-center overflow-hidden p-4 sm:p-6"
     >
-      {/* PDF 页面图像与交互区 */}
-      <div className="relative flex min-h-0 max-w-full flex-1 items-center justify-center">
+      {/* PDF 页面图像展示区 */}
+      <div className="relative flex min-h-0 max-w-full flex-1 items-center justify-center overflow-auto">
         {imgLoading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center text-sm opacity-50 pointer-events-none">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 加载页面中…
@@ -1113,48 +1113,48 @@ function PdfReaderCore({
             }}
           />
         )}
-
-        {/* 交互点击翻页区 */}
-        <div
-          className="absolute top-0 bottom-0 left-0 z-20 w-1/4 cursor-w-resize"
-          onClick={goPrev}
-          title="点击翻到上一页 (← / 滚轮上滑)"
-        />
-        <div
-          className="absolute top-0 bottom-0 left-1/4 z-10 w-2/4 cursor-pointer"
-          onClick={onToggleBars}
-          title="点击切换工具栏"
-        />
-        <div
-          className="absolute top-0 bottom-0 right-0 z-20 w-1/4 cursor-e-resize"
-          onClick={goNext}
-          title="点击翻到下一页 (→ / 滚轮下滑)"
-        />
-
-        {/* 悬浮翻页箭头按钮 */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            goPrev()
-          }}
-          disabled={currentPage <= 1}
-          className="absolute left-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-          title="上一页"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            goNext()
-          }}
-          disabled={currentPage >= totalPages}
-          className="absolute right-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-          title="下一页"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
       </div>
+
+      {/* 屏幕级交互点击翻页区：左 20% 上一页，中 60% 控制栏，右 20% 下一页（与其他格式完全一致） */}
+      <div
+        className="absolute top-0 bottom-0 left-0 z-20 w-1/5 cursor-w-resize"
+        onClick={goPrev}
+        title="点击翻到上一页 (← / 滚轮上滑)"
+      />
+      <div
+        className="absolute top-0 bottom-0 left-[20%] z-10 w-3/5 cursor-pointer"
+        onClick={onToggleBars}
+        title="点击呼出 / 隐藏控制栏"
+      />
+      <div
+        className="absolute top-0 bottom-0 right-0 z-20 w-1/5 cursor-e-resize"
+        onClick={goNext}
+        title="点击翻到下一页 (→ / 滚轮下滑)"
+      />
+
+      {/* 屏幕级悬浮翻页箭头按钮（屏幕左右两侧） */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          goPrev()
+        }}
+        disabled={currentPage <= 1}
+        className="absolute left-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+        title="上一页"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          goNext()
+        }}
+        disabled={currentPage >= totalPages}
+        className="absolute right-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white opacity-0 shadow-lg backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-black/50 hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+        title="下一页"
+      >
+        <ChevronRight className="h-6 w-6" />
+      </button>
 
       {/* 底部悬浮翻页控制栏 */}
       <footer
