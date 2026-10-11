@@ -171,6 +171,7 @@ export function PlayerBar() {
             surround={cur.surround}
             channels={cur.channels}
             sampleRateHz={cur.sampleRateHz}
+            isCue={cur.isCueTrack}
             dark
             className="shrink-0"
           />

@@ -370,7 +370,7 @@ export const api = {
   musicAlbums: () =>
     req<{ id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]>('/api/music/albums'),
   album: async (id: string): Promise<Album> => {
-    const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; format?: string | null; lrc: boolean; streamable: boolean; size_bytes: number }[] }>(`/api/music/albums/${id}`)
+    const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; format?: string | null; lrc: boolean; streamable: boolean; size_bytes: number; is_cue_track?: boolean }[] }>(`/api/music/albums/${id}`)
     const firstFormat = d.tracks.find((t) => t.format)?.format?.toUpperCase() || ''
     return {
       id: d.id,
@@ -386,6 +386,7 @@ export const api = {
         durationSec: t.duration_sec, bitrateK: t.bitrate_kbps ?? 0,
         sampleRateHz: t.sample_rate_hz, channels: t.channels, channelLayout: t.channel_layout,
         surround: t.surround, format: t.format, lrc: t.lrc, streamable: t.streamable,
+        isCueTrack: t.is_cue_track,
       })),
       tags: [],
       rating: 0,
@@ -396,7 +397,7 @@ export const api = {
     }
   },
   musicTracks: () =>
-    req<{ asset_id: string; album_id: string; title: string; album: string; artist: string; no: number | null; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; lrc: boolean; format: string | null; streamable: boolean; created_at: string }[]>('/api/music/tracks'),
+    req<{ asset_id: string; album_id: string; title: string; album: string; artist: string; no: number | null; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; lrc: boolean; format: string | null; streamable: boolean; is_cue_track?: boolean; created_at: string }[]>('/api/music/tracks'),
   musicAlbumCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/music/albums/${id}/cover?size=${size}`,
   videoSeries: () => req<{ id: string; name: string; episodes: number; first_ep: number | null; last_ep: number | null; duration_sec: number; cover_url: string | null }[]>('/api/videos/series'),
   seriesEpisodes: (id: string) => req<{ id: string; name: string; description: string; episode_count: number; watched: number; cover_url: string | null; episodes: { asset_id: string; episode: number | null; title: string; duration_sec: number; position_sec: number; streamable: boolean; cover_url: string | null }[] }>(`/api/videos/series/${id}/episodes`),

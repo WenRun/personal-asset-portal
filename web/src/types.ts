@@ -48,6 +48,7 @@ export interface Track {
   format?: string | null
   lrc: boolean
   streamable?: boolean
+  isCueTrack?: boolean
 }
 export interface Album {
   id: string

@@ -27,6 +27,7 @@ _register((".ttf", ".otf", ".woff", ".woff2"), "font")
 _register((
     ".mp3", ".flac", ".m4a", ".ogg", ".wav", ".dts", ".dtshd",
     ".ape", ".dsf", ".dff", ".aiff", ".aif", ".opus", ".wma", ".alac",
+    ".cue",
 ), "music")
 _register((".mp4", ".mkv", ".mov", ".webm", ".avi"), "video")
 _register((".epub", ".pdf", ".mobi", ".azw3", ".txt"), "book")
@@ -38,6 +39,7 @@ MIME_OVERRIDES = {
     ".ape": "audio/x-ape", ".dsf": "audio/x-dsf", ".dff": "audio/x-dff",
     ".aiff": "audio/x-aiff", ".aif": "audio/x-aiff", ".opus": "audio/opus",
     ".wma": "audio/x-ms-wma", ".alac": "audio/x-alac",
+    ".cue": "application/x-cue",
     ".epub": "application/epub+zip",
     ".pdf": "application/pdf", ".mkv": "video/x-matroska", ".heic": "image/heic",
     ".md": "text/markdown", ".txt": "text/plain",

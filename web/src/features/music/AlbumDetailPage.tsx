@@ -102,6 +102,7 @@ export function AlbumDetailPage() {
                       surround={t.surround}
                       channels={t.channels}
                       sampleRateHz={t.sampleRateHz}
+                      isCue={t.isCueTrack}
                       className="ml-2"
                     />
                     {active && !playing && <span className="ml-2 text-xs text-slate-400">（已暂停）</span>}

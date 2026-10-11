@@ -2,6 +2,7 @@
 
 import posixpath
 import subprocess
+import uuid
 from pathlib import Path
 
 from mutagen import File as MutagenFile
@@ -95,6 +96,214 @@ def _extract_attached_pic(path: Path) -> bytes | None:
     return None
 
 
+async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) -> None:
+    """处理 CUE 索引文件：解析分轨、绑定母带、派生子曲目并排队切片。"""
+    from app.core.jobs import enqueue
+    from app.core.registry import mime_of
+    from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet, resolve_audio_file
+    from app.domains.music.probe import probe_audio
+
+    content = detect_and_read_cue(path)
+    if not content:
+        asset.meta = {**asset.meta, "cue_parse_error": "无法读取 CUE 文件内容"}
+        asset.status = "failed"
+        await db.commit()
+        return
+
+    sheet = parse_cue_sheet(content)
+    if not sheet.tracks:
+        asset.meta = {**asset.meta, "cue_parse_error": "CUE 文件未包含有效 TRACK 音轨"}
+        asset.status = "failed"
+        await db.commit()
+        return
+
+    audio_path = resolve_audio_file(path, sheet)
+    audio_asset = None
+    if audio_path is not None:
+        for alias, r_path in storage.roots.items():
+            if audio_path.is_relative_to(r_path):
+                rel_p = str(audio_path.relative_to(r_path)).replace("\\", "/")
+                target_key = f"{alias}:{rel_p}"
+                audio_asset = (await db.execute(select(Asset).where(Asset.storage_key == target_key))).scalar_one_or_none()
+                break
+
+    # 解析音频流属性与总时长
+    audio_total_ms = None
+    audio_sr = None
+    audio_bitrate = None
+    audio_channels = None
+    audio_surround = None
+    audio_format = "flac"
+    cover_bytes = None
+    cover_ext = "jpg"
+
+    if audio_path is not None and audio_path.is_file():
+        audio_format = ext_of(audio_path.name).lstrip(".").lower()
+        probed = probe_audio(audio_path)
+        if probed:
+            audio_total_ms = probed.get("duration_ms")
+            audio_sr = probed.get("sample_rate_hz")
+            audio_bitrate = probed.get("bitrate_kbps")
+            audio_channels = probed.get("channels")
+            audio_surround = probed.get("surround")
+        cover_bytes = _extract_attached_pic(audio_path)
+
+    # 封面试探：若母带内嵌未提取到，查找同目录下常见封面
+    if cover_bytes is None and path.parent.is_dir():
+        for cand_name in ("cover.jpg", "cover.png", "cover.jpeg", "folder.jpg", "folder.png", "front.jpg", "front.png"):
+            cand = path.parent / cand_name
+            if cand.is_file():
+                try:
+                    cover_bytes = cand.read_bytes()
+                    cover_ext = cand.suffix.lstrip(".").lower() or "jpg"
+                    break
+                except Exception:
+                    pass
+
+    # 填充最后一首曲目的时长
+    if sheet.tracks:
+        last_track = sheet.tracks[-1]
+        if last_track.duration_ms is None and audio_total_ms and audio_total_ms > last_track.start_ms:
+            last_track.end_ms = audio_total_ms
+            last_track.duration_ms = audio_total_ms - last_track.start_ms
+
+    # 专辑与艺术家归一
+    rel = asset.storage_key.split(":", 1)[1]
+    parts = rel.split("/")
+    album_name = sheet.title or (parts[-2] if len(parts) > 2 else None) or asset.file_name.rsplit(".", 1)[0]
+    artist_name = sheet.performer or (parts[0] if len(parts) > 2 else None) or "未知艺术家"
+    year = sheet.date
+
+    arow = (await db.execute(select(MusicArtist).where(MusicArtist.name == artist_name))).scalar_one_or_none()
+    if arow is None:
+        arow = MusicArtist(name=artist_name)
+        db.add(arow)
+        await db.flush()
+
+    alrow = (
+        await db.execute(
+            select(MusicAlbum).where(MusicAlbum.artist_id == arow.id, MusicAlbum.name == album_name)
+        )
+    ).scalar_one_or_none()
+    if alrow is None:
+        alrow = MusicAlbum(artist_id=arow.id, name=album_name, year=year)
+        db.add(alrow)
+        await db.flush()
+    elif alrow.year is None and year:
+        alrow.year = year
+
+    # 标记母带音频 Asset
+    if audio_asset is not None:
+        audio_asset.meta = {
+            **audio_asset.meta,
+            "is_cue_master": True,
+            "cue_asset_id": str(asset.id),
+        }
+        matrack = await db.get(MusicTrack, audio_asset.id)
+        if matrack is not None:
+            matrack.album_id = alrow.id
+
+    # 更新 CUE 资产自身元数据
+    asset.title = album_name
+    asset.status = "ready"
+    asset.meta = {
+        **asset.meta,
+        "is_cue_sheet": True,
+        "album_id": str(alrow.id),
+        "artist_id": str(arow.id),
+        "track_count": len(sheet.tracks),
+        "audio_path": str(audio_path) if audio_path else None,
+        "audio_asset_id": str(audio_asset.id) if audio_asset else None,
+    }
+
+    # 批量构建/更新各分轨子资产与音轨记录
+    raw_file_size = audio_path.stat().st_size if audio_path and audio_path.is_file() else 0
+    child_asset_ids = []
+
+    for trk in sheet.tracks:
+        trk_uuid = uuid.uuid5(asset.id, f"track_{trk.track_no}")
+        trk_storage_key = f"cue:{asset.id}/track_{trk.track_no:02d}.mp3"
+        trk_artist_name = trk.performer or artist_name
+        trk_dur = trk.duration_ms or 0
+        trk_size = int(raw_file_size * (trk_dur / (audio_total_ms or 1))) if raw_file_size and audio_total_ms and trk_dur else 1024
+
+        child_asset = await db.get(Asset, trk_uuid)
+        child_meta = {
+            "cue_asset_id": str(asset.id),
+            "audio_path": str(audio_path) if audio_path else None,
+            "audio_storage_key": audio_asset.storage_key if audio_asset else None,
+            "track_no": trk.track_no,
+            "start_ms": trk.start_ms,
+            "end_ms": trk.end_ms,
+            "duration_ms": trk_dur,
+            "format": audio_format,
+            "sample_rate_hz": audio_sr,
+            "channels": audio_channels,
+            "surround": audio_surround,
+            "is_cue_track": True,
+        }
+
+        if child_asset is None:
+            child_asset = Asset(
+                id=trk_uuid,
+                asset_type="music",
+                title=trk.title,
+                storage_key=trk_storage_key,
+                file_name=f"{trk.track_no:02d}. {trk.title}.{audio_format}",
+                size_bytes=trk_size,
+                file_mtime=path.stat().st_mtime_ns if path.exists() else 0,
+                mime_type=mime_of(f"x.{audio_format}"),
+                status="ready",
+                meta=child_meta,
+            )
+            db.add(child_asset)
+        else:
+            child_asset.title = trk.title
+            child_asset.file_name = f"{trk.track_no:02d}. {trk.title}.{audio_format}"
+            child_asset.size_bytes = trk_size
+            child_asset.status = "ready"
+            child_asset.meta = {**child_asset.meta, **child_meta}
+
+        # 艺术家
+        tarow = (await db.execute(select(MusicArtist).where(MusicArtist.name == trk_artist_name))).scalar_one_or_none()
+        if tarow is None:
+            tarow = MusicArtist(name=trk_artist_name)
+            db.add(tarow)
+            await db.flush()
+
+        # 音轨
+        child_track = await db.get(MusicTrack, trk_uuid)
+        if child_track is None:
+            child_track = MusicTrack(asset_id=trk_uuid)
+            db.add(child_track)
+        child_track.album_id = alrow.id
+        child_track.artist_id = tarow.id
+        child_track.track_no = trk.track_no
+        child_track.duration_ms = trk_dur
+        child_track.format = audio_format
+        child_track.sample_rate_hz = audio_sr
+        child_track.bitrate_kbps = audio_bitrate
+        child_track.streamable = True
+        child_asset_ids.append(trk_uuid)
+
+    await db.commit()
+
+    # 派生任务
+    if cover_bytes is not None:
+        from app.domains.music.thumbs import derived_dir
+
+        out_dir = derived_dir(str(asset.id))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / f"cover_src.{cover_ext}").write_bytes(cover_bytes)
+        await enqueue(db, "derive:music_cover", {"asset_id": str(asset.id), "album_id": str(alrow.id)}, priority=5)
+
+    if audio_path is not None and audio_path.is_file():
+        await enqueue(db, "derive:cue_slices", {"cue_asset_id": str(asset.id)}, priority=6)
+
+    for cid in child_asset_ids:
+        await enqueue(db, "index_meili", {"asset_id": str(cid)}, priority=8)
+
+
 @register("parse:music")
 async def parse_music(db: AsyncSession, payload: dict) -> None:
     asset = await db.get(Asset, payload["asset_id"])
@@ -104,6 +313,10 @@ async def parse_music(db: AsyncSession, payload: dict) -> None:
     storage = build_storage(await roots_of(db))
     path = storage.resolve(asset.storage_key)
     ext = ext_of(asset.file_name).lstrip(".")
+
+    if ext == "cue":
+        await _parse_cue_asset(db, asset, path, storage)
+        return
 
     meta: dict = {"ext": ext, "streamable": ext in PLAYABLE}
     fields: dict = {"format": ext, "streamable": ext in PLAYABLE}

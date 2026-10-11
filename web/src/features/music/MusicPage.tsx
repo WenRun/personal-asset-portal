@@ -233,6 +233,7 @@ function TracksView() {
                       surround={t.surround}
                       channels={t.channels}
                       sampleRateHz={t.sample_rate_hz}
+                      isCue={t.is_cue_track}
                       className="ml-1.5"
                     />
                   </td>

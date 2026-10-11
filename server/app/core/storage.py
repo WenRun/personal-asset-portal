@@ -31,6 +31,11 @@ class LocalStorage:
         if ":" not in key:
             raise bad_request(f"非法 storage_key: {key}")
         alias, rel = key.split(":", 1)
+        if alias == "cue":
+            from app.core.config import get_settings
+
+            root = (get_settings().data_root / "derived" / "music").resolve()
+            return root, rel
         root = self.roots.get(alias)
         if root is None:
             raise not_found(f"未注册的资源根目录: {alias}")

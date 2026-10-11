@@ -74,9 +74,11 @@ async def list_tracks(db: AsyncSession = Depends(get_db), _: object = Depends(re
             "channel_layout": a.meta.get("channel_layout") if a.meta else None,
             "surround": a.meta.get("surround") if a.meta else None,
             "lrc": t.has_lyrics, "format": t.format, "streamable": t.streamable,
+            "is_cue_track": bool(a.meta and a.meta.get("is_cue_track")),
             "created_at": a.created_at.isoformat(),
         }
         for a, t, al, ar in rows
+        if not (a.meta and a.meta.get("is_cue_master"))
     ]
 
 
@@ -109,8 +111,10 @@ async def album_detail(album_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
                 "surround": a.meta.get("surround") if a.meta else None,
                 "lrc": t.has_lyrics,
                 "format": t.format, "streamable": t.streamable, "size_bytes": a.size_bytes,
+                "is_cue_track": bool(a.meta and a.meta.get("is_cue_track")),
             }
             for a, t in tracks
+            if not (a.meta and a.meta.get("is_cue_master"))
         ],
     }
 
@@ -154,8 +158,65 @@ async def stream(asset_id: uuid.UUID,
     if t is not None and not t.streamable:
         raise bad_request("该格式不支持在线播放，仅下载")
     storage = build_storage(await roots_of(db))
-    src_path = storage.resolve(a.storage_key)
     ext = ext_of(a.file_name).lstrip(".").lower()
+
+    if ext == "cue" or (a.meta and a.meta.get("is_cue_sheet")):
+        raise bad_request("CUE 文件为分轨索引表，请直接播放具体分轨曲目")
+
+    # CUE 派生分轨：确保切片就绪并输出
+    if a.meta and a.meta.get("is_cue_track"):
+        from app.domains.music.transcode import ensure_cue_track_stream
+
+        cue_asset_id = a.meta.get("cue_asset_id")
+        track_no = a.meta.get("track_no", 1)
+        start_ms = a.meta.get("start_ms", 0)
+        end_ms = a.meta.get("end_ms")
+        audio_path_str = a.meta.get("audio_path")
+        audio_path = Path(audio_path_str) if audio_path_str else None
+
+        if (audio_path is None or not audio_path.exists()) and a.meta.get("audio_storage_key"):
+            try:
+                audio_path = storage.resolve(a.meta["audio_storage_key"])
+            except Exception:
+                pass
+
+        if (audio_path is None or not audio_path.exists()) and cue_asset_id:
+            cue_asset = await db.get(Asset, uuid.UUID(cue_asset_id))
+            if cue_asset:
+                from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet, resolve_audio_file
+
+                cue_path = storage.resolve(cue_asset.storage_key)
+                content = detect_and_read_cue(cue_path)
+                if content:
+                    sheet = parse_cue_sheet(content)
+                    audio_path = resolve_audio_file(cue_path, sheet)
+
+        if audio_path is None or not audio_path.exists():
+            raise not_found("关联的母带音频文件不存在")
+
+        fmt = a.meta.get("format") or "mp3"
+        sliced = ensure_cue_track_stream(
+            audio_path=audio_path,
+            cue_asset_id=cue_asset_id or str(a.id),
+            track_no=track_no,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            original=original,
+            audio_format=fmt,
+        )
+        if sliced is None or not sliced.exists():
+            raise not_found("生成分轨音频切片失败")
+
+        out_ext = sliced.suffix.lstrip(".").lower()
+        media_type = "audio/mpeg" if out_ext == "mp3" else (mime_of(f"x.{out_ext}") or "application/octet-stream")
+        return FileResponse(
+            sliced,
+            filename=f"{a.title}.{out_ext}",
+            media_type=media_type,
+            content_disposition_type="inline",
+        )
+
+    src_path = storage.resolve(a.storage_key)
 
     # 针对非浏览器原生播放格式（DTS/APE/DSF/DFF/WMA/ALAC/AIFF 等）或多声道环绕声音频，在非强制原始串流时，转码/读取下混立体声 MP3 以供浏览器 audio 标签平滑播放
     from app.domains.music.parser import NEED_TRANSCODE

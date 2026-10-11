@@ -330,6 +330,21 @@ async def download(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     if a is None or a.deleted_at is not None:
         raise not_found()
     storage = await _storage(db)
+    if a.meta and a.meta.get("is_cue_track"):
+        from app.domains.music.transcode import ensure_cue_track_stream
+
+        audio_path_str = a.meta.get("audio_path")
+        audio_path = Path(audio_path_str) if audio_path_str else None
+        if audio_path and audio_path.exists():
+            ensure_cue_track_stream(
+                audio_path=audio_path,
+                cue_asset_id=a.meta.get("cue_asset_id", str(a.id)),
+                track_no=a.meta.get("track_no", 1),
+                start_ms=a.meta.get("start_ms", 0),
+                end_ms=a.meta.get("end_ms"),
+                original=False,
+                audio_format="mp3",
+            )
     path = storage.resolve(a.storage_key)
     return FileResponse(path, filename=a.file_name, media_type=a.mime_type or "application/octet-stream")
 
