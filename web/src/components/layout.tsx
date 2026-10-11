@@ -217,7 +217,7 @@ function Topbar() {
         </button>
         {user ? (
           <button
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-200 md:w-72 md:flex-none xl:w-80"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-200 md:w-96 md:flex-none lg:w-[480px] xl:w-[600px]"
             onClick={() => setPalette(true)}
           >
             <Search className="h-4 w-4 shrink-0" />
@@ -226,7 +226,7 @@ function Topbar() {
           </button>
         ) : (
           <div
-            className="flex min-w-0 flex-1 cursor-not-allowed select-none items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 md:flex-none md:w-72"
+            className="flex min-w-0 flex-1 cursor-not-allowed select-none items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400 md:w-96 md:flex-none lg:w-[480px] xl:w-[600px]"
             title="登录后可搜索"
           >
             <Search className="h-4 w-4" />

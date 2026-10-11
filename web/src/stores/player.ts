@@ -10,7 +10,7 @@ interface PlayerState {
   playing: boolean
   pos: number
   volume: number
-  playAlbum: (album: Album, startNo?: number) => void
+  playAlbum: (album: Album, startTrack?: string | number | null) => void
   setPlaying: (v: boolean) => void
   toggle: () => void
   next: () => void
@@ -26,8 +26,15 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   playing: false,
   pos: 0,
   volume: 0.7,
-  playAlbum(album, startNo = 1) {
-    const idx = Math.max(0, album.tracks.findIndex((t) => t.no === startNo))
+  playAlbum(album, startTrack = 1) {
+    let idx = 0
+    if (typeof startTrack === 'string') {
+      const found = album.tracks.findIndex((t) => t.id === startTrack)
+      if (found >= 0) idx = found
+    } else if (typeof startTrack === 'number') {
+      const found = album.tracks.findIndex((t) => t.no === startTrack)
+      if (found >= 0) idx = found
+    }
     set({ queue: album.tracks, albumId: album.id, albumTitle: album.title, artist: album.artist, index: idx, playing: true, pos: 0 })
   },
   setPlaying: (playing) => set({ playing }),

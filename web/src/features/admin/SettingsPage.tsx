@@ -12,10 +12,11 @@ export function SettingsPage() {
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.settings })
   const [regOpen, setRegOpen] = useState<boolean | null>(null)
   const effectiveOpen = regOpen ?? settings?.registration_open ?? true
+  const [uploadLimit, setUploadLimit] = useState<number | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const update = useMutation({
-    mutationFn: (patch: { registration_open: boolean }) => api.updateSettings(patch),
+    mutationFn: (patch: { registration_open?: boolean; max_upload_gb?: number }) => api.updateSettings(patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   })
 
@@ -51,6 +52,35 @@ export function SettingsPage() {
             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${effectiveOpen ? 'left-[22px]' : 'left-0.5'}`} />
           </button>
           <span className="ml-3 text-sm text-slate-500">{effectiveOpen ? '开放注册' : '已关闭'}</span>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-1 text-sm font-semibold">单文件上传上限</div>
+          <p className="mb-3 text-xs text-slate-400">控制网页端单次上传文件的最大体积限制（默认为 8GB，支持 1 ~ 128 GB）。</p>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={1}
+              max={128}
+              className="w-28 font-mono"
+              value={uploadLimit ?? settings?.max_upload_gb ?? 8}
+              onChange={(e) => setUploadLimit(Math.max(1, Math.min(128, Number(e.target.value) || 1)))}
+            />
+            <span className="text-sm text-slate-500">GB</span>
+            <Button
+              size="sm"
+              disabled={update.isPending || uploadLimit === null || uploadLimit === (settings?.max_upload_gb ?? 8)}
+              onClick={() => {
+                const target = uploadLimit ?? settings?.max_upload_gb ?? 8
+                update.mutate({ max_upload_gb: target }, {
+                  onSuccess: () => showToast('ok', `已将单文件上传上限更新为 ${target} GB`),
+                  onError: (e) => showToast('err', (e as Error).message),
+                })
+              }}
+            >
+              保存
+            </Button>
+          </div>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">

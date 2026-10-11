@@ -8,6 +8,7 @@ import { useAssetNav, Badge, Button, HueCover, PageHeader } from '@/components/u
 import { SelectionBar } from '@/components/SelectionBar'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn, fmtTime } from '@/lib/utils'
+import { TrackAudioBadge } from './TrackAudioBadge'
 
 type View = 'album' | 'artist' | 'tracks'
 type Sort = 'recent' | 'artist' | 'year'
@@ -178,7 +179,7 @@ function TracksView() {
     const hit = (tracks ?? []).find((t) => t.asset_id === assetId)
     if (!hit || !hit.streamable) return
     const album = await api.album(hit.album_id)
-    if (album.tracks.length) playAlbum(album, album.tracks.find((t) => t.id === assetId)?.no ?? 1)
+    if (album.tracks.length) playAlbum(album, assetId)
   }
 
   return (
@@ -225,7 +226,16 @@ function TracksView() {
                       </span>
                     ) : i + 1}
                   </td>
-                  <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>{t.title}</td>
+                  <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>
+                    <span>{t.title}</span>
+                    <TrackAudioBadge
+                      format={t.format}
+                      surround={t.surround}
+                      channels={t.channels}
+                      sampleRateHz={t.sample_rate_hz}
+                      className="ml-1.5"
+                    />
+                  </td>
                   <td className="px-2 py-2.5 text-slate-500">{t.album}</td>
                   <td className="hidden px-2 py-2.5 text-slate-500 sm:table-cell">{t.artist}</td>
                   <td className="hidden px-2 py-2.5 sm:table-cell">{t.lrc ? <Badge tone="brand">LRC</Badge> : <span className="text-slate-300">—</span>}</td>

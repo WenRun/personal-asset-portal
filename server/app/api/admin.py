@@ -231,6 +231,7 @@ class ScanRoot(BaseModel):
 class SettingsBody(BaseModel):
     scan_roots: list[ScanRoot] | None = None
     registration_open: bool | None = None
+    max_upload_gb: int | None = None
 
 
 @router.get("/settings", summary="查看系统设置",
@@ -259,5 +260,9 @@ async def put_settings_api(body: SettingsBody, db: AsyncSession = Depends(get_db
         await _upsert("scan_roots", [{"alias": r.alias, "path": str(Path(r.path).expanduser())} for r in body.scan_roots])
     if body.registration_open is not None:
         await _upsert("registration_open", body.registration_open)
+    if body.max_upload_gb is not None:
+        if body.max_upload_gb < 1 or body.max_upload_gb > 128:
+            raise bad_request("单文件上传上限需在 1 ~ 128 GB 范围内")
+        await _upsert("max_upload_gb", body.max_upload_gb)
     await db.commit()
     return await get_app_settings(db)

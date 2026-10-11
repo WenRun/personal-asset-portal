@@ -41,6 +41,11 @@ export interface Track {
   title: string
   durationSec: number
   bitrateK: number
+  sampleRateHz?: number | null
+  channels?: number | null
+  channelLayout?: string | null
+  surround?: string | null
+  format?: string | null
   lrc: boolean
   streamable?: boolean
 }

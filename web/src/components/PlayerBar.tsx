@@ -5,6 +5,7 @@ import { cn, fmtTime } from '@/lib/utils'
 import { usePlayer } from '@/stores/player'
 import { api } from '@/api/client'
 import { HueCover } from '@/components/ui'
+import { TrackAudioBadge } from '@/features/music/TrackAudioBadge'
 
 interface LyricLine { time: number | null; text: string }
 
@@ -113,10 +114,13 @@ export function PlayerBar() {
     <footer className="relative z-30 flex h-16 shrink-0 animate-rise items-center gap-4 border-t border-slate-800 bg-slate-900 px-4 text-slate-300">
       <audio
         ref={audioRef}
-
+        crossOrigin="use-credentials"
         onTimeUpdate={(e) => setPos(e.currentTarget.currentTime)}
         onEnded={() => { setPos(0); next() }}
-        onError={() => { if (queue.length > 1) next() }}
+        onError={(e) => {
+          console.warn('Audio playback error on track', cur.id, e.currentTarget.error)
+          if (queue.length > 1) next()
+        }}
         onPlay={() => !playing && setPlaying(true)}
         onPause={() => playing && setPlaying(false)}
       />
@@ -159,8 +163,18 @@ export function PlayerBar() {
       )}
 
       <HueCover hue={245} className="h-10 w-10 shrink-0 rounded-md" />
-      <div className="hidden w-44 min-w-0 sm:block">
-        <div className="truncate text-sm text-white">{cur.title}</div>
+      <div className="hidden w-48 min-w-0 sm:block">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm text-white">{cur.title}</span>
+          <TrackAudioBadge
+            format={cur.format}
+            surround={cur.surround}
+            channels={cur.channels}
+            sampleRateHz={cur.sampleRateHz}
+            dark
+            className="shrink-0"
+          />
+        </div>
         <div className="truncate text-xs text-slate-500">{artist} · {albumTitle}</div>
       </div>
       <div className="flex items-center gap-3">

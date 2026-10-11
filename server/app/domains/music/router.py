@@ -13,6 +13,7 @@ from app.core.db import get_db
 from app.core.errors import bad_request, not_found
 from app.core.models import Asset, MusicAlbum, MusicArtist, MusicTrack
 from app.core.pipeline import build_storage, roots_of
+from app.core.registry import ext_of, mime_of
 
 router = APIRouter(prefix="/api/music", tags=["音乐"])
 
@@ -68,6 +69,10 @@ async def list_tracks(db: AsyncSession = Depends(get_db), _: object = Depends(re
             "asset_id": str(a.id), "album_id": str(t.album_id), "title": a.title, "album": al or "未知专辑",
             "artist": ar or "未知艺术家", "no": t.track_no,
             "duration_sec": int((t.duration_ms or 0) / 1000), "bitrate_kbps": t.bitrate_kbps,
+            "sample_rate_hz": t.sample_rate_hz,
+            "channels": a.meta.get("channels") if a.meta else None,
+            "channel_layout": a.meta.get("channel_layout") if a.meta else None,
+            "surround": a.meta.get("surround") if a.meta else None,
             "lrc": t.has_lyrics, "format": t.format, "streamable": t.streamable,
             "created_at": a.created_at.isoformat(),
         }
@@ -98,7 +103,11 @@ async def album_detail(album_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
             {
                 "asset_id": str(a.id), "no": t.track_no, "title": a.title,
                 "duration_sec": int((t.duration_ms or 0) / 1000), "bitrate_kbps": t.bitrate_kbps,
-                "sample_rate_hz": t.sample_rate_hz, "lrc": t.has_lyrics,
+                "sample_rate_hz": t.sample_rate_hz,
+                "channels": a.meta.get("channels") if a.meta else None,
+                "channel_layout": a.meta.get("channel_layout") if a.meta else None,
+                "surround": a.meta.get("surround") if a.meta else None,
+                "lrc": t.has_lyrics,
                 "format": t.format, "streamable": t.streamable, "size_bytes": a.size_bytes,
             }
             for a, t in tracks
@@ -134,8 +143,10 @@ async def lyrics(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: obj
 
 @router.get("/{asset_id}/stream", summary="音频流",
             description="登录用户。返回音频文件流，原生支持 Range 分段请求（206），可直接供 audio 标签播放。")
-async def stream(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
-    """音频流（登录）：FileResponse 原生支持 Range 请求（206 分段）。"""
+async def stream(asset_id: uuid.UUID,
+                 original: bool = Query(False, description="是否原样输出原始音频文件（非转码）"),
+                 db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
+    """音频流（登录）：FileResponse 原生支持 Range 请求（206 分段）。DTS 及多声道环绕声音频自动下混为兼容立体声 MP3 串流播放。"""
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None or a.asset_type != "music":
         raise not_found()
@@ -143,5 +154,33 @@ async def stream(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: obj
     if t is not None and not t.streamable:
         raise bad_request("该格式不支持在线播放，仅下载")
     storage = build_storage(await roots_of(db))
-    return FileResponse(storage.resolve(a.storage_key), filename=a.file_name,
-                        media_type=a.mime_type or "audio/mpeg")
+    src_path = storage.resolve(a.storage_key)
+    ext = ext_of(a.file_name).lstrip(".").lower()
+
+    # 针对非浏览器原生播放格式（DTS/APE/DSF/DFF/WMA/ALAC/AIFF 等）或多声道环绕声音频，在非强制原始串流时，转码/读取下混立体声 MP3 以供浏览器 audio 标签平滑播放
+    from app.domains.music.parser import NEED_TRANSCODE
+
+    needs_transcode = (
+        ext in NEED_TRANSCODE
+        or (a.meta and (a.meta.get("surround") in ("5.1", "7.1", "4.0") or (a.meta.get("channels") and a.meta["channels"] > 2)))
+    )
+    if needs_transcode and not original:
+        from app.domains.music.transcode import ensure_transcoded_stream
+
+        preview = ensure_transcoded_stream(src_path, str(a.id))
+        if preview is not None and preview.is_file():
+            base_stem = a.file_name.rsplit(".", 1)[0]
+            return FileResponse(
+                preview,
+                filename=f"{base_stem}.mp3",
+                media_type="audio/mpeg",
+                content_disposition_type="inline",
+            )
+
+    media_type = a.mime_type or mime_of(a.file_name) or "audio/mpeg"
+    return FileResponse(
+        src_path,
+        filename=a.file_name,
+        media_type=media_type,
+        content_disposition_type="inline",
+    )

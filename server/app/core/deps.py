@@ -31,6 +31,7 @@ async def get_app_settings(db: AsyncSession) -> dict:
         ],
     )
     kv.setdefault("registration_open", True)
+    kv.setdefault("max_upload_gb", get_settings().max_upload_gb)
     return kv
 
 

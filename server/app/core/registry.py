@@ -24,14 +24,21 @@ def _register(exts: tuple[str, ...], asset_type: str) -> None:
 
 
 _register((".ttf", ".otf", ".woff", ".woff2"), "font")
-_register((".mp3", ".flac", ".m4a", ".ogg", ".wav"), "music")
+_register((
+    ".mp3", ".flac", ".m4a", ".ogg", ".wav", ".dts", ".dtshd",
+    ".ape", ".dsf", ".dff", ".aiff", ".aif", ".opus", ".wma", ".alac",
+), "music")
 _register((".mp4", ".mkv", ".mov", ".webm", ".avi"), "video")
 _register((".epub", ".pdf", ".mobi", ".azw3", ".txt"), "book")
 _register((".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"), "image")
 
 MIME_OVERRIDES = {
     ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2",
-    ".flac": "audio/flac", ".m4a": "audio/mp4", ".epub": "application/epub+zip",
+    ".flac": "audio/flac", ".m4a": "audio/mp4", ".dts": "audio/vnd.dts", ".dtshd": "audio/vnd.dts",
+    ".ape": "audio/x-ape", ".dsf": "audio/x-dsf", ".dff": "audio/x-dff",
+    ".aiff": "audio/x-aiff", ".aif": "audio/x-aiff", ".opus": "audio/opus",
+    ".wma": "audio/x-ms-wma", ".alac": "audio/x-alac",
+    ".epub": "application/epub+zip",
     ".pdf": "application/pdf", ".mkv": "video/x-matroska", ".heic": "image/heic",
     ".md": "text/markdown", ".txt": "text/plain",
 }

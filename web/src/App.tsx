@@ -15,6 +15,7 @@ const DashboardPage = page(() => import('@/features/dashboard/DashboardPage'), '
 const FontsPage = page(() => import('@/features/fonts/FontsPage'), 'FontsPage')
 const FontDetailPage = page(() => import('@/features/fonts/FontDetailPage'), 'FontDetailPage')
 const MusicPage = page(() => import('@/features/music/MusicPage'), 'MusicPage')
+const MusicTrackRedirect = page(() => import('@/features/music/MusicTrackRedirect'), 'MusicTrackRedirect')
 const AlbumDetailPage = page(() => import('@/features/music/AlbumDetailPage'), 'AlbumDetailPage')
 const VideosPage = page(() => import('@/features/videos/VideosPage'), 'VideosPage')
 const VideoDetailPage = page(() => import('@/features/videos/VideoDetailPage'), 'VideoDetailPage')
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/images" element={<ImagesPage />} />
             {/* 详情 / 搜索：要求登录 */}
             <Route path="/fonts/:id" element={<RequireUser><FontDetailPage /></RequireUser>} />
+            <Route path="/music/:id" element={<RequireUser><MusicTrackRedirect /></RequireUser>} />
             <Route path="/music/albums/:id" element={<RequireUser><AlbumDetailPage /></RequireUser>} />
             <Route path="/videos/:id" element={<RequireUser><VideoDetailPage /></RequireUser>} />
             <Route path="/books/:id" element={<RequireUser><BookDetailPage /></RequireUser>} />

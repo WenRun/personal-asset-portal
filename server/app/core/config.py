@@ -1,7 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+SERVER_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -13,6 +16,13 @@ class Settings(BaseSettings):
     meili_enabled: bool = True
 
     data_root: Path = Path("./data")
+
+    @field_validator("data_root", mode="after")
+    @classmethod
+    def resolve_data_root(cls, v: Path) -> Path:
+        if not v.is_absolute():
+            return (SERVER_DIR / v).resolve()
+        return v.resolve()
 
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str = "admin1234"

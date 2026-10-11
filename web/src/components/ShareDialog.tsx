@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Check, Copy, Link2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { Button, Modal } from '@/components/ui'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 
 /** 分享弹层（从工具箱下沉到各详情页）：生成带过期时间的公开 token 链接，仅 admin 可用。 */
 export function ShareDialog({ assetId, assetTitle, open, onClose }: {
@@ -23,10 +23,12 @@ export function ShareDialog({ assetId, assetTitle, open, onClose }: {
   })
 
   const close = () => { setLink(''); setCopied(false); onClose() }
-  const copy = () => {
-    void navigator.clipboard.writeText(link)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copy = async () => {
+    const ok = await copyToClipboard(link)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   return (
@@ -64,7 +66,15 @@ export function ShareDialog({ assetId, assetTitle, open, onClose }: {
         </>
       ) : (
         <>
-          <div className="mb-4 break-all rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-600">{link}</div>
+          <div className="mb-4">
+            <input
+              readOnly
+              value={link}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700 outline-none transition focus:border-brand-500 focus:bg-white"
+            />
+            <div className="mt-1 text-[11px] text-slate-400">点击链接可快速全选复制</div>
+          </div>
           <div className="flex gap-2">
             <Button className="flex-1" onClick={copy}>
               {copied ? <><Check className="h-3.5 w-3.5" />已复制</> : <><Copy className="h-3.5 w-3.5" />复制链接</>}

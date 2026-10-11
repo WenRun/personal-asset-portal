@@ -9,6 +9,7 @@ import { BackLink, Badge, Button, EqBars, HueCover } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { fmtTime } from '@/lib/utils'
+import { TrackAudioBadge } from './TrackAudioBadge'
 
 export function AlbumDetailPage() {
   const { id } = useParams()
@@ -45,7 +46,17 @@ export function AlbumDetailPage() {
           <h1 className="text-2xl font-bold">{album.title}</h1>
           <div className="mt-1 text-sm text-slate-500">{album.artist || "未知艺术家"} · {album.year} · {album.genre || "音频"}</div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-            <Badge>{album.format}</Badge>
+            {album.tracks.some((t) => t.format?.toLowerCase() === 'dsf' || t.format?.toLowerCase() === 'dff' || (t.sampleRateHz && t.sampleRateHz >= 2800000)) ? (
+              <span className="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                {album.tracks.some((t) => (t.sampleRateHz || 0) >= 5600000) ? 'DSD128 5.6MHz' : 'DSD64 2.8MHz'}
+              </span>
+            ) : album.format ? (
+              <Badge tone="brand">{album.format}</Badge>
+            ) : null}
+            {album.tracks.some((t) => t.surround === '5.1' || t.channels === 6 || t.format?.toLowerCase() === 'dts') && (
+              <span className="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">5.1 环绕声</span>
+            )}
+            {album.khz > 0 && album.khz < 2800 && <Badge>{album.khz}kHz</Badge>}
             <Badge>{album.tracks.length} 首 · {fmtTime(totalSec)}</Badge>
             <Badge>{(album.tracks.reduce((s, t) => s + t.bitrateK, 0) / 1000).toFixed(1)}Mbps 均值</Badge>
           </div>
@@ -77,7 +88,7 @@ export function AlbumDetailPage() {
                 <tr
                   key={t.id}
                   className={`cursor-pointer transition ${active ? 'bg-brand-50' : 'hover:bg-slate-50'}`}
-                  onClick={() => playAlbum(album, t.no)}
+                  onClick={() => playAlbum(album, t.id)}
                 >
                   <td className="px-4 py-2.5">
                     {active && playing
@@ -85,7 +96,14 @@ export function AlbumDetailPage() {
                       : <span className={active ? 'font-bold text-brand-600' : 'text-slate-400'}>{t.no}</span>}
                   </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>
-                    {t.title}
+                    <span>{t.title}</span>
+                    <TrackAudioBadge
+                      format={t.format}
+                      surround={t.surround}
+                      channels={t.channels}
+                      sampleRateHz={t.sampleRateHz}
+                      className="ml-2"
+                    />
                     {active && !playing && <span className="ml-2 text-xs text-slate-400">（已暂停）</span>}
                   </td>
                   <td className="hidden px-2 py-2.5 sm:table-cell">{t.lrc ? <Badge tone="green">LRC</Badge> : <span className="text-slate-300">—</span>}</td>

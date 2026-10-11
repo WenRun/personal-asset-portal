@@ -16,6 +16,7 @@ import app.domains.books.parser  # noqa: F401  M3: parse:book
 import app.domains.books.thumbs  # noqa: F401  M3: derive:book_cover
 import app.domains.music.parser  # noqa: F401  M4: parse:music
 import app.domains.music.thumbs  # noqa: F401  M4: derive:music_cover
+import app.domains.music.transcode  # noqa: F401  DTS: derive:music_stream
 import app.domains.videos.parser  # noqa: F401  M5: parse:video
 import app.core.downloads  # noqa: F401  M6: pack_zip
 

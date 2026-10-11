@@ -473,8 +473,10 @@ async def upload(file: UploadFile, db: AsyncSession = Depends(get_db),
     if asset_type_of(file.filename or "") is None:
         raise bad_request(f"不支持的文件类型: {ext_of(file.filename or '')}")
     data = await file.read()
-    if len(data) > get_settings().max_upload_gb * 1024**3:
-        raise bad_request("文件超过上传上限")
+    app_settings = await get_app_settings(db)
+    max_gb = int(app_settings.get("max_upload_gb") or get_settings().max_upload_gb)
+    if len(data) > max_gb * 1024**3:
+        raise bad_request(f"文件大小超出上传上限（{max_gb}GB）")
     storage = await _storage(db)
     ym = datetime.now().strftime("%Y-%m")
     key = f"uploads:staging/{ym}/{uuid.uuid4().hex}{ext_of(file.filename or '')}"

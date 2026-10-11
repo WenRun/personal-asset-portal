@@ -5,7 +5,7 @@ import { api } from '@/api/client'
 import { useAssetNav } from '@/components/ui'
 import { useAuth } from '@/stores/auth'
 import { Badge, Button, Chip, PageHeader } from '@/components/ui'
-import { fmtTime } from '@/lib/utils'
+import { copyToClipboard, fmtTime } from '@/lib/utils'
 
 const TYPES = [
   { key: 'font', label: '字体' },
@@ -69,10 +69,13 @@ export function ToolsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collections'] }),
   })
 
-  const copy = (text: string) => {
-    void navigator.clipboard.writeText(location.origin + text)
-    setCopied(text)
-    setTimeout(() => setCopied(''), 2000)
+  const copy = async (text: string) => {
+    const fullUrl = text.startsWith('http') ? text : `${location.origin}${text}`
+    const ok = await copyToClipboard(fullUrl)
+    if (ok) {
+      setCopied(text)
+      setTimeout(() => setCopied(''), 2000)
+    }
   }
 
   return (
