@@ -1,5 +1,6 @@
 """音频转码与串流派生：DTS / 多声道无损音频下混立体声 MP3 串流缓存。"""
 
+import logging
 import os
 import subprocess
 import uuid
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.models import Asset
 from app.core.pipeline import build_storage, register, roots_of
+
+log = logging.getLogger("portal.music.transcode")
 
 
 def derived_music_dir(asset_id: str) -> Path:
@@ -113,8 +116,8 @@ def ensure_cue_track_stream(
     cmd_fast = [
         "ffmpeg", "-y", "-v", "error",
         "-ss", f"{start_sec:.3f}",
-        *dur_arg,
         "-i", str(audio_path),
+        *dur_arg,
         "-vn",
         "-avoid_negative_ts", "make_zero",
         "-fflags", "+genpts",
@@ -128,6 +131,8 @@ def ensure_cue_track_stream(
         if res.returncode == 0 and tmp_file.exists() and tmp_file.stat().st_size > 0:
             os.replace(tmp_file, out_file)
             return out_file
+        if res.stderr:
+            log.warning("ffmpeg cue fast seek failed (rc=%s): %s", res.returncode, res.stderr.strip())
 
         # 方案 2：若 Input Seek 失败（针对某些 APE 压缩级别或损坏时间码），自动降级为全量 Output Seek
         cmd_robust = [
@@ -144,6 +149,8 @@ def ensure_cue_track_stream(
         if res.returncode == 0 and tmp_file.exists() and tmp_file.stat().st_size > 0:
             os.replace(tmp_file, out_file)
             return out_file
+        if res.stderr:
+            log.warning("ffmpeg cue robust seek failed (rc=%s): %s", res.returncode, res.stderr.strip())
 
         # 方案 3：若原格式 copy 切片失败，尝试统一转为 mp3 兜底
         if original and ext not in ("mp3",):
@@ -160,8 +167,10 @@ def ensure_cue_track_stream(
             if res.returncode == 0 and tmp_file.exists() and tmp_file.stat().st_size > 0:
                 os.replace(tmp_file, out_file)
                 return out_file
-    except Exception:
-        pass
+            if res.stderr:
+                log.warning("ffmpeg cue mp3 fallback failed (rc=%s): %s", res.returncode, res.stderr.strip())
+    except Exception as exc:
+        log.warning("ffmpeg cue slicing exception: %s", exc)
     finally:
         if tmp_file.exists():
             try:
@@ -180,7 +189,11 @@ async def derive_cue_slices(db: AsyncSession, payload: dict) -> None:
     cue_asset_id = payload.get("cue_asset_id")
     if not cue_asset_id:
         return
-    cue_asset = await db.get(Asset, cue_asset_id)
+    try:
+        cue_uid = uuid.UUID(str(cue_asset_id))
+    except Exception:
+        return
+    cue_asset = await db.get(Asset, cue_uid)
     if cue_asset is None or cue_asset.deleted_at is not None:
         return
 

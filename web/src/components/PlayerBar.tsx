@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { List, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import { AlertCircle, List, Mic2, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
 import { cn, fmtTime } from '@/lib/utils'
 import { usePlayer } from '@/stores/player'
 import { api } from '@/api/client'
@@ -45,6 +45,8 @@ export function PlayerBar() {
   const [pos, setPos] = useState(0)
   const [showLyrics, setShowLyrics] = useState(false)
   const lyricBoxRef = useRef<HTMLDivElement>(null)
+  const [playbackError, setPlaybackError] = useState<string | null>(null)
+  const consecutiveErrorsRef = useRef(0)
 
   // 切曲 → 换源并播放
   useEffect(() => {
@@ -115,15 +117,52 @@ export function PlayerBar() {
       <audio
         ref={audioRef}
         crossOrigin="use-credentials"
-        onTimeUpdate={(e) => setPos(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => {
+          if (e.currentTarget.currentTime > 0) {
+            consecutiveErrorsRef.current = 0
+          }
+          setPos(e.currentTarget.currentTime)
+        }}
         onEnded={() => { setPos(0); next() }}
         onError={(e) => {
           console.warn('Audio playback error on track', cur.id, e.currentTarget.error)
-          if (queue.length > 1) next()
+          consecutiveErrorsRef.current++
+          if (consecutiveErrorsRef.current >= queue.length) {
+            consecutiveErrorsRef.current = 0
+            setPlaying(false)
+            setPlaybackError(`无法播放该专辑中的曲目（${cur.title}），已停止连播`)
+          } else if (queue.length > 1) {
+            setPlaybackError(`《${cur.title}》加载失败，正在尝试下一首…`)
+            next()
+          } else {
+            setPlaying(false)
+            setPlaybackError(`无法播放曲目《${cur.title}》`)
+          }
         }}
-        onPlay={() => !playing && setPlaying(true)}
+        onPlay={() => {
+          consecutiveErrorsRef.current = 0
+          setPlaybackError(null)
+          if (!playing) setPlaying(true)
+        }}
         onPause={() => playing && setPlaying(false)}
       />
+
+      {/* 播放错误提示条（防止错误扩散与死循环，给用户清晰反馈） */}
+      {playbackError && (
+        <div className="absolute inset-x-0 bottom-16 mx-auto flex max-w-lg items-center justify-between gap-3 rounded-t-lg border border-b-0 border-amber-500/30 bg-amber-950/90 px-4 py-2 text-xs text-amber-200 shadow-xl backdrop-blur">
+          <div className="flex items-center gap-2 truncate">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+            <span className="truncate">{playbackError}</span>
+          </div>
+          <button
+            onClick={() => setPlaybackError(null)}
+            className="rounded p-1 text-amber-300/70 hover:bg-amber-900/50 hover:text-amber-200"
+            title="关闭提示"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* 歌词面板（有歌词的曲目可展开；LRC 时间轴高亮 + 点击跳播） */}
       {showLyrics && (

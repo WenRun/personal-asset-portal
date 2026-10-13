@@ -1,6 +1,9 @@
 """音乐端点（详细设计 §5.2/§6.2）：专辑墙（公开）、专辑详情/曲目/平铺曲目（member）、Range 音频流（member）。"""
 
+import logging
+import posixpath
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
@@ -14,6 +17,8 @@ from app.core.errors import bad_request, not_found
 from app.core.models import Asset, MusicAlbum, MusicArtist, MusicTrack
 from app.core.pipeline import build_storage, roots_of
 from app.core.registry import ext_of, mime_of
+
+log = logging.getLogger("portal.music.router")
 
 router = APIRouter(prefix="/api/music", tags=["音乐"])
 
@@ -201,8 +206,25 @@ async def stream(asset_id: uuid.UUID,
         # 2. 尝试从所属 CUE 资产解析并定位同目录音频
         cue_asset = None
         if cue_asset_id:
-            cue_asset = await db.get(Asset, uuid.UUID(cue_asset_id))
+            try:
+                cue_asset = await db.get(Asset, uuid.UUID(cue_asset_id))
+            except Exception:
+                pass
 
+        # 2.1 尝试从 CUE 资产记录的 audio_asset_id 查找
+        if (audio_path is None or not audio_path.exists()) and cue_asset is not None and cue_asset.meta:
+            audio_aid = cue_asset.meta.get("audio_asset_id")
+            if audio_aid:
+                try:
+                    master_a = await db.get(Asset, uuid.UUID(audio_aid))
+                    if master_a is not None and master_a.deleted_at is None:
+                        cand_p = storage.resolve(master_a.storage_key)
+                        if cand_p.is_file():
+                            audio_path = cand_p
+                except Exception:
+                    pass
+
+        # 2.2 尝试从所属 CUE 资产磁盘内容解析并定位
         if (audio_path is None or not audio_path.exists()) and cue_asset is not None:
             from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet, resolve_audio_file
 
@@ -239,25 +261,36 @@ async def stream(asset_id: uuid.UUID,
                         except Exception:
                             pass
 
-        # 4. 尝试根据 CUE 中声明的文件名在库内全局资产中匹配
+        # 4. 尝试根据 CUE 中声明的文件名或主干在库内全局资产中匹配
         if (audio_path is None or not audio_path.exists()) and cue_asset is not None:
             from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet
 
             try:
                 cue_path = storage.resolve(cue_asset.storage_key)
                 content = detect_and_read_cue(cue_path)
+                target_names: list[str] = []
                 if content:
                     sheet = parse_cue_sheet(content)
                     for f in sheet.files:
                         pure_name = f.replace("\\", "/").split("/")[-1].strip()
-                        cands = (await db.execute(
-                            select(Asset).where(
-                                Asset.asset_type == "music",
-                                Asset.file_name.ilike(pure_name),
-                                Asset.deleted_at.is_(None),
-                            )
-                        )).scalars().all()
-                        for cand_a in cands:
+                        if pure_name:
+                            target_names.append(pure_name)
+                target_names.append(cue_asset.file_name)
+
+                for t_name in target_names:
+                    t_stem = Path(t_name).stem.lower()
+                    cands = (await db.execute(
+                        select(Asset).where(
+                            Asset.asset_type == "music",
+                            Asset.id != cue_asset.id,
+                            Asset.deleted_at.is_(None),
+                        )
+                    )).scalars().all()
+                    for cand_a in cands:
+                        c_name = cand_a.file_name.lower()
+                        c_stem = Path(c_name).stem.lower()
+                        c_ext = ext_of(c_name).lstrip(".").lower()
+                        if c_ext != "cue" and (c_name == t_name.lower() or c_stem == t_stem or t_stem in c_stem or c_stem in t_stem):
                             try:
                                 cand_p = storage.resolve(cand_a.storage_key)
                                 if cand_p.is_file():
@@ -265,13 +298,22 @@ async def stream(asset_id: uuid.UUID,
                                     break
                             except Exception:
                                 pass
-                        if audio_path and audio_path.is_file():
-                            break
+                    if audio_path and audio_path.is_file():
+                        break
             except Exception:
                 pass
 
         if audio_path is None or not audio_path.exists():
+            log.warning("CUE track %s stream failed: master audio file not found", a.id)
             raise not_found("关联的母带音频文件不存在")
+
+        # 命中后回填缓存路径，提升后续切片点播性能
+        if audio_path and a.meta.get("audio_path") != str(audio_path):
+            try:
+                a.meta = {**a.meta, "audio_path": str(audio_path)}
+                await db.commit()
+            except Exception:
+                pass
 
         fmt = a.meta.get("format") or "mp3"
         sliced = ensure_cue_track_stream(
