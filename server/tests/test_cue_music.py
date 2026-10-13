@@ -169,6 +169,16 @@ FILE "CDImage.wav" WAVE
         resolved = resolve_audio_file(cue_path, sheet)
         self.assertEqual(resolved, dts_path)
 
+        # 策略 4: Windows 盘符与反斜杠路径清洗匹配 (如 C:\Music\Rips\Master.wav 匹配本地 Master.flac)
+        dts_path.unlink()
+        master_flac = self.tmp_dir / "Master.flac"
+        master_flac.touch()
+
+        sheet_win = CueSheet(files=[r"C:\Music\Rips\Master.wav"])
+        resolved_win = resolve_audio_file(cue_path, sheet_win)
+        self.assertEqual(resolved_win, master_flac)
+        master_flac.unlink()
+
     def test_cue_track_slicing(self):
         """测试基于 ffmpeg 的毫秒级 CUE 分轨无损/MP3高速切片。"""
         audio_file = self.tmp_dir / "disc.flac"
@@ -242,6 +252,13 @@ FILE "GoldMaster.flac" WAVE
         cue_file.write_text(cue_content, encoding="utf-8")
 
         storage = DummyStorage(self.tmp_dir)
+
+        from sqlalchemy import text
+        try:
+            async with SessionLocal() as test_conn:
+                await test_conn.execute(text("SELECT 1"))
+        except Exception as e:
+            self.skipTest(f"数据库连接不可达 ({e})，跳过端到端入库测试")
 
         async with SessionLocal() as db:
             # 1. 模拟母带大音频资产

@@ -182,27 +182,39 @@ def parse_cue_sheet(content: str) -> CueSheet:
     return sheet
 
 
-def resolve_audio_file(cue_path: Path, sheet: CueSheet) -> Path | None:
+def resolve_audio_file(cue_path: Path, sheet: CueSheet, track_file: str | None = None) -> Path | None:
     """多级容错定位 CUE 对应的母带音频文件。"""
     folder = cue_path.parent
     if not folder.is_dir():
         return None
 
-    # 1. 尝试 CUE 内记录的 FILE 命令文件名（精确匹配）
+    # 汇总待匹配的音频文件名列表（清洗 Windows 盘符与反斜杠路径）
+    raw_files: list[str] = []
+    if track_file:
+        raw_files.append(track_file)
     for f in sheet.files:
-        cand = folder / f
+        if f not in raw_files:
+            raw_files.append(f)
+
+    clean_targets: list[tuple[str, str]] = []  # (pure_name, pure_stem)
+    for rf in raw_files:
+        p_name = rf.replace("\\", "/").split("/")[-1].strip()
+        if p_name:
+            clean_targets.append((p_name.lower(), Path(p_name).stem.lower()))
+
+    # 1. 尝试精确文件名匹配（不区分大小写）
+    for p_name, _ in clean_targets:
+        cand = folder / p_name
         if cand.is_file():
             return cand
-        # 大小写不敏感匹配
         for sibling in folder.iterdir():
-            if sibling.is_file() and sibling.name.lower() == f.lower():
+            if sibling.is_file() and sibling.name.lower() == p_name:
                 return sibling
 
-    # 2. 尝试 CUE 内 FILE 文件名主干替换为已支持音频扩展名（常见如 CUE 记录 .wav 实际压制为 .flac/.ape）
-    for f in sheet.files:
-        f_stem = Path(f).stem.lower()
+    # 2. 尝试 FILE 文件名主干替换为已支持音频扩展名（常见如 CUE 记录 .wav 实际压制为 .flac/.ape）
+    for _, p_stem in clean_targets:
         for sibling in folder.iterdir():
-            if sibling.is_file() and sibling.stem.lower() == f_stem and sibling.suffix.lower() in AUDIO_EXTS:
+            if sibling.is_file() and sibling.stem.lower() == p_stem and sibling.suffix.lower() in AUDIO_EXTS:
                 return sibling
 
     # 3. 尝试与 CUE 同名主干的音频文件（如 Jay.cue 匹配 Jay.flac / Jay.ape）
@@ -211,12 +223,21 @@ def resolve_audio_file(cue_path: Path, sheet: CueSheet) -> Path | None:
         if sibling.is_file() and sibling.stem.lower() == cue_stem and sibling.suffix.lower() in AUDIO_EXTS:
             return sibling
 
-    # 4. 同目录下唯一音频文件容错绑定
+    # 4. 尝试包含关系的模糊匹配（如 "Jay - Fantasy.cue" 匹配 "Fantasy.flac" 或 "CDImage.flac"）
+    for sibling in folder.iterdir():
+        if sibling.is_file() and sibling.suffix.lower() in AUDIO_EXTS and sibling.suffix.lower() != ".cue":
+            s_stem = sibling.stem.lower()
+            if s_stem and (s_stem in cue_stem or cue_stem in s_stem or "cdimage" in s_stem or "image" in s_stem):
+                return sibling
+
+    # 5. 目录下音频文件兜底：若有音频文件，优先选取体积最大的母带音频
     audio_candidates = [
         p for p in folder.iterdir()
         if p.is_file() and p.suffix.lower() in AUDIO_EXTS and p.suffix.lower() != ".cue"
     ]
-    if len(audio_candidates) == 1:
+    if audio_candidates:
+        # 按文件大小倒序排序，最大的一般为整轨母带
+        audio_candidates.sort(key=lambda p: p.stat().st_size, reverse=True)
         return audio_candidates[0]
 
     return None

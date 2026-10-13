@@ -160,10 +160,27 @@ async def stream(asset_id: uuid.UUID,
     storage = build_storage(await roots_of(db))
     ext = ext_of(a.file_name).lstrip(".").lower()
 
+    # 若请求的是 CUE 索引资产本身：自动路由播放其第一首分轨曲目（或直接播放关联母带）
     if ext == "cue" or (a.meta and a.meta.get("is_cue_sheet")):
-        raise bad_request("CUE 文件为分轨索引表，请直接播放具体分轨曲目")
+        first_track_id = uuid.uuid5(a.id, "track_1")
+        first_asset = await db.get(Asset, first_track_id)
+        if first_asset is not None and first_asset.deleted_at is None:
+            a = first_asset
+            asset_id = first_track_id
+            ext = ext_of(a.file_name).lstrip(".").lower()
+        else:
+            audio_aid = a.meta.get("audio_asset_id") if a.meta else None
+            if audio_aid:
+                try:
+                    master_a = await db.get(Asset, uuid.UUID(audio_aid))
+                    if master_a is not None and master_a.deleted_at is None:
+                        a = master_a
+                        asset_id = master_a.id
+                        ext = ext_of(a.file_name).lstrip(".").lower()
+                except Exception:
+                    pass
 
-    # CUE 派生分轨：确保切片就绪并输出
+    # CUE 派生分轨：多层容错定位母带音频并输出切片流
     if a.meta and a.meta.get("is_cue_track"):
         from app.domains.music.transcode import ensure_cue_track_stream
 
@@ -174,22 +191,84 @@ async def stream(asset_id: uuid.UUID,
         audio_path_str = a.meta.get("audio_path")
         audio_path = Path(audio_path_str) if audio_path_str else None
 
+        # 1. 尝试直接从子资产 meta 中的 audio_storage_key 解析
         if (audio_path is None or not audio_path.exists()) and a.meta.get("audio_storage_key"):
             try:
                 audio_path = storage.resolve(a.meta["audio_storage_key"])
             except Exception:
                 pass
 
-        if (audio_path is None or not audio_path.exists()) and cue_asset_id:
+        # 2. 尝试从所属 CUE 资产解析并定位同目录音频
+        cue_asset = None
+        if cue_asset_id:
             cue_asset = await db.get(Asset, uuid.UUID(cue_asset_id))
-            if cue_asset:
-                from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet, resolve_audio_file
 
+        if (audio_path is None or not audio_path.exists()) and cue_asset is not None:
+            from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet, resolve_audio_file
+
+            try:
                 cue_path = storage.resolve(cue_asset.storage_key)
                 content = detect_and_read_cue(cue_path)
                 if content:
                     sheet = parse_cue_sheet(content)
                     audio_path = resolve_audio_file(cue_path, sheet)
+            except Exception:
+                pass
+
+        # 3. 尝试在数据库中查找同存储目录下的母带音频资产
+        if (audio_path is None or not audio_path.exists()) and cue_asset is not None:
+            if ":" in cue_asset.storage_key:
+                alias, rel = cue_asset.storage_key.split(":", 1)
+                dir_part = posixpath.dirname(rel)
+                prefix = f"{alias}:{dir_part}/" if dir_part else f"{alias}:"
+                siblings = (await db.execute(
+                    select(Asset).where(
+                        Asset.asset_type == "music",
+                        Asset.storage_key.startswith(prefix),
+                        Asset.id != cue_asset.id,
+                        Asset.deleted_at.is_(None),
+                    )
+                )).scalars().all()
+                for sib in siblings:
+                    if ext_of(sib.file_name).lstrip(".").lower() != "cue":
+                        try:
+                            cand_p = storage.resolve(sib.storage_key)
+                            if cand_p.is_file():
+                                audio_path = cand_p
+                                break
+                        except Exception:
+                            pass
+
+        # 4. 尝试根据 CUE 中声明的文件名在库内全局资产中匹配
+        if (audio_path is None or not audio_path.exists()) and cue_asset is not None:
+            from app.domains.music.cue import detect_and_read_cue, parse_cue_sheet
+
+            try:
+                cue_path = storage.resolve(cue_asset.storage_key)
+                content = detect_and_read_cue(cue_path)
+                if content:
+                    sheet = parse_cue_sheet(content)
+                    for f in sheet.files:
+                        pure_name = f.replace("\\", "/").split("/")[-1].strip()
+                        cands = (await db.execute(
+                            select(Asset).where(
+                                Asset.asset_type == "music",
+                                Asset.file_name.ilike(pure_name),
+                                Asset.deleted_at.is_(None),
+                            )
+                        )).scalars().all()
+                        for cand_a in cands:
+                            try:
+                                cand_p = storage.resolve(cand_a.storage_key)
+                                if cand_p.is_file():
+                                    audio_path = cand_p
+                                    break
+                            except Exception:
+                                pass
+                        if audio_path and audio_path.is_file():
+                            break
+            except Exception:
+                pass
 
         if audio_path is None or not audio_path.exists():
             raise not_found("关联的母带音频文件不存在")
@@ -211,7 +290,6 @@ async def stream(asset_id: uuid.UUID,
         media_type = "audio/mpeg" if out_ext == "mp3" else (mime_of(f"x.{out_ext}") or "application/octet-stream")
         return FileResponse(
             sliced,
-            filename=f"{a.title}.{out_ext}",
             media_type=media_type,
             content_disposition_type="inline",
         )

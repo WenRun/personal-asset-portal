@@ -80,10 +80,17 @@ class TestDtsMusicSupport(unittest.IsolatedAsyncioTestCase):
     async def test_parse_music_integration(self):
         """验证 parse_music 完整入库链路：从 Asset 到 MusicTrack/MusicAlbum 及 meta 环绕声标记。"""
         import uuid
+        from sqlalchemy import text
         from app.core.db import SessionLocal
         from app.core.models import Asset, MusicTrack
         from app.core.pipeline import build_storage, roots_of
         from app.domains.music.parser import parse_music
+
+        try:
+            async with SessionLocal() as test_conn:
+                await test_conn.execute(text("SELECT 1"))
+        except Exception as e:
+            self.skipTest(f"数据库连接不可达 ({e})，跳过集成入库测试")
 
         async with SessionLocal() as db:
             storage = build_storage(await roots_of(db))
@@ -137,9 +144,16 @@ class TestDtsMusicSupport(unittest.IsolatedAsyncioTestCase):
 
     async def test_settings_max_upload_gb(self):
         """验证设置接口支持读写 max_upload_gb。"""
+        from sqlalchemy import text
         from app.core.db import SessionLocal
         from app.core.deps import get_app_settings
         from app.api.admin import put_settings_api, SettingsBody
+
+        try:
+            async with SessionLocal() as test_conn:
+                await test_conn.execute(text("SELECT 1"))
+        except Exception as e:
+            self.skipTest(f"数据库连接不可达 ({e})，跳过设置接口测试")
 
         async with SessionLocal() as db:
             orig_s = await get_app_settings(db)

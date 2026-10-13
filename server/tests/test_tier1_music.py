@@ -108,11 +108,18 @@ class TestTier1MusicFormats(unittest.IsolatedAsyncioTestCase):
 
             # 3. 完整入库集成测试
             import uuid
+            from sqlalchemy import text
             from app.core.db import SessionLocal
             from app.core.models import Asset, MusicTrack
             from app.core.pipeline import build_storage, roots_of
             from app.domains.music.parser import parse_music
             from app.domains.music.router import stream as stream_api
+
+            try:
+                async with SessionLocal() as test_conn:
+                    await test_conn.execute(text("SELECT 1"))
+            except Exception as e:
+                self.skipTest(f"数据库连接不可达 ({e})，跳过集成入库测试")
 
             async with SessionLocal() as db:
                 storage = build_storage(await roots_of(db))
