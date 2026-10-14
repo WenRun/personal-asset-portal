@@ -11,8 +11,22 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import forbidden, unauthenticated
 from app.core.models import SessionToken, Setting, User
+from app.core.registry import ASSET_TYPES
 
 COOKIE_NAME = "portal_session"
+
+DEFAULT_ALIAS_TYPES: dict[str, list[str]] = {
+    "fonts": ["font"],
+    "font": ["font"],
+    "music": ["music"],
+    "videos": ["video"],
+    "video": ["video"],
+    "books": ["book"],
+    "book": ["book"],
+    "images": ["image"],
+    "image": ["image"],
+    "uploads": list(ASSET_TYPES),
+}
 
 
 async def get_app_settings(db: AsyncSession) -> dict:
@@ -22,14 +36,18 @@ async def get_app_settings(db: AsyncSession) -> dict:
     kv.setdefault(
         "scan_roots",
         [
-            {"alias": "fonts", "path": str(get_settings().data_root / "library" / "fonts")},
-            {"alias": "music", "path": str(get_settings().data_root / "library" / "music")},
-            {"alias": "videos", "path": str(get_settings().data_root / "library" / "videos")},
-            {"alias": "books", "path": str(get_settings().data_root / "library" / "books")},
-            {"alias": "images", "path": str(get_settings().data_root / "library" / "images")},
-            {"alias": "uploads", "path": str(get_settings().data_root / "library" / "uploads")},
+            {"alias": "fonts", "path": str(get_settings().data_root / "library" / "fonts"), "types": ["font"]},
+            {"alias": "music", "path": str(get_settings().data_root / "library" / "music"), "types": ["music"]},
+            {"alias": "videos", "path": str(get_settings().data_root / "library" / "videos"), "types": ["video"]},
+            {"alias": "books", "path": str(get_settings().data_root / "library" / "books"), "types": ["book"]},
+            {"alias": "images", "path": str(get_settings().data_root / "library" / "images"), "types": ["image"]},
+            {"alias": "uploads", "path": str(get_settings().data_root / "library" / "uploads"), "types": list(ASSET_TYPES)},
         ],
     )
+    # 向下兼容历史缺少 types 字段的旧配置
+    for r in kv["scan_roots"]:
+        if "types" not in r or r["types"] is None:
+            r["types"] = DEFAULT_ALIAS_TYPES.get(r["alias"], list(ASSET_TYPES))
     kv.setdefault("registration_open", True)
     kv.setdefault("max_upload_gb", get_settings().max_upload_gb)
     return kv

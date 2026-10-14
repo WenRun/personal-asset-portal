@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search as meili
 from app.core.config import get_settings
+from app.core.deps import get_app_settings
 from app.core.fingerprints import compute_fingerprint
 from app.core.jobs import enqueue
 from app.core.models import Asset, AssetTag, Setting, Tag
-from app.core.registry import asset_type_of, ext_of, mime_of
+from app.core.registry import ASSET_TYPES, asset_type_of, ext_of, mime_of
 from app.core.storage import LocalStorage
 
 log = logging.getLogger("portal.pipeline")
@@ -53,12 +54,16 @@ def cleanup_derived(asset_id, data_root) -> int:
 @register("scan_root")
 async def scan_root(db: AsyncSession, payload: dict) -> None:
     """扫描资源根目录：新文件登记 pending；mtime/size 变化重指纹；
-    库内有、盘上没有的记录自动软删（对账，可恢复）——文件被删除/移动/改名后重扫即同步。"""
+    库内有、盘上没有（或不在类型白名单内）的记录自动软删（对账，可恢复）——文件被删除/移动/改名/排除后重扫即同步。"""
     alias = payload["root_alias"]
-    roots = await roots_of(db)
-    if alias not in roots:
+    settings_kv = await get_app_settings(db)
+    scan_roots = settings_kv.get("scan_roots", [])
+    root_cfg = next((r for r in scan_roots if r.get("alias") == alias), None)
+    if root_cfg is None:
         raise LookupError(f"未注册的资源根目录: {alias}")
 
+    allowed_types = set(root_cfg.get("types") or ASSET_TYPES)
+    roots = {r["alias"]: r["path"] for r in scan_roots}
     storage = build_storage(roots)
     existing = {
         a.storage_key: a
@@ -69,14 +74,15 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
     seen: set[str] = set()
     new_files = 0
     for st in storage.iter_files(alias):
-        seen.add(st.key)
-        if asset_type_of(st.name) is None:
+        atype = asset_type_of(st.name)
+        if atype is None or atype not in allowed_types:
             continue
+        seen.add(st.key)
         row = existing.get(st.key)
         if row is None:
             db.add(
                 Asset(
-                    asset_type=asset_type_of(st.name),
+                    asset_type=atype,
                     status="pending",
                     title=st.name.rsplit(".", 1)[0],
                     storage_key=st.key,
@@ -88,6 +94,12 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
             )
             new_files += 1
             await enqueue(db, "fingerprint", {"storage_key": st.key}, priority=5)
+        elif row.deleted_at is not None:
+            row.deleted_at = None
+            row.file_mtime = st.mtime_ns
+            row.size_bytes = st.size
+            row.status = "pending"
+            await enqueue(db, "fingerprint", {"asset_id": str(row.id)}, priority=5)
         elif row.file_mtime != st.mtime_ns or row.size_bytes != st.size:
             row.file_mtime = st.mtime_ns
             row.size_bytes = st.size
@@ -163,13 +175,5 @@ async def index_meili(db: AsyncSession, payload: dict) -> None:
 
 
 async def roots_of(db: AsyncSession) -> dict[str, str]:
-    from app.core.models import Setting
-
-    rows = (await db.execute(select(Setting))).scalars().all()
-    scan_roots = next((r.value for r in rows if r.key == "scan_roots"), None)
-    if scan_roots is None:
-        scan_roots = [
-            {"alias": a, "path": str(get_settings().data_root / "library" / a)}
-            for a in ("fonts", "music", "videos", "books", "images", "uploads")
-        ]
-    return {r["alias"]: r["path"] for r in scan_roots}
+    settings_kv = await get_app_settings(db)
+    return {r["alias"]: r["path"] for r in settings_kv.get("scan_roots", [])}

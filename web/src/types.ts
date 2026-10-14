@@ -177,3 +177,15 @@ export interface Stats {
   jobsFailed: number
   jobsDoneToday: number
 }
+
+export interface ScanRoot {
+  alias: string
+  path: string
+  types: AssetType[]
+}
+
+export interface AppSettings {
+  scan_roots: ScanRoot[]
+  registration_open: boolean
+  max_upload_gb?: number
+}

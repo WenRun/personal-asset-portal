@@ -5,7 +5,7 @@
  */
 
 import type {
-  Album, Book, Clip, FontFamily, Photo,
+  Album, AppSettings, Book, Clip, FontFamily, Photo, ScanRoot,
 } from '@/types'
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://localhost:8000'
@@ -472,8 +472,8 @@ export const api = {
       releaseJobsStream()
     }
   },
-  settings: () => req<{ scan_roots: { alias: string; path: string }[]; registration_open: boolean; max_upload_gb?: number }>('/api/admin/settings'),
-  updateSettings: (patch: { registration_open?: boolean; max_upload_gb?: number }) => req<unknown>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+  settings: () => req<AppSettings>('/api/admin/settings'),
+  updateSettings: (patch: { scan_roots?: ScanRoot[]; registration_open?: boolean; max_upload_gb?: number }) => req<AppSettings>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),
   scan: (rootAlias: string) => req<{ job_id: string }>('/api/admin/scan', { method: 'POST', body: JSON.stringify({ root_alias: rootAlias }) }),
   upload: (file: File) => {
     const fd = new FormData()

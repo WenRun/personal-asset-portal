@@ -19,6 +19,7 @@ from app.core.db import SessionLocal, get_db
 from app.core.errors import bad_request, not_found
 from app.core.jobs import JOB_NOTIFY_CHANNEL, enqueue, notify_job_changed
 from app.core.models import Asset, DownloadPack, Job, MusicTrack, Setting, User
+from app.core.registry import ASSET_TYPES
 
 log = logging.getLogger("portal.admin")
 
@@ -226,6 +227,7 @@ async def retry_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: Us
 class ScanRoot(BaseModel):
     alias: str = Field(min_length=1, max_length=32)
     path: str = Field(min_length=1)
+    types: list[str] = Field(default_factory=list, description="允许入库的资产类型白名单；为空表示全部允许")
 
 
 class SettingsBody(BaseModel):
@@ -256,8 +258,18 @@ async def put_settings_api(body: SettingsBody, db: AsyncSession = Depends(get_db
         if len(aliases) != len(set(aliases)):
             raise bad_request("资源根目录 alias 重复")
         for r in body.scan_roots:
+            for t in r.types:
+                if t not in ASSET_TYPES:
+                    raise bad_request(f"未知资产类型: {t}，合法值为: {list(ASSET_TYPES)}")
             Path(r.path).expanduser().mkdir(parents=True, exist_ok=True)
-        await _upsert("scan_roots", [{"alias": r.alias, "path": str(Path(r.path).expanduser())} for r in body.scan_roots])
+        await _upsert("scan_roots", [
+            {
+                "alias": r.alias,
+                "path": str(Path(r.path).expanduser()),
+                "types": [t for t in r.types if t in ASSET_TYPES] if r.types else list(ASSET_TYPES),
+            }
+            for r in body.scan_roots
+        ])
     if body.registration_open is not None:
         await _upsert("registration_open", body.registration_open)
     if body.max_upload_gb is not None:
