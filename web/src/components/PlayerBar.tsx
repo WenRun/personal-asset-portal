@@ -100,7 +100,7 @@ export function PlayerBar() {
   }, [activeLine, showLyrics])
 
   if (!cur) return null
-  const curTitle = cleanTrackTitle(cur.title)
+  const curTitle = cleanTrackTitle(cur.title, artist)
   const audioDur = audioRef.current?.duration
   const duration = audioDur && Number.isFinite(audioDur) ? audioDur : cur.durationSec
   const pct = duration ? (pos / duration) * 100 : 0

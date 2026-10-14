@@ -20,6 +20,7 @@ from app.domains.music.cue import (
     CueSheet,
     detect_and_read_cue,
     normalize_track_title,
+    normalize_track_title_and_artist,
     parse_cue_sheet,
     resolve_audio_file,
     timecode_to_ms,
@@ -76,7 +77,7 @@ class TestCueMusicSupport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mime_of("disc.cue"), "application/x-cue")
 
     def test_normalize_track_title(self):
-        """测试曲目标题清洗规范（去除冗余数字/点号序号，防止误伤真实歌名）。"""
+        """测试曲目标题清洗规范（去除冗余数字/点号序号，以及前置/后置歌手名剥离）。"""
         # 1. 常见数字带点/分隔符模式
         self.assertEqual(normalize_track_title("01.你若无情休怪我无义"), "你若无情休怪我无义")
         self.assertEqual(normalize_track_title("02. 你的眼神出卖你的心"), "你的眼神出卖你的心")
@@ -89,11 +90,41 @@ class TestCueMusicSupport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(normalize_track_title("10.小三续集"), "小三续集")
         self.assertEqual(normalize_track_title("  09.  测试歌曲  "), "测试歌曲")
 
-        # 2. 防误伤测试（真实歌名以数字开头，不应被截断）
+        # 2. 剥离后置歌手名（如 "歌名 - 歌手"、"独角戏 - 许茹芸-"）
+        self.assertEqual(normalize_track_title("老人与海 - 海鸣威", "海鸣威"), "老人与海")
+        self.assertEqual(normalize_track_title("第一次爱的人 - 王心凌", "王心凌"), "第一次爱的人")
+        self.assertEqual(normalize_track_title("稻香 - 周杰伦", "周杰伦"), "稻香")
+        self.assertEqual(normalize_track_title("秋天不回来 - 王强", "王强"), "秋天不回来")
+        self.assertEqual(normalize_track_title("电台情歌 - 莫文蔚", "莫文蔚"), "电台情歌")
+        self.assertEqual(normalize_track_title("独角戏 - 许茹芸-", "许茹芸"), "独角戏")
+        self.assertEqual(normalize_track_title("浪花 - 刘德华", "刘德华"), "浪花")
+        self.assertEqual(normalize_track_title("此时此刻 - 许巍", "许巍"), "此时此刻")
+        self.assertEqual(normalize_track_title("浪人情歌 - 伍佰", "伍佰"), "浪人情歌")
+        self.assertEqual(normalize_track_title("曲终人散 - 张宇", "张宇"), "曲终人散")
+        self.assertEqual(normalize_track_title("拒绝再玩(超级混音版) - 张国荣", "张国荣"), "拒绝再玩(超级混音版)")
+        self.assertEqual(normalize_track_title("情已逝 - 张学友", "张学友"), "情已逝")
+
+        # 3. 剥离前置歌手名（如 "歌手 - 歌名"、"01. 歌手 - 歌名"）
+        self.assertEqual(normalize_track_title("周杰伦 - 稻香", "周杰伦"), "稻香")
+        self.assertEqual(normalize_track_title("01. 周杰伦 - 稻香", "周杰伦"), "稻香")
+        self.assertEqual(normalize_track_title("02 - 稻香 - 周杰伦", "周杰伦"), "稻香")
+        self.assertEqual(normalize_track_title("王菲 - 红豆", "王菲"), "红豆")
+
+        # 4. 未知歌手启发式识别（如 "清澈见底(电影《快乐到家》主题曲) - 刀郎&云朵"）
+        self.assertEqual(
+            normalize_track_title("清澈见底(电影《快乐到家》主题曲) - 刀郎&云朵", "未知艺术家"),
+            "清澈见底(电影《快乐到家》主题曲)",
+        )
+        t, a = normalize_track_title_and_artist("清澈见底(电影《快乐到家》主题曲) - 刀郎&云朵", "未知艺术家")
+        self.assertEqual(t, "清澈见底(电影《快乐到家》主题曲)")
+        self.assertEqual(a, "刀郎&云朵")
+
+        # 5. 防误伤测试（真实歌名以数字开头，不应被截断）
         self.assertEqual(normalize_track_title("1984"), "1984")
         self.assertEqual(normalize_track_title("2002年的第一场雪"), "2002年的第一场雪")
         self.assertEqual(normalize_track_title("3天2夜"), "3天2夜")
         self.assertEqual(normalize_track_title("365个祝福"), "365个祝福")
+        self.assertEqual(normalize_track_title("周杰伦", "周杰伦"), "周杰伦")
         self.assertEqual(normalize_track_title("01"), "01")
         self.assertEqual(normalize_track_title("01."), "01.")
         self.assertEqual(normalize_track_title(""), "")

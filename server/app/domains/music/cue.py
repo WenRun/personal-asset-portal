@@ -86,18 +86,77 @@ def _unquote(val: str) -> str:
     return val
 
 
-def normalize_track_title(title: str | None) -> str:
-    """清洗曲目标题中的冗余音轨号前缀（如 '01.歌名'、'02 - 歌名'、'03、歌名' 等）。
-
-    防误伤保护：
-    - 仅匹配 1~3 位数字开头且紧随常见分隔符（. - _ 、 ． 或空格）的前缀
-    - 若清洗后为空，则回退保留原样，避免误伤特殊曲目名
+def normalize_track_title_and_artist(
+    title: str | None,
+    artist: str | None = None,
+) -> tuple[str, str | None]:
+    """清洗曲目标题与歌手信息：
+    1. 清除冗余音轨号前缀（如 '01. '、'02 - '）
+    2. 若已知歌手，精准剥离标题中前置或后置的歌手名字（如 '稻香 - 周杰伦'、'独角戏 - 许茹芸-'、'周杰伦 - 稻香'）
+    3. 若歌手未知，启发式拆分 'A - B' 结构，识别纯歌名与歌手
+    返回 (clean_title, clean_artist)。
     """
     if not title:
-        return ""
+        return ("", artist)
     text = title.strip()
+
+    # 1. 清洗音轨序号前缀 (如 "01. ", "02 - ", "03、")
     cleaned = re.sub(r"^\s*\d{1,3}(?:\s*[-._、．]\s*|\s+)", "", text).strip()
-    return cleaned if cleaned else text
+    candidate = cleaned if cleaned else text
+
+    # 2. 如果已知 artist，尝试匹配并剥离
+    if artist and artist.strip() not in ("未知艺术家", "Unknown Artist", "Unknown", "群星", "Various Artists"):
+        art_clean = artist.strip()
+        art_candidates = [art_clean]
+        for sub in re.split(r"[/&,、]|(?:\s+(?:feat\.?|ft\.?|with|vs\.?)\s+)", art_clean, flags=re.IGNORECASE):
+            s = sub.strip()
+            if len(s) >= 2 and s not in art_candidates:
+                art_candidates.append(s)
+        art_candidates.sort(key=len, reverse=True)
+
+        for art in art_candidates:
+            escaped = re.escape(art)
+            # 2.1 后置歌手: 歌名 - 歌手 [尾部可能有冗余连字符/空格]
+            post_pattern = rf"(?:[\s\-_—－~·/]+|\s+){escaped}[\s\-_—－~·]*$"
+            m_post = re.search(post_pattern, candidate, flags=re.IGNORECASE)
+            if m_post and m_post.start() > 0:
+                stripped = candidate[:m_post.start()].strip(" -_—－~·")
+                if stripped:
+                    return (stripped, artist)
+
+            # 2.2 前置歌手: 歌手 - 歌名
+            pre_pattern = rf"^[\s\-_—－~·]*{escaped}(?:[\s\-_—－~·]+|\s+)"
+            m_pre = re.search(pre_pattern, candidate, flags=re.IGNORECASE)
+            if m_pre and m_pre.end() < len(candidate):
+                stripped = candidate[m_pre.end():].strip(" -_—－~·")
+                if stripped:
+                    return (stripped, artist)
+
+    # 3. 未知 artist 或未匹配上已知 artist 时，启发式检测 A - B 结构
+    sep_match = re.search(r"\s+[-_—－~·]\s+|\s*[-—－]\s*", candidate)
+    if sep_match:
+        part_a = candidate[:sep_match.start()].strip()
+        part_b = candidate[sep_match.end():].strip(" -_—－~·")
+        if part_a and part_b:
+            title_features = r"[（(].*?(?:主题曲|片尾曲|插曲|电影|电视剧|Remix|Live|伴奏|原声|Cover|翻唱|版)[)）]|《.*?》|\[.*?\]"
+            has_feat_a = bool(re.search(title_features, part_a, flags=re.IGNORECASE))
+            has_feat_b = bool(re.search(title_features, part_b, flags=re.IGNORECASE))
+            artist_features = r"&|feat\.?|ft\.?|与|和"
+            has_art_a = bool(re.search(artist_features, part_a, flags=re.IGNORECASE))
+            has_art_b = bool(re.search(artist_features, part_b, flags=re.IGNORECASE))
+
+            if (has_feat_a and not has_feat_b) or (has_art_b and not has_art_a):
+                return (part_a, part_b if not artist or artist == "未知艺术家" else artist)
+            if (has_feat_b and not has_feat_a) or (has_art_a and not has_art_b):
+                return (part_b, part_a if not artist or artist == "未知艺术家" else artist)
+
+    return (candidate, artist)
+
+
+def normalize_track_title(title: str | None, artist: str | None = None) -> str:
+    """清洗曲目标题中的冗余音轨号前缀与歌手名（无论歌手名在前还是在后）。"""
+    clean_title, _ = normalize_track_title_and_artist(title, artist)
+    return clean_title
 
 
 def parse_cue_sheet(content: str) -> CueSheet:
@@ -151,12 +210,15 @@ def parse_cue_sheet(content: str) -> CueSheet:
             if line.upper().startswith("TITLE"):
                 val = _unquote(line[5:])
                 if val:
-                    current_track.title = normalize_track_title(val)
+                    art = current_track.performer or sheet.performer
+                    current_track.title = normalize_track_title(val, art)
                 continue
             if line.upper().startswith("PERFORMER"):
                 val = _unquote(line[9:])
                 if val:
                     current_track.performer = val
+                    if current_track.title:
+                        current_track.title = normalize_track_title(current_track.title, val)
                 continue
             idx00_m = re.match(r"^INDEX\s+00\s+([\d:]+)", line, re.IGNORECASE)
             if idx00_m:

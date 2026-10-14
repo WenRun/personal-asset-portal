@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.models import Asset, MusicAlbum, MusicArtist, MusicTrack
 from app.core.pipeline import build_storage, register, roots_of
 from app.core.registry import ext_of
-from app.domains.music.cue import normalize_track_title
+from app.domains.music.cue import normalize_track_title, normalize_track_title_and_artist
 
 PLAYABLE = {
     "mp3", "flac", "m4a", "ogg", "oga", "wav", "opus", "webm",
@@ -224,8 +224,8 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
     for trk in sheet.tracks:
         trk_uuid = uuid.uuid5(asset.id, f"track_{trk.track_no}")
         trk_storage_key = f"cue:{asset.id}/track_{trk.track_no:02d}.mp3"
-        trk_title = normalize_track_title(trk.title)
         trk_artist_name = trk.performer or artist_name
+        trk_title = normalize_track_title(trk.title, trk_artist_name)
         trk_dur = trk.duration_ms or 0
         trk_size = int(raw_file_size * (trk_dur / (audio_total_ms or 1))) if raw_file_size and audio_total_ms and trk_dur else 1024
 
@@ -424,8 +424,10 @@ async def parse_music(db: AsyncSession, payload: dict) -> None:
     rel = asset.storage_key.split(":", 1)[1]
     parts = rel.split("/")
     raw_title = title or asset.title or asset.file_name.rsplit(".", 1)[0]
-    asset.title = normalize_track_title(raw_title)
-    artist_name = artist or (parts[0] if len(parts) > 2 else None) or "未知艺术家"
+    initial_artist = artist or (parts[0] if len(parts) > 2 else None)
+    clean_title, extracted_artist = normalize_track_title_and_artist(raw_title, initial_artist)
+    asset.title = clean_title
+    artist_name = initial_artist or extracted_artist or "未知艺术家"
     album_name = album or (parts[-2] if len(parts) > 2 else None) or "未知专辑"
     asset.meta = {**asset.meta, **meta}
     asset.status = "ready"

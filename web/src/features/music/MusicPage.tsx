@@ -7,7 +7,7 @@ import { useAuth } from '@/stores/auth'
 import { useAssetNav, Badge, Button, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
 import { useBulkSelect } from '@/lib/useBulkSelect'
-import { cleanTrackTitle, cn, fmtTime } from '@/lib/utils'
+import { cleanTrackTitleAndArtist, cn, fmtTime } from '@/lib/utils'
 import { TrackAudioBadge } from './TrackAudioBadge'
 
 type View = 'album' | 'artist' | 'tracks'
@@ -170,7 +170,12 @@ function TracksView() {
   const list = useMemo(() => {
     const arr = tracks ?? []
     const s = q.trim().toLowerCase()
-    return s ? arr.filter((t) => `${t.title}${t.artist}${t.album}`.toLowerCase().includes(s)) : arr
+    return s
+      ? arr.filter((t) => {
+          const c = cleanTrackTitleAndArtist(t.title, t.artist)
+          return `${c.title}${c.artist || t.artist}${t.album}`.toLowerCase().includes(s)
+        })
+      : arr
   }, [tracks, q])
 
   const curTrackId = queue[index]?.id
@@ -213,6 +218,9 @@ function TracksView() {
             {list.map((t, i) => {
               const active = curTrackId === t.asset_id
               const checked = sel.has(t.asset_id)
+              const c = cleanTrackTitleAndArtist(t.title, t.artist)
+              const displayTitle = c.title
+              const displayArtist = c.artist || t.artist
               return (
                 <tr
                   key={t.asset_id}
@@ -227,7 +235,7 @@ function TracksView() {
                     ) : i + 1}
                   </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>
-                    <span>{cleanTrackTitle(t.title)}</span>
+                    <span>{displayTitle}</span>
                     <TrackAudioBadge
                       format={t.format}
                       surround={t.surround}
@@ -238,7 +246,7 @@ function TracksView() {
                     />
                   </td>
                   <td className="px-2 py-2.5 text-slate-500">{t.album}</td>
-                  <td className="hidden px-2 py-2.5 text-slate-500 sm:table-cell">{t.artist}</td>
+                  <td className="hidden px-2 py-2.5 text-slate-500 sm:table-cell">{displayArtist}</td>
                   <td className="hidden px-2 py-2.5 sm:table-cell">{t.lrc ? <Badge tone="brand">LRC</Badge> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-2 py-2.5 font-mono text-slate-400">{fmtTime(t.duration_sec)}</td>
                 </tr>

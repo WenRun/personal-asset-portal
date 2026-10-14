@@ -28,7 +28,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   pos: 0,
   volume: 0.7,
   playAlbum(album, startTrack = 1) {
-    const tracks = album.tracks.map((t) => ({ ...t, title: cleanTrackTitle(t.title) }))
+    const tracks = album.tracks.map((t) => ({ ...t, title: cleanTrackTitle(t.title, album.artist) }))
     let idx = 0
     if (typeof startTrack === 'string') {
       const found = tracks.findIndex((t) => t.id === startTrack)

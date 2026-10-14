@@ -84,6 +84,7 @@ export function AlbumDetailPage() {
           <tbody className="divide-y divide-slate-100">
             {album.tracks.map((t, i) => {
               const active = i === activeIdx
+              const trackTitle = cleanTrackTitle(t.title, album.artist)
               return (
                 <tr
                   key={t.id}
@@ -96,7 +97,7 @@ export function AlbumDetailPage() {
                       : <span className={active ? 'font-bold text-brand-600' : 'text-slate-400'}>{t.no}</span>}
                   </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>
-                    <span>{cleanTrackTitle(t.title)}</span>
+                    <span>{trackTitle}</span>
                     <TrackAudioBadge
                       format={t.format}
                       surround={t.surround}
@@ -115,8 +116,8 @@ export function AlbumDetailPage() {
                       {isAdmin && (
                         <button
                           className="text-slate-300 transition hover:text-brand-600"
-                          title={`分享「${cleanTrackTitle(t.title)}」`}
-                          onClick={(e) => { e.stopPropagation(); setShareTrack({ id: t.id, title: cleanTrackTitle(t.title) }) }}
+                          title={`分享「${trackTitle}」`}
+                          onClick={(e) => { e.stopPropagation(); setShareTrack({ id: t.id, title: trackTitle }) }}
                         >
                           <Link2 className="h-3.5 w-3.5" />
                         </button>
@@ -124,8 +125,8 @@ export function AlbumDetailPage() {
                       {isAdmin && (
                         <button
                           className="text-slate-300 transition hover:text-rose-500"
-                          title={`删除「${cleanTrackTitle(t.title)}」`}
-                          onClick={(e) => { e.stopPropagation(); setDelTrack({ id: t.id, title: cleanTrackTitle(t.title) }) }}
+                          title={`删除「${trackTitle}」`}
+                          onClick={(e) => { e.stopPropagation(); setDelTrack({ id: t.id, title: trackTitle }) }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
