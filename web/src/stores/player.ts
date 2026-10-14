@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Album, Track } from '@/types'
+import { cleanTrackTitle } from '@/lib/utils'
 
 interface PlayerState {
   queue: Track[]
@@ -27,15 +28,16 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   pos: 0,
   volume: 0.7,
   playAlbum(album, startTrack = 1) {
+    const tracks = album.tracks.map((t) => ({ ...t, title: cleanTrackTitle(t.title) }))
     let idx = 0
     if (typeof startTrack === 'string') {
-      const found = album.tracks.findIndex((t) => t.id === startTrack)
+      const found = tracks.findIndex((t) => t.id === startTrack)
       if (found >= 0) idx = found
     } else if (typeof startTrack === 'number') {
-      const found = album.tracks.findIndex((t) => t.no === startTrack)
+      const found = tracks.findIndex((t) => t.no === startTrack)
       if (found >= 0) idx = found
     }
-    set({ queue: album.tracks, albumId: album.id, albumTitle: album.title, artist: album.artist, index: idx, playing: true, pos: 0 })
+    set({ queue: tracks, albumId: album.id, albumTitle: album.title, artist: album.artist, index: idx, playing: true, pos: 0 })
   },
   setPlaying: (playing) => set({ playing }),
   toggle: () => set((s) => ({ playing: s.queue.length > 0 ? !s.playing : false })),

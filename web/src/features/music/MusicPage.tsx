@@ -7,7 +7,7 @@ import { useAuth } from '@/stores/auth'
 import { useAssetNav, Badge, Button, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
 import { useBulkSelect } from '@/lib/useBulkSelect'
-import { cn, fmtTime } from '@/lib/utils'
+import { cleanTrackTitle, cn, fmtTime } from '@/lib/utils'
 import { TrackAudioBadge } from './TrackAudioBadge'
 
 type View = 'album' | 'artist' | 'tracks'
@@ -227,7 +227,7 @@ function TracksView() {
                     ) : i + 1}
                   </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>
-                    <span>{t.title}</span>
+                    <span>{cleanTrackTitle(t.title)}</span>
                     <TrackAudioBadge
                       format={t.format}
                       surround={t.surround}

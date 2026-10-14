@@ -69,3 +69,17 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * 清洗曲目标题中的冗余音轨号前缀（例如 "01.歌曲名"、"02 - 歌曲名"、"03、歌曲名" 等）。
+ *
+ * 安全规则：
+ * - 仅匹配 1~3 位数字开头且紧随分隔符（. - _ 、 ． 或带空格）的前缀
+ * - 若清洗后为空，则回退保留原样，避免误伤特殊曲目名
+ */
+export function cleanTrackTitle(title?: string | null): string {
+  if (!title) return ''
+  const trimmed = title.trim()
+  const cleaned = trimmed.replace(/^\s*\d{1,3}(?:\s*[-._、．]\s*|\s+)/, '').trim()
+  return cleaned || trimmed
+}

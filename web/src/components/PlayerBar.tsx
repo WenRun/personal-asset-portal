@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, List, Mic2, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
-import { cn, fmtTime } from '@/lib/utils'
+import { cleanTrackTitle, cn, fmtTime } from '@/lib/utils'
 import { usePlayer } from '@/stores/player'
 import { api } from '@/api/client'
 import { HueCover } from '@/components/ui'
@@ -100,6 +100,7 @@ export function PlayerBar() {
   }, [activeLine, showLyrics])
 
   if (!cur) return null
+  const curTitle = cleanTrackTitle(cur.title)
   const audioDur = audioRef.current?.duration
   const duration = audioDur && Number.isFinite(audioDur) ? audioDur : cur.durationSec
   const pct = duration ? (pos / duration) * 100 : 0
@@ -130,13 +131,13 @@ export function PlayerBar() {
           if (consecutiveErrorsRef.current >= queue.length) {
             consecutiveErrorsRef.current = 0
             setPlaying(false)
-            setPlaybackError(`无法播放该专辑中的曲目（${cur.title}），已停止连播`)
+            setPlaybackError(`无法播放该专辑中的曲目（${curTitle}），已停止连播`)
           } else if (queue.length > 1) {
-            setPlaybackError(`《${cur.title}》加载失败，正在尝试下一首…`)
+            setPlaybackError(`《${curTitle}》加载失败，正在尝试下一首…`)
             next()
           } else {
             setPlaying(false)
-            setPlaybackError(`无法播放曲目《${cur.title}》`)
+            setPlaybackError(`无法播放曲目《${curTitle}》`)
           }
         }}
         onPlay={() => {
@@ -169,7 +170,7 @@ export function PlayerBar() {
         <div className="absolute inset-x-0 bottom-16 mx-auto max-h-[46vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-b-0 border-slate-800 bg-slate-900/95 p-6 shadow-2xl backdrop-blur">
           <div className="mb-3 flex items-center justify-between text-xs text-slate-500">
             <span>歌词{lyricTimed ? ' · 同步滚动' : ''}</span>
-            <span className="truncate pl-4 text-slate-600">{cur.title}</span>
+            <span className="truncate pl-4 text-slate-600">{curTitle}</span>
           </div>
           <div ref={lyricBoxRef} className="max-h-[calc(46vh-3rem)] overflow-y-auto">
             {lyricLines.length === 0 ? (
@@ -204,7 +205,7 @@ export function PlayerBar() {
       <HueCover hue={245} className="h-10 w-10 shrink-0 rounded-md" />
       <div className="hidden w-48 min-w-0 sm:block">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm text-white">{cur.title}</span>
+          <span className="truncate text-sm text-white">{curTitle}</span>
           <TrackAudioBadge
             format={cur.format}
             surround={cur.surround}

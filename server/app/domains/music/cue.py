@@ -86,6 +86,20 @@ def _unquote(val: str) -> str:
     return val
 
 
+def normalize_track_title(title: str | None) -> str:
+    """清洗曲目标题中的冗余音轨号前缀（如 '01.歌名'、'02 - 歌名'、'03、歌名' 等）。
+
+    防误伤保护：
+    - 仅匹配 1~3 位数字开头且紧随常见分隔符（. - _ 、 ． 或空格）的前缀
+    - 若清洗后为空，则回退保留原样，避免误伤特殊曲目名
+    """
+    if not title:
+        return ""
+    text = title.strip()
+    cleaned = re.sub(r"^\s*\d{1,3}(?:\s*[-._、．]\s*|\s+)", "", text).strip()
+    return cleaned if cleaned else text
+
+
 def parse_cue_sheet(content: str) -> CueSheet:
     """解析 CUE Sheet 文本，提取专辑级信息、音频文件引用以及各曲目分轨。"""
     sheet = CueSheet()
@@ -137,7 +151,7 @@ def parse_cue_sheet(content: str) -> CueSheet:
             if line.upper().startswith("TITLE"):
                 val = _unquote(line[5:])
                 if val:
-                    current_track.title = val
+                    current_track.title = normalize_track_title(val)
                 continue
             if line.upper().startswith("PERFORMER"):
                 val = _unquote(line[9:])

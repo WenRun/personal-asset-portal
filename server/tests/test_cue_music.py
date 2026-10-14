@@ -19,6 +19,7 @@ from app.core.registry import asset_type_of, ext_of, mime_of
 from app.domains.music.cue import (
     CueSheet,
     detect_and_read_cue,
+    normalize_track_title,
     parse_cue_sheet,
     resolve_audio_file,
     timecode_to_ms,
@@ -73,6 +74,30 @@ class TestCueMusicSupport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(asset_type_of("ALBUM.CUE"), "music")
         self.assertEqual(ext_of("disc.cue"), ".cue")
         self.assertEqual(mime_of("disc.cue"), "application/x-cue")
+
+    def test_normalize_track_title(self):
+        """测试曲目标题清洗规范（去除冗余数字/点号序号，防止误伤真实歌名）。"""
+        # 1. 常见数字带点/分隔符模式
+        self.assertEqual(normalize_track_title("01.你若无情休怪我无义"), "你若无情休怪我无义")
+        self.assertEqual(normalize_track_title("02. 你的眼神出卖你的心"), "你的眼神出卖你的心")
+        self.assertEqual(normalize_track_title("03 - 爱情骗子"), "爱情骗子")
+        self.assertEqual(normalize_track_title("04-我还爱着你"), "我还爱着你")
+        self.assertEqual(normalize_track_title("05_两个人的世界一个人睡"), "两个人的世界一个人睡")
+        self.assertEqual(normalize_track_title("06、唱不完的情歌"), "唱不完的情歌")
+        self.assertEqual(normalize_track_title("07．不想回家的女人"), "不想回家的女人")
+        self.assertEqual(normalize_track_title("08 爱的供养"), "爱的供养")
+        self.assertEqual(normalize_track_title("10.小三续集"), "小三续集")
+        self.assertEqual(normalize_track_title("  09.  测试歌曲  "), "测试歌曲")
+
+        # 2. 防误伤测试（真实歌名以数字开头，不应被截断）
+        self.assertEqual(normalize_track_title("1984"), "1984")
+        self.assertEqual(normalize_track_title("2002年的第一场雪"), "2002年的第一场雪")
+        self.assertEqual(normalize_track_title("3天2夜"), "3天2夜")
+        self.assertEqual(normalize_track_title("365个祝福"), "365个祝福")
+        self.assertEqual(normalize_track_title("01"), "01")
+        self.assertEqual(normalize_track_title("01."), "01.")
+        self.assertEqual(normalize_track_title(""), "")
+        self.assertEqual(normalize_track_title(None), "")
 
     def test_timecode_to_ms(self):
         """测试 CUE 75帧/秒标准时间戳到毫秒的精确转换。"""

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.models import Asset, MusicAlbum, MusicArtist, MusicTrack
 from app.core.pipeline import build_storage, register, roots_of
 from app.core.registry import ext_of
+from app.domains.music.cue import normalize_track_title
 
 PLAYABLE = {
     "mp3", "flac", "m4a", "ogg", "oga", "wav", "opus", "webm",
@@ -223,6 +224,7 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
     for trk in sheet.tracks:
         trk_uuid = uuid.uuid5(asset.id, f"track_{trk.track_no}")
         trk_storage_key = f"cue:{asset.id}/track_{trk.track_no:02d}.mp3"
+        trk_title = normalize_track_title(trk.title)
         trk_artist_name = trk.performer or artist_name
         trk_dur = trk.duration_ms or 0
         trk_size = int(raw_file_size * (trk_dur / (audio_total_ms or 1))) if raw_file_size and audio_total_ms and trk_dur else 1024
@@ -247,9 +249,9 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
             child_asset = Asset(
                 id=trk_uuid,
                 asset_type="music",
-                title=trk.title,
+                title=trk_title,
                 storage_key=trk_storage_key,
-                file_name=f"{trk.track_no:02d}. {trk.title}.{audio_format}",
+                file_name=f"{trk.track_no:02d}. {trk_title}.{audio_format}",
                 size_bytes=trk_size,
                 file_mtime=path.stat().st_mtime_ns if path.exists() else 0,
                 mime_type=mime_of(f"x.{audio_format}"),
@@ -258,8 +260,8 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
             )
             db.add(child_asset)
         else:
-            child_asset.title = trk.title
-            child_asset.file_name = f"{trk.track_no:02d}. {trk.title}.{audio_format}"
+            child_asset.title = trk_title
+            child_asset.file_name = f"{trk.track_no:02d}. {trk_title}.{audio_format}"
             child_asset.size_bytes = trk_size
             child_asset.status = "ready"
             child_asset.meta = {**child_asset.meta, **child_meta}
@@ -421,7 +423,8 @@ async def parse_music(db: AsyncSession, payload: dict) -> None:
     # 无标签 → 目录/文件名兜底（详细设计 §5.2）
     rel = asset.storage_key.split(":", 1)[1]
     parts = rel.split("/")
-    asset.title = title or asset.title or asset.file_name.rsplit(".", 1)[0]
+    raw_title = title or asset.title or asset.file_name.rsplit(".", 1)[0]
+    asset.title = normalize_track_title(raw_title)
     artist_name = artist or (parts[0] if len(parts) > 2 else None) or "未知艺术家"
     album_name = album or (parts[-2] if len(parts) > 2 else None) or "未知专辑"
     asset.meta = {**asset.meta, **meta}

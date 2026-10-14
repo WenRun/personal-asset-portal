@@ -8,7 +8,7 @@ import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, EqBars, HueCover } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
-import { fmtTime } from '@/lib/utils'
+import { cleanTrackTitle, fmtTime } from '@/lib/utils'
 import { TrackAudioBadge } from './TrackAudioBadge'
 
 export function AlbumDetailPage() {
@@ -96,7 +96,7 @@ export function AlbumDetailPage() {
                       : <span className={active ? 'font-bold text-brand-600' : 'text-slate-400'}>{t.no}</span>}
                   </td>
                   <td className={`px-2 py-2.5 font-medium ${active ? 'text-brand-700' : ''}`}>
-                    <span>{t.title}</span>
+                    <span>{cleanTrackTitle(t.title)}</span>
                     <TrackAudioBadge
                       format={t.format}
                       surround={t.surround}
@@ -115,8 +115,8 @@ export function AlbumDetailPage() {
                       {isAdmin && (
                         <button
                           className="text-slate-300 transition hover:text-brand-600"
-                          title={`分享「${t.title}」`}
-                          onClick={(e) => { e.stopPropagation(); setShareTrack({ id: t.id, title: t.title }) }}
+                          title={`分享「${cleanTrackTitle(t.title)}」`}
+                          onClick={(e) => { e.stopPropagation(); setShareTrack({ id: t.id, title: cleanTrackTitle(t.title) }) }}
                         >
                           <Link2 className="h-3.5 w-3.5" />
                         </button>
@@ -124,8 +124,8 @@ export function AlbumDetailPage() {
                       {isAdmin && (
                         <button
                           className="text-slate-300 transition hover:text-rose-500"
-                          title={`删除「${t.title}」`}
-                          onClick={(e) => { e.stopPropagation(); setDelTrack({ id: t.id, title: t.title }) }}
+                          title={`删除「${cleanTrackTitle(t.title)}」`}
+                          onClick={(e) => { e.stopPropagation(); setDelTrack({ id: t.id, title: cleanTrackTitle(t.title) }) }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
