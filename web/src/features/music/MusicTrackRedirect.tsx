@@ -8,7 +8,7 @@ export function MusicTrackRedirect() {
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
   const playAlbum = usePlayer((s) => s.playAlbum)
-  const { data: tracks, isLoading } = useQuery({ queryKey: ['music-tracks'], queryFn: api.musicTracks })
+  const { data: tracks, isLoading } = useQuery({ queryKey: ['music-tracks'], queryFn: () => api.musicTracks() })
 
   useEffect(() => {
     if (isLoading || !id) return

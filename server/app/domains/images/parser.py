@@ -56,6 +56,22 @@ def _gps_decimal(gps: dict, lat_key: int, lat_ref_key: int, lon_key: int, lon_re
     return dec(gps.get(lat_key, ()), gps.get(lat_ref_key)), dec(gps.get(lon_key, ()), gps.get(lon_ref_key))
 
 
+def suggest_image_category(camera_make: str | None, camera_model: str | None, width: int | None, height: int | None, ext: str) -> str:
+    if camera_make or camera_model:
+        return "摄影相片"
+    if width and height:
+        ratio = width / height if height > 0 else 0
+        if width >= 1920 and height >= 1080 and (1.5 <= ratio <= 2.4):
+            return "电脑壁纸"
+        if height >= 1920 and width >= 1080 and (0.45 <= ratio <= 0.65):
+            return "手机壁纸"
+        if width <= 512 and height <= 512:
+            return "图标表情"
+    if ext.lower() in (".svg", ".ico", ".ai", ".psd"):
+        return "设计矢量"
+    return "插画图形"
+
+
 @register("parse:image")
 async def parse_image(db: AsyncSession, payload: dict) -> None:
     asset = await db.get(Asset, payload["asset_id"])
@@ -105,6 +121,14 @@ async def parse_image(db: AsyncSession, payload: dict) -> None:
     asset.title = asset.title or asset.file_name.rsplit(".", 1)[0]
     asset.meta = {**asset.meta, **meta}
     asset.status = "ready"
+    if not asset.suggested_category:
+        asset.suggested_category = suggest_image_category(
+            fields.get("camera_make"),
+            fields.get("camera_model"),
+            width,
+            height,
+            ext_of(asset.file_name),
+        )
 
     row = await db.get(ImageDetail, asset.id)
     if row is None:

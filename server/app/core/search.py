@@ -7,7 +7,7 @@ from app.core.registry import TYPE_TO_ROUTE
 
 INDEX_SETTINGS = {
     "searchableAttributes": ["title", "file_name", "note"],
-    "filterableAttributes": ["type", "tags", "rating"],
+    "filterableAttributes": ["type", "tags", "rating", "category"],
     "sortableAttributes": ["created_at"],
 }
 
@@ -83,6 +83,7 @@ def doc_from_asset(a, tags: list[str] | None = None) -> dict:
         "file_name": a.file_name,
         "note": a.note or "",
         "tags": tags or [],
+        "category": a.category,
         "rating": a.rating,
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "size_bytes": a.size_bytes,

@@ -5,7 +5,7 @@
  */
 
 import type {
-  Album, AppSettings, Book, Clip, FontFamily, Photo, ScanRoot,
+  Album, AppSettings, Book, CategoriesResult, Clip, FontFamily, Photo, ScanRoot,
 } from '@/types'
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://localhost:8000'
@@ -21,6 +21,8 @@ export interface RawAsset {
   file_name: string
   size_bytes: number
   mime_type: string | null
+  category?: string | null
+  suggested_category?: string | null
   rating: number | null
   is_favorite: boolean
   note: string | null
@@ -78,7 +80,7 @@ export interface RawAsset {
 
 export interface UserPayload { id: string; username: string; role: 'admin' | 'member' }
 
-export interface ListParams { q?: string; tag?: string; favorite?: boolean }
+export interface ListParams { q?: string; tag?: string; category?: string; favorite?: boolean }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
@@ -122,7 +124,14 @@ const READABLE_BOOK = new Set(['epub', 'pdf'])
 // ---------- 通用 → 视图模型映射 ----------
 
 function base(r: RawAsset) {
-  return { hue: hueFromId(r.id), rating: r.rating ?? 0, favorite: r.is_favorite, createdAt: r.created_at }
+  return {
+    hue: hueFromId(r.id),
+    rating: r.rating ?? 0,
+    favorite: r.is_favorite,
+    createdAt: r.created_at,
+    category: r.category,
+    suggested_category: r.suggested_category,
+  }
 }
 
 function toBook(r: RawAsset): Book {
@@ -140,6 +149,8 @@ function toBook(r: RawAsset): Book {
     lastChapter: undefined,
     rating: r.rating ?? 0,
     tags: (r.tags ?? []).map((t) => t.name),
+    category: r.category,
+    suggested_category: r.suggested_category,
     hue: hueFromId(r.id),
     createdAt: r.created_at,
     desc: r.note ?? '',
@@ -203,6 +214,8 @@ function toClip(r: RawAsset): Clip {
     hue: hueFromId(r.id),
     codec: r.video_codec ?? '',
     tags: (r.tags ?? []).map((t) => t.name),
+    category: r.category,
+    suggested_category: r.suggested_category,
     note: r.note ?? '',
     series_id: r.series_id ?? null,
     episode: r.episode ?? null,
@@ -210,8 +223,6 @@ function toClip(r: RawAsset): Clip {
     rating: r.rating ?? 0,
   }
 }
-
-
 
 function toPhoto(r: RawAsset): Photo {
   const w = r.width ?? 0
@@ -235,16 +246,19 @@ function toPhoto(r: RawAsset): Photo {
     // 瀑布流高度：按真实宽高比派生；无 EXIF 尺寸时退回哈希伪随机
     displayH: w > 0 && h > 0 ? Math.min(440, Math.max(120, Math.round((300 * h) / w))) : 170 + (hueFromId(r.id) % 140),
     tags: (r.tags ?? []).map((t) => t.name),
+    category: r.category,
+    suggested_category: r.suggested_category,
     note: r.note ?? '',
     rating: r.rating ?? 0,
     favorite: r.is_favorite,
   }
 }
 
-async function listRaw(route: string, params?: { q?: string; tag?: string; favorite?: boolean }): Promise<RawAsset[]> {
+async function listRaw(route: string, params?: { q?: string; tag?: string; category?: string; favorite?: boolean }): Promise<RawAsset[]> {
   const usp = new URLSearchParams({ page_size: '200' })
   if (params?.q) usp.set('q', params.q)
   if (params?.tag) usp.set('tag', params.tag)
+  if (params?.category) usp.set('category', params.category)
   if (params?.favorite) usp.set('favorite', 'true')
   const d = await req<{ items: RawAsset[] }>(`/api/${route}?${usp}`)
   return d.items
@@ -367,8 +381,10 @@ export const api = {
   fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
   fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
   fontFamilyPackUrl: (id: string) => `${BASE}/api/fonts/${id}/family-pack`,
-  musicAlbums: () =>
-    req<{ id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]>('/api/music/albums'),
+  musicAlbums: (category?: string) =>
+    req<{ id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]>(
+      `/api/music/albums${category ? `?category=${encodeURIComponent(category)}` : ''}`,
+    ),
   album: async (id: string): Promise<Album> => {
     const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; format?: string | null; lrc: boolean; streamable: boolean; size_bytes: number; is_cue_track?: boolean }[] }>(`/api/music/albums/${id}`)
     const firstFormat = d.tracks.find((t) => t.format)?.format?.toUpperCase() || ''
@@ -396,8 +412,10 @@ export const api = {
       hue: hueFromId(d.id),
     }
   },
-  musicTracks: () =>
-    req<{ asset_id: string; album_id: string; title: string; album: string; artist: string; no: number | null; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; lrc: boolean; format: string | null; streamable: boolean; is_cue_track?: boolean; created_at: string }[]>('/api/music/tracks'),
+  musicTracks: (category?: string) =>
+    req<{ asset_id: string; album_id: string; title: string; album: string; artist: string; no: number | null; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; lrc: boolean; format: string | null; streamable: boolean; is_cue_track?: boolean; created_at: string; category?: string | null; suggested_category?: string | null }[]>(
+      `/api/music/tracks${category ? `?category=${encodeURIComponent(category)}` : ''}`,
+    ),
   musicAlbumCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/music/albums/${id}/cover?size=${size}`,
   videoSeries: () => req<{ id: string; name: string; episodes: number; first_ep: number | null; last_ep: number | null; duration_sec: number; cover_url: string | null }[]>('/api/videos/series'),
   seriesEpisodes: (id: string) => req<{ id: string; name: string; description: string; episode_count: number; watched: number; cover_url: string | null; episodes: { asset_id: string; episode: number | null; title: string; duration_sec: number; position_sec: number; streamable: boolean; cover_url: string | null }[] }>(`/api/videos/series/${id}/episodes`),
@@ -422,8 +440,16 @@ export const api = {
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   font: async (id: string) => toFont(await detailRaw(id)),
 
+  // 分类（M7）
+  categories: (route: string) => req<CategoriesResult>(`/api/${route}/categories`),
+  batchCategory: (assetIds: string[], category?: string | null, adoptSuggested?: boolean) =>
+    req<{ ok: boolean; updated: number }>('/api/assets/batch-category', {
+      method: 'POST',
+      body: JSON.stringify({ asset_ids: assetIds, category, adopt_suggested: adoptSuggested }),
+    }),
+
   // 编辑（admin）
-  patchAsset: (id: string, patch: { title?: string; note?: string; rating?: number; is_favorite?: boolean; tags?: string[] }) =>
+  patchAsset: (id: string, patch: { title?: string; note?: string; rating?: number; is_favorite?: boolean; tags?: string[]; category?: string | null }) =>
     req<RawAsset>(`/api/assets/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   // 删除（admin）：默认软删可恢复；purge 彻底删记录，deleteFile 连源文件一起删
   deleteAsset: (id: string, opts?: { purge?: boolean; deleteFile?: boolean }) =>

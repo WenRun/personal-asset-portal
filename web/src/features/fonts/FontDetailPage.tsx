@@ -261,6 +261,8 @@ export function FontDetailPage() {
         <EditAssetDialog
           assetId={current?.id ?? font.id}
           initialTitle={current?.family || current?.title || font.family}
+          initialCategory={current?.category ?? font.category}
+          suggestedCategory={current?.suggested_category ?? font.suggested_category}
           initialNote={current?.note || font.note || ''}
           initialTags={current?.tags || font.tags || []}
           initialRating={current?.rating || font.rating || 0}

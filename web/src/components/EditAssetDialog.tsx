@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Star, X } from 'lucide-react'
+import { Folder, Pencil, Plus, Sparkles, Star, X } from 'lucide-react'
 import { api } from '@/api/client'
 import { Button, Input, Modal } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
-/** 资产信息编辑弹层（admin 可用，支持标题、备注、标签与评分修改） */
+/** 资产信息编辑弹层（admin 可用，支持标题、分类、备注、标签与评分修改） */
 export function EditAssetDialog({
   assetId,
   initialTitle,
+  initialCategory,
+  suggestedCategory,
   initialNote = '',
   initialTags = [],
   initialRating = 0,
@@ -18,6 +20,8 @@ export function EditAssetDialog({
 }: {
   assetId: string
   initialTitle: string
+  initialCategory?: string | null
+  suggestedCategory?: string | null
   initialNote?: string
   initialTags?: string[]
   initialRating?: number
@@ -27,6 +31,7 @@ export function EditAssetDialog({
 }) {
   const qc = useQueryClient()
   const [title, setTitle] = useState(initialTitle)
+  const [category, setCategory] = useState(initialCategory ?? '')
   const [note, setNote] = useState(initialNote)
   const [tags, setTags] = useState<string[]>(initialTags)
   const [rating, setRating] = useState(initialRating)
@@ -38,6 +43,7 @@ export function EditAssetDialog({
   useEffect(() => {
     if (open) {
       setTitle(initialTitle || '')
+      setCategory(initialCategory || '')
       setNote(initialNote || '')
       setTags([...(initialTags || [])])
       setRating(initialRating || 0)
@@ -45,7 +51,7 @@ export function EditAssetDialog({
       setTagInput('')
       setErrorMsg(null)
     }
-  }, [open, initialTitle, initialNote, initialTags, initialRating])
+  }, [open, initialTitle, initialCategory, initialNote, initialTags, initialRating])
 
   // 获取已有标签供快速点选补充
   const { data: allTags } = useQuery({
@@ -78,6 +84,7 @@ export function EditAssetDialog({
       }
       return api.patchAsset(assetId, {
         title: cleanTitle,
+        category: category.trim() || null,
         note: note.trim(),
         tags,
         rating,
@@ -90,6 +97,10 @@ export function EditAssetDialog({
       void qc.invalidateQueries({ queryKey: ['fonts'] })
       void qc.invalidateQueries({ queryKey: ['photo', assetId] })
       void qc.invalidateQueries({ queryKey: ['photos'] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['book', assetId] })
+      void qc.invalidateQueries({ queryKey: ['music'] })
+      void qc.invalidateQueries({ queryKey: ['categories'] })
       void qc.invalidateQueries({ queryKey: ['tags'] })
       void qc.invalidateQueries()
       onSuccess?.()
@@ -137,6 +148,48 @@ export function EditAssetDialog({
             placeholder="请输入资产标题"
             className="w-full"
           />
+        </div>
+
+        {/* 分类（方案 B 手动归纳 + 方案 C 推荐采纳） */}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-600">
+            <label htmlFor="asset-category" className="flex items-center gap-1.5">
+              <Folder className="h-3.5 w-3.5 text-brand-600" />
+              <span>所属分类</span>
+            </label>
+            {category && (
+              <button
+                type="button"
+                onClick={() => setCategory('')}
+                className="text-[11px] text-slate-400 hover:text-rose-500 transition"
+              >
+                清空分类（设为未分类）
+              </button>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Input
+              id="asset-category"
+              value={category}
+              maxLength={128}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="输入分类名称（如：计算机与技术、流行、摄影相片…）"
+              className="w-full text-xs"
+            />
+            {suggestedCategory && suggestedCategory !== category && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50/80 border border-amber-200/70 rounded-lg px-2.5 py-1.5">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span>智能推荐分类：<b>{suggestedCategory}</b></span>
+                <button
+                  type="button"
+                  onClick={() => setCategory(suggestedCategory)}
+                  className="ml-auto inline-flex items-center gap-0.5 font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2"
+                >
+                  采纳推荐
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 评分 */}

@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { Check, ListChecks, Play } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePlayer } from '@/stores/player'
 import { useAuth } from '@/stores/auth'
 import { useAssetNav, Badge, Button, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
+import { CategoryBar } from '@/components/CategoryBar'
+import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cleanTrackTitleAndArtist, cn, fmtTime } from '@/lib/utils'
 import { TrackAudioBadge } from './TrackAudioBadge'
@@ -24,7 +27,20 @@ function hueOf(id: string) {
 }
 
 export function MusicPage() {
-  const { data: albums } = useQuery({ queryKey: ['music-albums'], queryFn: api.musicAlbums, refetchInterval: 10_000 })
+  const [params, setParams] = useSearchParams()
+  const catFilter = params.get('category') ?? undefined
+  const setCategory = (c: string | undefined) => {
+    const p = new URLSearchParams(params)
+    if (c) p.set('category', c)
+    else p.delete('category')
+    setParams(p, { replace: true })
+  }
+
+  const { data: albums } = useQuery({
+    queryKey: ['music-albums', catFilter],
+    queryFn: () => api.musicAlbums(catFilter),
+    refetchInterval: 10_000,
+  })
   const playAlbum = usePlayer((s) => s.playAlbum)
   const nav = useAssetNav()
   const [view, setView] = useState<View>('album')
@@ -85,6 +101,9 @@ export function MusicPage() {
           </>
         }
       />
+
+      {/* 分类胶囊栏 */}
+      <CategoryBar route="music" selected={catFilter} onSelect={setCategory} className="mt-3" />
 
       {view === 'album' && (
         <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
@@ -153,14 +172,17 @@ export function MusicPage() {
         </div>
       )}
 
-      {view === 'tracks' && <TracksView />}
+      {view === 'tracks' && <TracksView category={catFilter} />}
     </div>
   )
 }
 
 /** 全部曲目（member）：平铺表 + 点行播放（从所属专辑入队）；支持批量多选入包 */
-function TracksView() {
-  const { data: tracks } = useQuery({ queryKey: ['music-tracks'], queryFn: api.musicTracks })
+function TracksView({ category }: { category?: string }) {
+  const { data: tracks } = useQuery({
+    queryKey: ['music-tracks', category],
+    queryFn: () => api.musicTracks(category),
+  })
   const playAlbum = usePlayer((s) => s.playAlbum)
   const { queue, index } = usePlayer()
   const user = useAuth((s) => s.user)
@@ -210,6 +232,7 @@ function TracksView() {
               <th className="px-2 py-2 text-left font-medium">标题</th>
               <th className="px-2 py-2 text-left font-medium">专辑</th>
               <th className="hidden px-2 py-2 text-left font-medium sm:table-cell">艺术家</th>
+              <th className="hidden px-2 py-2 text-left font-medium md:table-cell">分类</th>
               <th className="hidden w-16 px-2 py-2 text-left font-medium sm:table-cell">歌词</th>
               <th className="w-16 px-2 py-2 text-left font-medium">时长</th>
             </tr>
@@ -247,13 +270,16 @@ function TracksView() {
                   </td>
                   <td className="px-2 py-2.5 text-slate-500">{t.album}</td>
                   <td className="hidden px-2 py-2.5 text-slate-500 sm:table-cell">{displayArtist}</td>
+                  <td className="hidden px-2 py-2.5 md:table-cell">
+                    <AdoptCategoryBadge assetId={t.asset_id} category={t.category} suggestedCategory={t.suggested_category} />
+                  </td>
                   <td className="hidden px-2 py-2.5 sm:table-cell">{t.lrc ? <Badge tone="brand">LRC</Badge> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-2 py-2.5 font-mono text-slate-400">{fmtTime(t.duration_sec)}</td>
                 </tr>
               )
             })}
             {list.length === 0 && (
-              <tr><td colSpan={6} className="p-10 text-center text-slate-400">没有匹配的曲目</td></tr>
+              <tr><td colSpan={7} className="p-10 text-center text-slate-400">没有匹配的曲目</td></tr>
             )}
           </tbody>
         </table>
@@ -262,7 +288,7 @@ function TracksView() {
         共 {list.length} 首 · 点行播放（/api/music/&#123;id&#125;/stream 真实音频流）
       </div>
 
-      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
+      {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="music" onDone={exit} onCancel={exit} />}
     </div>
   )
 }

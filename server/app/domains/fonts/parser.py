@@ -26,6 +26,23 @@ def _detect_languages(cmap_keys: set[int]) -> list[str]:
     return out or ["未知"]
 
 
+def suggest_font_category(family: str, title: str, is_mono: bool = False, languages: list[str] | None = None) -> str:
+    comb = f"{family} {title}".lower()
+    if is_mono or any(k in comb for k in ("mono", "code", "consolas", "fira code", "jetbrains", "hack", "inconsolata", "等宽")):
+        return "等宽/代码"
+    if any(k in comb for k in ("sans", "gothic", "arial", "helvetica", "黑体", "雅黑", "苹方", "思源黑体", "noto sans", "pingfang", "lato", "roboto")):
+        return "无衬线/黑体"
+    if any(k in comb for k in ("serif", "mincho", "times", "georgia", "宋体", "明朝", "思源宋体", "noto serif", "songti")):
+        return "衬线/宋体"
+    if any(k in comb for k in ("script", "hand", "calligraphy", "brush", "楷体", "行书", "草书", "书法", "手写", "毛笔", "kaiti")):
+        return "手写/书法"
+    if any(k in comb for k in ("pixel", "retro", "8bit", "像素")):
+        return "创意/像素"
+    if languages and "简体中文" not in languages and "日文" not in languages and "韩文" not in languages:
+        return "西文字体"
+    return "通用字体"
+
+
 @register("parse:font")
 async def parse_font(db: AsyncSession, payload: dict) -> None:
     asset = await db.get(Asset, payload["asset_id"])
@@ -81,6 +98,13 @@ async def parse_font(db: AsyncSession, payload: dict) -> None:
     asset.title = asset.title or asset.file_name.rsplit(".", 1)[0]
     asset.meta = {**asset.meta, **meta}
     asset.status = "ready"
+    if not asset.suggested_category:
+        asset.suggested_category = suggest_font_category(
+            fields.get("family", ""),
+            asset.title,
+            is_mono=bool(meta.get("is_mono")),
+            languages=fields.get("languages"),
+        )
 
     row = await db.get(FontDetail, asset.id)
     if row is None:

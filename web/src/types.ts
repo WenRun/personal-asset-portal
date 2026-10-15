@@ -26,6 +26,8 @@ export interface FontFamily {
   version: string
   designer: string
   tags: string[]
+  category?: string | null
+  suggested_category?: string | null
   rating: number
   favorite: boolean
   createdAt: string
@@ -62,6 +64,8 @@ export interface Album {
   hue: number
   tracks: Track[]
   tags: string[]
+  category?: string | null
+  suggested_category?: string | null
   rating: number
   favorite: boolean
   createdAt: string
@@ -82,6 +86,8 @@ export interface Series {
   hue: number
   watched: number
   tags: string[]
+  category?: string | null
+  suggested_category?: string | null
   note: string
   episodes: Episode[]
 }
@@ -97,6 +103,8 @@ export interface Clip {
   hue: number
   codec?: string
   tags?: string[]
+  category?: string | null
+  suggested_category?: string | null
   note?: string
   series_id?: string | null
   episode?: number | null
@@ -120,6 +128,8 @@ export interface Book {
   lastChapter?: string
   rating: number
   tags: string[]
+  category?: string | null
+  suggested_category?: string | null
   hue: number
   createdAt: string
   desc: string
@@ -146,6 +156,8 @@ export interface Photo {
   hue: number
   displayH: number
   tags: string[]
+  category?: string | null
+  suggested_category?: string | null
   note?: string
   rating: number
   favorite: boolean
@@ -188,4 +200,16 @@ export interface AppSettings {
   scan_roots: ScanRoot[]
   registration_open: boolean
   max_upload_gb?: number
+}
+
+// ---- 分类体系 ----
+export interface CategoryStat {
+  name: string
+  count: number
+}
+
+export interface CategoriesResult {
+  total: number
+  uncategorized: number
+  categories: CategoryStat[]
 }

@@ -123,7 +123,9 @@ def _item(a: Asset) -> dict:
     return {
         "id": str(a.id), "type": a.asset_type, "status": a.status,
         "title": a.title, "file_name": a.file_name, "size_bytes": a.size_bytes,
-        "mime_type": a.mime_type, "rating": a.rating, "is_favorite": a.is_favorite,
+        "mime_type": a.mime_type, "category": a.category,
+        "suggested_category": a.suggested_category,
+        "rating": a.rating, "is_favorite": a.is_favorite,
         "note": a.note, "created_at": a.created_at.isoformat(),
         "cover_url": None,
     }
@@ -134,7 +136,40 @@ async def _storage(db: AsyncSession) -> LocalStorage:
     return LocalStorage({r["alias"]: r["path"] for r in kv["scan_roots"]})
 
 
-# ---------- 浏览（公开；访客禁止携带 q —— §6.2/§6.4） ----------
+# ---------- 浏览与分类（公开；访客禁止携带 q —— §6.2/§6.4） ----------
+
+@router.get("/{route}/categories", summary="资产分类聚合统计",
+            description="公开。统计指定类型下各个分类的资产数量及未分类数量。")
+async def list_categories(
+    route: str = Path(description="资产类型路由：fonts / music / videos / books / images"),
+    db: AsyncSession = Depends(get_db),
+):
+    if route not in ROUTE_TO_TYPE:
+        raise not_found()
+    atype = ROUTE_TO_TYPE[route]
+    rows = (
+        await db.execute(
+            select(Asset.category, func.count(Asset.id))
+            .where(Asset.asset_type == atype, Asset.deleted_at.is_(None))
+            .group_by(Asset.category)
+        )
+    ).all()
+    categories = []
+    uncategorized = 0
+    total = 0
+    for cat, count in rows:
+        total += count
+        if cat is None or not cat.strip():
+            uncategorized += count
+        else:
+            categories.append({"name": cat, "count": count})
+    categories.sort(key=lambda x: (-x["count"], x["name"]))
+    return {
+        "total": total,
+        "uncategorized": uncategorized,
+        "categories": categories,
+    }
+
 
 @router.get("/{route}", summary="按类型浏览资产列表",
             description="公开。游标分页（按入库时间倒序），返回对应类型资产并附带类型专属字段；游客不可搜索（携带 q 时返回 401）。")
@@ -144,6 +179,7 @@ async def list_assets(
     page_size: int = Query(60, description="每页条数，默认 60（上限 200，超出自动截断）"),
     q: str | None = Query(None, description="关键词，模糊匹配标题 / 文件名；游客不可用"),
     tag: str | None = Query(None, description="按标签名精确过滤"),
+    category: str | None = Query(None, description="按分类过滤；传 '__uncategorized__' 过滤未分类"),
     favorite: bool | None = Query(None, description="仅看收藏"),
     user: User | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -156,6 +192,12 @@ async def list_assets(
     cond = [Asset.asset_type == ROUTE_TO_TYPE[route], Asset.deleted_at.is_(None)]
     if favorite:
         cond.append(Asset.is_favorite.is_(True))
+    if category is not None:
+        c = category.strip()
+        if c == "__uncategorized__":
+            cond.append(Asset.category.is_(None))
+        elif c:
+            cond.append(Asset.category == c)
     if tag is not None and tag.strip():
         cond.append(Asset.id.in_(
             select(AssetTag.asset_id).join(Tag, Tag.id == AssetTag.tag_id).where(Tag.name == tag.strip())
@@ -357,26 +399,68 @@ class AssetPatch(BaseModel):
     rating: int | None = Field(default=None, ge=0, le=5)
     is_favorite: bool | None = None
     tags: list[str] | None = None
+    category: str | None = None  # None 不做修改；"" 或 "__clear__" 清空；字符串则更新分类
+
+
+class BatchCategoryRequest(BaseModel):
+    asset_ids: list[uuid.UUID]
+    category: str | None = None  # 指定新分类；若传 "__clear__" 或空则清空
+    adopt_suggested: bool = False  # 若为 True，则对选中的资产一键采纳系统给出的 suggested_category
 
 
 async def _reindex(db: AsyncSession, a: Asset) -> None:
     await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
 
 
+@router.post("/assets/batch-category", summary="批量设置或采纳分类",
+             description="管理员或登录成员。支持批量修改选定资产的分类，或一键采纳系统的推荐分类。")
+async def batch_category(
+    body: BatchCategoryRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_member),
+):
+    if user.role != "admin":
+        raise forbidden()
+    if not body.asset_ids:
+        return {"updated": 0}
+    assets = (
+        await db.execute(
+            select(Asset).where(Asset.id.in_(body.asset_ids), Asset.deleted_at.is_(None))
+        )
+    ).scalars().all()
+    updated = 0
+    for a in assets:
+        if body.adopt_suggested:
+            if a.suggested_category:
+                a.category = a.suggested_category
+                updated += 1
+        elif body.category is not None:
+            c = body.category.strip()
+            a.category = None if (not c or c == "__clear__") else c
+            updated += 1
+    await db.commit()
+    for a in assets:
+        await _reindex(db, a)
+    return {"updated": updated}
+
+
 @router.patch("/assets/{asset_id}", summary="编辑资产元信息",
-              description="管理员或登录成员。可修改标题 / 备注 / 评分（0-5）/ 标签 / 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
+              description="管理员或登录成员。可修改标题 / 备注 / 评分（0-5）/ 标签 / 分类 / 收藏标记，仅传入的字段生效；改动后异步重建搜索索引。")
 async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_member)):
     a = await db.get(Asset, asset_id)
     if a is None or a.deleted_at is not None:
         raise not_found()
     # 非管理员仅允许修改评分与收藏标记
-    if user.role != "admin" and (body.title is not None or body.note is not None or body.tags is not None):
+    if user.role != "admin" and (body.title is not None or body.note is not None or body.tags is not None or body.category is not None):
         raise forbidden()
     for field in ("title", "note", "rating", "is_favorite"):
         val = getattr(body, field)
         if val is not None:
             setattr(a, field, val)
+    if body.category is not None:
+        c = body.category.strip()
+        a.category = None if (not c or c == "__clear__") else c
     if body.tags is not None:
         # 重置资产关联标签
         await db.execute(delete(AssetTag).where(AssetTag.asset_id == a.id))

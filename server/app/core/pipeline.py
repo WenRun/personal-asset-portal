@@ -51,6 +51,18 @@ def cleanup_derived(asset_id, data_root) -> int:
     return removed
 
 
+def category_from_key(key: str) -> str | None:
+    """从 storage_key ("alias:rel_path") 提取首层子目录作为初始分类。
+    若在根目录（无子文件夹）或虚拟分轨键（如 cue:）则返回 None。"""
+    if not key or key.startswith("cue:") or ":" not in key:
+        return None
+    _, rel = key.split(":", 1)
+    parts = [p for p in rel.split("/") if p]
+    if len(parts) > 1:
+        return parts[0]
+    return None
+
+
 @register("scan_root")
 async def scan_root(db: AsyncSession, payload: dict) -> None:
     """扫描资源根目录：新文件登记 pending；mtime/size 变化重指纹；
@@ -90,6 +102,7 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
                     size_bytes=st.size,
                     file_mtime=st.mtime_ns,
                     mime_type=mime_of(st.name),
+                    category=category_from_key(st.key),
                 )
             )
             new_files += 1
@@ -99,6 +112,8 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
             row.file_mtime = st.mtime_ns
             row.size_bytes = st.size
             row.status = "pending"
+            if row.category is None:
+                row.category = category_from_key(st.key)
             await enqueue(db, "fingerprint", {"asset_id": str(row.id)}, priority=5)
         elif row.file_mtime != st.mtime_ns or row.size_bytes != st.size:
             row.file_mtime = st.mtime_ns

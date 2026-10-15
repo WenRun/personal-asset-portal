@@ -9,6 +9,21 @@ from app.domains.videos.probe import extract_cover_frames, probe_video
 from app.domains.videos.series import recognize, upsert_series
 
 
+def suggest_video_category(kind: str, title: str, series_name: str | None = None) -> str:
+    comb = f"{title} {series_name or ''}".lower()
+    if kind == "tutorial" or series_name:
+        if any(k in comb for k in ("开发", "编程", "python", "java", "vue", "react", "前端", "后端", "算法", "代码")):
+            return "编程技术教程"
+        if any(k in comb for k in ("剪辑", "pr", "ae", "ps", "摄影", "达芬奇", "调色")):
+            return "影视设计教程"
+        return "教程系列"
+    if any(k in comb for k in ("空镜", "绿幕", "转场", "特效", "bgm", "片头", "片尾", "音效", "素材")):
+        return "剪辑素材"
+    if any(k in comb for k in ("movie", "电影", "纪录片", "剧场版", "短片")):
+        return "影视片段"
+    return "素材片段"
+
+
 @register("parse:video")
 async def parse_video(db: AsyncSession, payload: dict) -> None:
     asset = await db.get(Asset, payload["asset_id"])
@@ -41,6 +56,8 @@ async def parse_video(db: AsyncSession, payload: dict) -> None:
     asset.title = asset.title or asset.file_name.rsplit(".", 1)[0]
     asset.meta = {**asset.meta, **meta}
     asset.status = "ready"
+    if not asset.suggested_category:
+        asset.suggested_category = suggest_video_category(fields.get("kind", "clip"), asset.title, rec.get("series_name"))
 
     row = await db.get(VideoDetail, asset.id)
     if row is None:

@@ -844,6 +844,8 @@ export function VideoDetailPage() {
       <EditAssetDialog
         assetId={video.id}
         initialTitle={video.title}
+        initialCategory={video.category}
+        suggestedCategory={video.suggested_category}
         initialNote={video.note || ''}
         initialTags={video.tags || []}
         initialRating={rating}

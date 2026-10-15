@@ -24,6 +24,30 @@ NEED_TRANSCODE = {
 }
 
 
+def suggest_music_category(genre: str | None, title: str | None, album: str | None) -> str | None:
+    g = (genre or "").lower().strip()
+    comb = f"{genre or ''} {title or ''} {album or ''}".lower()
+    if any(k in g for k in ("soundtrack", "ost", "score", "original soundtrack")) or any(k in comb for k in ("原声", "ost", "soundtrack")):
+        return "影视原声"
+    if any(k in g for k in ("classical", "orchestra", "symphony", "baroque", "concerto")) or any(k in comb for k in ("古典", "交响", "协奏曲")):
+        return "古典音乐"
+    if any(k in g for k in ("anime", "acg", "animation", "game")) or any(k in comb for k in ("动漫", "游戏原声")):
+        return "动漫游戏"
+    if any(k in g for k in ("jazz", "blues")) or any(k in comb for k in ("爵士", "蓝调")):
+        return "爵士蓝调"
+    if any(k in g for k in ("rock", "metal", "punk")) or any(k in comb for k in ("摇滚", "金属", "朋克")):
+        return "摇滚金属"
+    if any(k in g for k in ("folk", "acoustic", "country")) or any(k in comb for k in ("民谣", "乡村")):
+        return "民谣吉他"
+    if any(k in g for k in ("electronic", "techno", "house", "trance", "ambient", "edm")) or any(k in comb for k in ("电子", "纯音", "轻音乐", "白噪音")):
+        return "轻音乐/纯音"
+    if any(k in g for k in ("pop", "dance")) or any(k in comb for k in ("流行")):
+        return "流行音乐"
+    if genre and len(genre.strip()) <= 16:
+        return genre.strip().title()
+    return None
+
+
 def _frame_value(first) -> str | None:
     """ID3 帧对象（.text 可为 list 或 str）/ 普通值统一取字符串。"""
     if hasattr(first, "text"):
@@ -245,6 +269,7 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
             "is_cue_track": True,
         }
 
+        cue_sugg = suggest_music_category(sheet.genre, trk_title, album_name)
         if child_asset is None:
             child_asset = Asset(
                 id=trk_uuid,
@@ -257,6 +282,8 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
                 mime_type=mime_of(f"x.{audio_format}"),
                 status="ready",
                 meta=child_meta,
+                category=asset.category,
+                suggested_category=cue_sugg,
             )
             db.add(child_asset)
         else:
@@ -265,6 +292,10 @@ async def _parse_cue_asset(db: AsyncSession, asset: Asset, path: Path, storage) 
             child_asset.size_bytes = trk_size
             child_asset.status = "ready"
             child_asset.meta = {**child_asset.meta, **child_meta}
+            if child_asset.category is None:
+                child_asset.category = asset.category
+            if child_asset.suggested_category is None:
+                child_asset.suggested_category = cue_sugg
 
         # 艺术家
         tarow = (await db.execute(select(MusicArtist).where(MusicArtist.name == trk_artist_name))).scalar_one_or_none()
@@ -431,6 +462,8 @@ async def parse_music(db: AsyncSession, payload: dict) -> None:
     album_name = album or (parts[-2] if len(parts) > 2 else None) or "未知专辑"
     asset.meta = {**asset.meta, **meta}
     asset.status = "ready"
+    if not asset.suggested_category:
+        asset.suggested_category = suggest_music_category(meta.get("genre"), clean_title, album_name)
 
     # 三级聚合：按名字归一 upsert
     arow = (await db.execute(select(MusicArtist).where(MusicArtist.name == artist_name))).scalar_one_or_none()

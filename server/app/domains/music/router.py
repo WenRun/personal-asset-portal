@@ -25,24 +25,32 @@ router = APIRouter(prefix="/api/music", tags=["音乐"])
 
 @router.get("/albums", summary="专辑墙",
             description="公开。返回全部专辑（艺术家 / 年份 / 曲目数 / 总时长 / 格式 / 是否有封面），按年份倒序、名称排序。")
-async def list_albums(db: AsyncSession = Depends(get_db)):
+async def list_albums(category: str | None = None, db: AsyncSession = Depends(get_db)):
     """专辑墙（公开浏览页）。"""
-    rows = (
-        await db.execute(
-            select(
-                MusicAlbum.id, MusicAlbum.name, MusicAlbum.year, MusicAlbum.cover_path,
-                MusicArtist.name.label("artist"),
-                func.count(MusicTrack.asset_id).label("track_count"),
-                func.sum(MusicTrack.duration_ms).label("duration_ms"),
-                func.min(MusicTrack.format).label("format"),
-            )
-            .join(MusicArtist, MusicArtist.id == MusicAlbum.artist_id, isouter=True)
-            .join(MusicTrack, MusicTrack.album_id == MusicAlbum.id, isouter=True)
-            .group_by(MusicAlbum.id, MusicArtist.name)
-            .having(func.count(MusicTrack.asset_id) > 0)
-            .order_by(MusicAlbum.year.desc().nullslast(), MusicAlbum.name)
+    q = (
+        select(
+            MusicAlbum.id, MusicAlbum.name, MusicAlbum.year, MusicAlbum.cover_path,
+            MusicArtist.name.label("artist"),
+            func.count(MusicTrack.asset_id).label("track_count"),
+            func.sum(MusicTrack.duration_ms).label("duration_ms"),
+            func.min(MusicTrack.format).label("format"),
         )
-    ).all()
+        .join(MusicArtist, MusicArtist.id == MusicAlbum.artist_id, isouter=True)
+        .join(MusicTrack, MusicTrack.album_id == MusicAlbum.id, isouter=True)
+        .join(Asset, Asset.id == MusicTrack.asset_id, isouter=True)
+        .where(Asset.deleted_at.is_(None))
+    )
+    if category == "__uncategorized__":
+        q = q.where(Asset.category.is_(None))
+    elif category:
+        q = q.where(Asset.category == category)
+
+    q = (
+        q.group_by(MusicAlbum.id, MusicArtist.name)
+        .having(func.count(MusicTrack.asset_id) > 0)
+        .order_by(MusicAlbum.year.desc().nullslast(), MusicAlbum.name)
+    )
+    rows = (await db.execute(q)).all()
     return [
         {
             "id": str(r.id), "name": r.name, "artist": r.artist or "未知艺术家",
@@ -56,19 +64,22 @@ async def list_albums(db: AsyncSession = Depends(get_db)):
 
 @router.get("/tracks", summary="全部曲目（平铺）",
             description="登录用户。按入库时间倒序返回最近 500 首曲目及其专辑 / 艺术家信息。")
-async def list_tracks(db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
+async def list_tracks(category: str | None = None, db: AsyncSession = Depends(get_db), _: object = Depends(require_member)):
     """全部曲目平铺（member）。"""
-    rows = (
-        await db.execute(
-            select(Asset, MusicTrack, MusicAlbum.name.label("album"), MusicArtist.name.label("artist"))
-            .join(MusicTrack, MusicTrack.asset_id == Asset.id)
-            .join(MusicAlbum, MusicAlbum.id == MusicTrack.album_id, isouter=True)
-            .join(MusicArtist, MusicArtist.id == MusicTrack.artist_id, isouter=True)
-            .where(Asset.deleted_at.is_(None))
-            .order_by(Asset.created_at.desc())
-            .limit(500)
-        )
-    ).all()
+    q = (
+        select(Asset, MusicTrack, MusicAlbum.name.label("album"), MusicArtist.name.label("artist"))
+        .join(MusicTrack, MusicTrack.asset_id == Asset.id)
+        .join(MusicAlbum, MusicAlbum.id == MusicTrack.album_id, isouter=True)
+        .join(MusicArtist, MusicArtist.id == MusicTrack.artist_id, isouter=True)
+        .where(Asset.deleted_at.is_(None))
+    )
+    if category == "__uncategorized__":
+        q = q.where(Asset.category.is_(None))
+    elif category:
+        q = q.where(Asset.category == category)
+
+    q = q.order_by(Asset.created_at.desc()).limit(500)
+    rows = (await db.execute(q)).all()
     return [
         {
             "asset_id": str(a.id), "album_id": str(t.album_id), "title": a.title, "album": al or "未知专辑",
@@ -81,6 +92,8 @@ async def list_tracks(db: AsyncSession = Depends(get_db), _: object = Depends(re
             "lrc": t.has_lyrics, "format": t.format, "streamable": t.streamable,
             "is_cue_track": bool(a.meta and a.meta.get("is_cue_track")),
             "created_at": a.created_at.isoformat(),
+            "category": a.category,
+            "suggested_category": a.suggested_category,
         }
         for a, t, al, ar in rows
         if not (a.meta and a.meta.get("is_cue_master"))

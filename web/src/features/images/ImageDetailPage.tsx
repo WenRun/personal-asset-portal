@@ -264,6 +264,8 @@ export function ImageDetailPage() {
         <EditAssetDialog
           assetId={photo.id}
           initialTitle={photo.title}
+          initialCategory={photo.category}
+          suggestedCategory={photo.suggested_category}
           initialNote={photo.note || ''}
           initialTags={photo.tags || []}
           initialRating={rating ?? photo.rating ?? 0}

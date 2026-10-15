@@ -379,6 +379,7 @@ def _parse_epub(path, meta: dict) -> dict:
             return el.text.strip() if el is not None and el.text and el.text.strip() else None
 
         authors = [el.text.strip() for el in md.findall("dc:creator", NS) if el.text and el.text.strip()]
+        subjects = [el.text.strip() for el in md.findall("dc:subject", NS) if el.text and el.text.strip()]
         date = dc("date")
         meta["epub_title_raw"] = dc("title") or ""
 
@@ -409,6 +410,7 @@ def _parse_epub(path, meta: dict) -> dict:
                 "format": "epub",
             },
             "desc": dc("description"),
+            "subjects": subjects,
             "cover_bytes": cover_bytes,
             "cover_ext": cover_ext,
             "title": dc("title"),
@@ -574,6 +576,44 @@ def ensure_reader_epub(asset: Asset, raw_path: Path) -> Path:
     raise ValueError(f"无法为格式 {ext} 派生 reader.epub")
 
 
+def suggest_book_category(title: str | None, authors: list[str] | None = None, subjects: list[str] | None = None, desc: str | None = None) -> str | None:
+    comb = f"{title or ''} {' '.join(authors or [])} {' '.join(subjects or [])} {desc or ''}".lower()
+    # 计算机与技术
+    tech_keywords = [
+        "python", "java", "golang", "c++", "rust", "javascript", "typescript", "react", "vue", "linux",
+        "算法", "数据结构", "计算机", "编程", "代码", "数据库", "mysql", "redis", "架构", "运维",
+        "kubernetes", "docker", "网络协议", "操作系统", "深度学习", "机器学习", "人工智能", "前端", "后端", "全栈",
+        "computer", "technology", "programming", "tcp", "network", "software", "developer",
+    ]
+    if any(k in comb for k in tech_keywords):
+        return "计算机与技术"
+    # 文学艺术
+    lit_keywords = ["小说", "文学", "散文", "诗歌", "戏剧", "名著", "传记", "故事", "艺术", "设计", "摄影", "绘本", "fiction", "novel", "literature", "poetry"]
+    if any(k in comb for k in lit_keywords):
+        return "文学艺术"
+    # 经济管理
+    econ_keywords = ["经济", "金融", "投资", "理财", "股票", "管理", "商业", "营销", "创业", "财报", "资本", "货币", "finance", "economy", "economics", "invest", "business"]
+    if any(k in comb for k in econ_keywords):
+        return "经济管理"
+    # 人文社科
+    humanities_keywords = ["哲学", "历史", "社会", "心理", "人类学", "政治", "文化", "文明", "宗教", "伦理", "philosophy", "history", "psychology", "sociology"]
+    if any(k in comb for k in humanities_keywords):
+        return "人文社科"
+    # 科学科普
+    science_keywords = ["数学", "物理", "化学", "生物", "天文学", "宇宙", "科普", "科学", "地理", "science", "physics", "math", "biology"]
+    if any(k in comb for k in science_keywords):
+        return "科学科普"
+    # 生活休闲
+    life_keywords = ["健康", "养生", "食谱", "烹饪", "美食", "旅游", "旅行", "居家", "育儿", "健身"]
+    if any(k in comb for k in life_keywords):
+        return "生活休闲"
+    if subjects:
+        first_sub = subjects[0].strip()
+        if len(first_sub) <= 12:
+            return first_sub
+    return None
+
+
 @register("parse:book")
 async def parse_book(db: AsyncSession, payload: dict) -> None:
     asset = await db.get(Asset, payload["asset_id"])
@@ -632,6 +672,9 @@ async def parse_book(db: AsyncSession, payload: dict) -> None:
     asset.note = desc or asset.note
     asset.meta = {**asset.meta, **meta}
     asset.status = "ready"
+    if not asset.suggested_category:
+        subs = r.get("subjects") if "r" in locals() and isinstance(r, dict) else None
+        asset.suggested_category = suggest_book_category(asset.title, fields.get("authors"), subs, desc)
 
     row = await db.get(BookDetail, asset.id)
     if row is None:

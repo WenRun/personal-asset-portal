@@ -54,6 +54,8 @@ class Asset(Base):
     meta: Mapped[dict] = mapped_column(JSONB, default=dict)
     rating: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)  # 用户所属分类（可由首层目录初始化或手动指定）
+    suggested_category: Mapped[str | None] = mapped_column(Text, nullable=True)  # 系统智能推荐分类
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -62,6 +64,7 @@ class Asset(Base):
     __table_args__ = (
         Index("idx_assets_list", "asset_type", "deleted_at", "created_at"),
         Index("idx_assets_status", "status"),
+        Index("idx_assets_type_category", "asset_type", "category", "deleted_at"),
     )
 
 

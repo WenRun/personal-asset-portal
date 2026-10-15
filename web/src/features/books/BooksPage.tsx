@@ -5,6 +5,8 @@ import { ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
+import { CategoryBar } from '@/components/CategoryBar'
+import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn } from '@/lib/utils'
@@ -32,10 +34,21 @@ function BookCover({ id, hue, title, className }: { id?: string; hue: number; ti
 export function BooksPage() {
   const [params, setParams] = useSearchParams()
   const tagFilter = params.get('tag') ?? ''
+  const catFilter = params.get('category') ?? undefined
   const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  const setCategory = (c: string | undefined) => {
+    const p = new URLSearchParams(params)
+    if (c) p.set('category', c)
+    else p.delete('category')
+    setParams(p, { replace: true })
+  }
+
   const { data: books } = useQuery({
-    queryKey: ['books', tagFilter],
-    queryFn: () => api.books(tagFilter ? { tag: tagFilter } : undefined),
+    queryKey: ['books', tagFilter, catFilter],
+    queryFn: () => api.books({
+      tag: tagFilter || undefined,
+      category: catFilter || undefined,
+    }),
   })
   const nav = useAssetNav()
   const user = useAuth((s) => s.user)
@@ -79,8 +92,11 @@ export function BooksPage() {
         )}
       />
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
+      {/* 分类胶囊栏 */}
+      <CategoryBar route="books" selected={catFilter} onSelect={setCategory} className="mt-3" />
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部状态</Chip>
         {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'reading'} onClick={() => setFilter('reading')}>在读</Chip>
         <Chip active={filter === 'unread'} onClick={() => setFilter('unread')}>未读</Chip>
@@ -102,7 +118,10 @@ export function BooksPage() {
               >
                 <BookCover id={b.id} hue={b.hue} title={b.title} className="aspect-[3/4] shadow-sm transition group-hover:shadow-md" />
                 <div className="mt-1.5 truncate text-xs font-medium">{b.title}</div>
-                {fmtState(b)}
+                <div className="flex items-center justify-between gap-1 mt-0.5">
+                  {fmtState(b)}
+                  <AdoptCategoryBadge assetId={b.id} category={b.category} suggestedCategory={b.suggested_category} />
+                </div>
               </div>
             ))}
           </div>
@@ -129,12 +148,15 @@ export function BooksPage() {
                   ? <span className="text-amber-600">{b.formats[0].kind} · 仅下载</span>
                   : <>{b.author && `${b.author} · `}{fmtState(b)}</>}
               </div>
+              <div className="mt-1">
+                <AdoptCategoryBadge assetId={b.id} category={b.category} suggestedCategory={b.suggested_category} />
+              </div>
             </div>
           )
         })}
       </div>
 
-      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
+      {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="books" onDone={exit} onCancel={exit} />}
     </div>
   )
 }

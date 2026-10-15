@@ -8,6 +8,7 @@ import { BackLink, Badge, Button, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
+import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { fmtDate } from '@/lib/utils'
 import { BookReader } from './BookReader'
 
@@ -92,6 +93,18 @@ export function BookDetailPage() {
 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+            {book.category && (
+              <button
+                className="rounded-full bg-slate-900 text-white px-2.5 py-0.5 font-medium transition hover:bg-slate-800"
+                title={`查看「${book.category}」分类下的书籍`}
+                onClick={() => nav(`/books?category=${encodeURIComponent(book.category!)}`)}
+              >
+                📁 {book.category}
+              </button>
+            )}
+            {!book.category && book.suggested_category && (
+              <AdoptCategoryBadge assetId={book.id} category={book.category} suggestedCategory={book.suggested_category} />
+            )}
             {book.series && (
               <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">
                 系列 · {book.series.name} 第 {book.series.idx} 部
@@ -112,7 +125,7 @@ export function BookDetailPage() {
                 onClick={() => setEditOpen(true)}
                 className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-slate-400 transition hover:border-brand-500 hover:text-brand-600"
               >
-                + 添加标签
+                + 添加标签/分类
               </button>
             )}
           </div>
@@ -217,6 +230,8 @@ export function BookDetailPage() {
         <EditAssetDialog
           assetId={book.id}
           initialTitle={book.title}
+          initialCategory={book.category}
+          suggestedCategory={book.suggested_category}
           initialNote={book.desc}
           initialTags={book.tags}
           initialRating={book.rating}
@@ -225,6 +240,7 @@ export function BookDetailPage() {
           onSuccess={() => {
             void qc.invalidateQueries({ queryKey: ['book', book.id] })
             void qc.invalidateQueries({ queryKey: ['books'] })
+            void qc.invalidateQueries({ queryKey: ['categories'] })
           }}
         />
       )}

@@ -5,6 +5,8 @@ import { ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
+import { CategoryBar } from '@/components/CategoryBar'
+import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
@@ -16,10 +18,18 @@ type SeriesDetailed = Awaited<ReturnType<typeof api.videoSeries>>[number] & {
 export function VideosPage() {
   const [params, setParams] = useSearchParams()
   const tagFilter = params.get('tag') ?? ''
+  const catFilter = params.get('category') ?? undefined
   const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  const setCategory = (c: string | undefined) => {
+    const p = new URLSearchParams(params)
+    if (c) p.set('category', c)
+    else p.delete('category')
+    setParams(p, { replace: true })
+  }
+
   const { data: videos } = useQuery({
-    queryKey: ['videos', tagFilter],
-    queryFn: () => api.videos(tagFilter ? { tag: tagFilter } : undefined),
+    queryKey: ['videos', tagFilter, catFilter],
+    queryFn: () => api.videos({ tag: tagFilter || undefined, category: catFilter || undefined }),
   })
   const { data: series } = useQuery({
     queryKey: ['video-series'],
@@ -35,11 +45,12 @@ export function VideosPage() {
 
   const seriesList = useMemo(() => {
     const all = series ?? []
-    if (!tagFilter) return all
-    // 标签过滤时：系列只要有任一剧集带该标签就保留（剧集资产也在 tag 过滤结果里）
-    const tagged = new Set((videos ?? []).map((v) => v.id))
-    return all.filter((s) => s.episodeList.some((e) => tagged.has(e.asset_id)))
-  }, [series, videos, tagFilter])
+    if (!tagFilter && !catFilter) return all
+    // 过滤时：系列只要有任一剧集在过滤结果集里就保留
+    const matched = new Set((videos ?? []).map((v) => v.id))
+    return all.filter((s) => s.episodeList.some((e) => matched.has(e.asset_id)))
+  }, [series, videos, tagFilter, catFilter])
+
   const seriesAssetIds = useMemo(() => new Set(seriesList.flatMap((s) => s.episodeList.map((e) => e.asset_id))), [seriesList])
   const clips = useMemo(() => (videos ?? []).filter((v) => !seriesAssetIds.has(v.id)), [videos, seriesAssetIds])
   const showSeries = filter === 'all' || filter === 'series'
@@ -57,8 +68,11 @@ export function VideosPage() {
         )}
       />
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
+      {/* 分类胶囊栏 */}
+      <CategoryBar route="videos" selected={catFilter} onSelect={setCategory} className="mt-3" />
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部类型</Chip>
         {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'series'} onClick={() => setFilter('series')}>教程系列</Chip>
         <Chip active={filter === 'clip'} onClick={() => setFilter('clip')}>素材</Chip>
@@ -142,7 +156,10 @@ export function VideosPage() {
                       </span>
                     </div>
                     <div className="mt-1.5 truncate text-sm font-medium">{c.title}</div>
-                    <div className="truncate text-xs text-slate-400">{fmtDate(c.addedAt)} · {c.resolution || c.codec || ''}</div>
+                    <div className="flex items-center justify-between gap-1 mt-0.5">
+                      <div className="truncate text-xs text-slate-400">{fmtDate(c.addedAt)} · {c.resolution || c.codec || ''}</div>
+                      <AdoptCategoryBadge assetId={c.id} category={c.category} suggestedCategory={c.suggested_category} />
+                    </div>
                   </div>
                 )
               })}
@@ -158,7 +175,7 @@ export function VideosPage() {
         系列识别规则：S01E02 / 第02讲 / EP02 / 父目录（存疑进确认队列）
       </div>
 
-      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
+      {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="videos" onDone={exit} onCancel={exit} />}
     </div>
   )
 }

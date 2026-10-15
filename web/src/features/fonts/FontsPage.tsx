@@ -8,6 +8,8 @@ import { useAuth } from '@/stores/auth'
 import { useFontFace } from '@/lib/useFontFace'
 import { useAssetNav, Badge, Button, Chip, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
+import { CategoryBar } from '@/components/CategoryBar'
+import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn } from '@/lib/utils'
 import type { FontFamily } from '@/types'
@@ -53,11 +55,14 @@ function FamilyCard({ family, files, text, size, weight, selecting, selected, on
           {state === 'loading' && <span className="ml-2 align-middle text-xs text-slate-300">字体加载中…</span>}
         </div>
       )}
-      <div className="flex flex-wrap gap-1.5">
-        <Badge>{files.length} 字重</Badge>
-        <Badge>{primary.files[0].format}</Badge>
-        {primary.languages.map((l) => <Badge key={l}>{l}</Badge>)}
-        {primary.license === 'SIL OFL 1.1' && <Badge tone="amber">OFL</Badge>}
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge>{files.length} 字重</Badge>
+          <Badge>{primary.files[0].format}</Badge>
+          {primary.languages.map((l) => <Badge key={l}>{l}</Badge>)}
+          {primary.license === 'SIL OFL 1.1' && <Badge tone="amber">OFL</Badge>}
+        </div>
+        <AdoptCategoryBadge assetId={primary.id} category={primary.category} suggestedCategory={primary.suggested_category} />
       </div>
     </div>
   )
@@ -66,10 +71,21 @@ function FamilyCard({ family, files, text, size, weight, selecting, selected, on
 export function FontsPage() {
   const [params, setParams] = useSearchParams()
   const tagFilter = params.get('tag') ?? ''
+  const catFilter = params.get('category') ?? undefined
   const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
+  const setCategory = (c: string | undefined) => {
+    const p = new URLSearchParams(params)
+    if (c) p.set('category', c)
+    else p.delete('category')
+    setParams(p, { replace: true })
+  }
+
   const { data: fonts } = useQuery({
-    queryKey: ['fonts', tagFilter],
-    queryFn: () => api.fonts(tagFilter ? { tag: tagFilter } : undefined),
+    queryKey: ['fonts', tagFilter, catFilter],
+    queryFn: () => api.fonts({
+      tag: tagFilter || undefined,
+      category: catFilter || undefined,
+    }),
   })
   const { fontText, fontSize, fontWeight, setFontPreview } = usePrefs()
   const user = useAuth((s) => s.user)
@@ -108,8 +124,11 @@ export function FontsPage() {
         )}
       />
 
+      {/* 分类胶囊栏 */}
+      <CategoryBar route="fonts" selected={catFilter} onSelect={setCategory} className="mt-3" />
+
       {/* 全局预览文案控制条（prefsStore 共享，详情页样张同步） */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm md:flex-nowrap">
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm md:flex-nowrap">
         <span className="shrink-0 text-xs text-slate-400">预览文案</span>
         <input
           value={fontText}
@@ -124,7 +143,7 @@ export function FontsPage() {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部</Chip>
+        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部属性</Chip>
         {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'han'} onClick={() => setFilter('han')}>含中文</Chip>
         <Chip active={filter === 'variable'} onClick={() => setFilter('variable')}>可变字体</Chip>
@@ -150,7 +169,7 @@ export function FontsPage() {
         样张为真实字体渲染（FontFace 加载 /api/fonts/&#123;id&#125;/file，失败回落服务端样张图）；字族打包下载见详情页
       </div>
 
-      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
+      {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="fonts" onDone={exit} onCancel={exit} />}
     </div>
   )
 }

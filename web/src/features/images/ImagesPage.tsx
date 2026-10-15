@@ -5,6 +5,8 @@ import { Check, Heart, ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
+import { CategoryBar } from '@/components/CategoryBar'
+import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn } from '@/lib/utils'
@@ -13,11 +15,19 @@ import type { Photo } from '@/types'
 export function ImagesPage() {
   const [params, setParams] = useSearchParams()
   const tagFilter = params.get('tag') ?? ''
+  const catFilter = params.get('category') ?? undefined
   const clearTag = () => { const p = new URLSearchParams(params); p.delete('tag'); setParams(p, { replace: true }) }
-  // 有 tag 参数时走服务端过滤（不局限在最近 200 条里筛）
+  const setCategory = (c: string | undefined) => {
+    const p = new URLSearchParams(params)
+    if (c) p.set('category', c)
+    else p.delete('category')
+    setParams(p, { replace: true })
+  }
+
+  // 有 tag/category 参数时走服务端过滤
   const { data: photos } = useQuery({
-    queryKey: ['photos', tagFilter],
-    queryFn: () => api.photos(tagFilter ? { tag: tagFilter } : undefined),
+    queryKey: ['photos', tagFilter, catFilter],
+    queryFn: () => api.photos({ tag: tagFilter || undefined, category: catFilter || undefined }),
   })
   const nav = useAssetNav()
   const user = useAuth((s) => s.user)
@@ -62,8 +72,12 @@ export function ImagesPage() {
           </>
         }
       />
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button className={`rounded-full px-3 py-1.5 text-sm transition ${filter === 'all' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter('all')}>全部</button>
+
+      {/* 分类胶囊栏 */}
+      <CategoryBar route="images" selected={catFilter} onSelect={setCategory} className="mt-3" />
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button className={`rounded-full px-3 py-1.5 text-sm transition ${filter === 'all' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter('all')}>全部时间</button>
         {tagFilter && (
           <button className="rounded-full bg-brand-600 px-3 py-1.5 text-sm text-white transition" onClick={clearTag}>
             标签：{tagFilter} ✕
@@ -119,8 +133,9 @@ export function ImagesPage() {
                 >
                   <Heart className={cn('h-4 w-4', (favs[p.id] || p.favorite) ? 'text-rose-500' : 'text-slate-400')} fill={(favs[p.id] || p.favorite) ? 'currentColor' : 'none'} />
                 </button>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100 flex items-center justify-between gap-1">
                   <div className="truncate text-xs text-white">{p.fileName} · {p.sizeMB}MB</div>
+                  <AdoptCategoryBadge assetId={p.id} category={p.category} suggestedCategory={p.suggested_category} />
                 </div>
               </div>
             ))}
@@ -133,7 +148,7 @@ export function ImagesPage() {
       )}
       <div className="mt-6 text-center text-xs text-slate-400">滚动加载更多（游标分页）…</div>
 
-      {user && selMode && <SelectionBar ids={[...sel]} onDone={exit} onCancel={exit} />}
+      {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="images" onDone={exit} onCancel={exit} />}
     </div>
   )
 }
