@@ -7,7 +7,7 @@ import { usePlayer } from '@/stores/player'
 import { useAuth } from '@/stores/auth'
 import { useAssetNav, Badge, Button, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
-import { CategoryBar } from '@/components/CategoryBar'
+import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cleanTrackTitleAndArtist, cn, fmtTime } from '@/lib/utils'
@@ -45,6 +45,7 @@ export function MusicPage() {
   const nav = useAssetNav()
   const [view, setView] = useState<View>('album')
   const [sort, setSort] = useState<Sort>('recent')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [coverFail, setCoverFail] = useState<Record<string, boolean>>({})
 
   const sorted = useMemo(() => {
@@ -71,39 +72,51 @@ export function MusicPage() {
   }
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
-        title="音乐"
-        sub={`${albums?.length ?? 0} 张专辑（mutagen 标签解析 · 真实音频流播放）`}
-        right={
-          <>
-            <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-xs">
-              {VIEWS.map((v) => (
-                <button
-                  key={v.key}
-                  className={`px-3 py-1.5 transition ${view === v.key ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                  onClick={() => setView(v.key)}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none focus:border-brand-500"
-              aria-label="排序"
-            >
-              <option value="recent">最近入库</option>
-              <option value="artist">按艺术家</option>
-              <option value="year">按年份</option>
-            </select>
-          </>
-        }
+    <div className="flex h-full min-h-[calc(100vh-4rem)]">
+      <CategorySidebar
+        route="music"
+        title="音乐流派/分类"
+        selected={catFilter}
+        onSelect={setCategory}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(true)}
       />
 
-      {/* 分类胶囊栏 */}
-      <CategoryBar route="music" selected={catFilter} onSelect={setCategory} className="mt-3" />
+      <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+        <PageHeader
+          title="音乐"
+          sub={`${albums?.length ?? 0} 张专辑（mutagen 标签解析 · 真实音频流播放）`}
+          right={
+            <div className="flex items-center gap-2">
+              <CategorySidebarToggle
+                collapsed={sidebarCollapsed}
+                onToggle={() => setSidebarCollapsed(false)}
+                title="流派分类"
+              />
+              <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-xs">
+                {VIEWS.map((v) => (
+                  <button
+                    key={v.key}
+                    className={`px-3 py-1.5 transition ${view === v.key ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                    onClick={() => setView(v.key)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as Sort)}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none focus:border-brand-500"
+                aria-label="排序"
+              >
+                <option value="recent">最近入库</option>
+                <option value="artist">按艺术家</option>
+                <option value="year">按年份</option>
+              </select>
+            </div>
+          }
+        />
 
       {view === 'album' && (
         <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
@@ -173,6 +186,7 @@ export function MusicPage() {
       )}
 
       {view === 'tracks' && <TracksView category={catFilter} />}
+      </div>
     </div>
   )
 }

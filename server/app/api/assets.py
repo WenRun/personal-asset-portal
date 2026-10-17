@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Path, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import delete, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_app_settings, get_current_user, require_admin, require_member
@@ -197,7 +197,7 @@ async def list_assets(
         if c == "__uncategorized__":
             cond.append(Asset.category.is_(None))
         elif c:
-            cond.append(Asset.category == c)
+            cond.append(or_(Asset.category == c, Asset.category.like(f"{c}/%")))
     if tag is not None and tag.strip():
         cond.append(Asset.id.in_(
             select(AssetTag.asset_id).join(Tag, Tag.id == AssetTag.tag_id).where(Tag.name == tag.strip())

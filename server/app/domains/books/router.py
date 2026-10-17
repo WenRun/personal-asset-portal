@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -90,6 +91,13 @@ async def get_progress(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
     if row is None:
         return None
     return {"position": row.position, "updated_at": row.updated_at.isoformat()}
+
+
+@progress_router.get("/all", summary="批量读取全部进度",
+                     description="登录用户。一次返回当前用户在所有资产上的阅读 / 观看进度，键为 asset_id，供列表页合并展示与筛选。")
+async def get_all_progress(db: AsyncSession = Depends(get_db), user: User = Depends(require_member)):
+    rows = (await db.execute(select(UserProgress).where(UserProgress.user_id == user.id))).scalars().all()
+    return {str(r.asset_id): {"position": r.position, "updated_at": r.updated_at.isoformat()} for r in rows}
 
 
 # ---------- 流式书籍阅读器（EPUB / MOBI / AZW3 / TXT）：统一解析与资源服务 ----------

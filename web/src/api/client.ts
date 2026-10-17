@@ -378,6 +378,8 @@ export const api = {
     req<{ ok: boolean }>('/api/progress', { method: 'POST', body: JSON.stringify({ asset_id: assetId, position }) }),
   getProgress: (assetId: string) =>
     req<{ position: Record<string, number | string> | null; updated_at: string } | null>(`/api/progress?asset_id=${assetId}`),
+  getAllProgress: () =>
+    req<Record<string, { position: Record<string, number | string> | null; updated_at: string }>>('/api/progress/all'),
   fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
   fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
   fontFamilyPackUrl: (id: string) => `${BASE}/api/fonts/${id}/family-pack`,

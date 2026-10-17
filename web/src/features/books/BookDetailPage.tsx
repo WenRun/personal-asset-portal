@@ -35,7 +35,7 @@ export function BookDetailPage() {
 
   const savePage = (p: { pct: number; chapter?: number }) => {
     void api.saveProgress(book.id, { pct: p.pct, ...(p.chapter !== undefined ? { chapter: p.chapter } : {}) })
-    void qc.invalidateQueries({ queryKey: ['progress', book.id] })
+    void qc.invalidateQueries({ queryKey: ['progress'] })
   }
 
   const handleRatingChange = (val: number) => {

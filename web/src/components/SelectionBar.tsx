@@ -148,7 +148,7 @@ export function SelectionBar({
               <Input
                 value={categoryInput}
                 onChange={(e) => setCategoryInput(e.target.value)}
-                placeholder="输入分类名称（如：计算机与技术、流行、壁纸…）"
+                placeholder="输入分类路径，支持斜杠多级（如：计算机/Python、流行/华语…）"
                 className="flex-1 text-xs"
               />
               <Button

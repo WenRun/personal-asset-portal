@@ -173,7 +173,7 @@ export function EditAssetDialog({
               value={category}
               maxLength={128}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="输入分类名称（如：计算机与技术、流行、摄影相片…）"
+              placeholder="输入分类路径，支持斜杠多级（如：计算机/Python/Web开发、流行/华语…）"
               className="w-full text-xs"
             />
             {suggestedCategory && suggestedCategory !== category && (

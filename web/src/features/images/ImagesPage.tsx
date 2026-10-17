@@ -5,7 +5,7 @@ import { Check, Heart, ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
-import { CategoryBar } from '@/components/CategoryBar'
+import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
@@ -32,6 +32,7 @@ export function ImagesPage() {
   const nav = useAssetNav()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [filter, setFilter] = useState<string>(params.get('favorite') ? 'fav' : 'all')
   const [favs, setFavs] = useState<Record<string, boolean>>({})
   const [imgFail, setImgFail] = useState<Record<string, boolean>>({})
@@ -57,27 +58,39 @@ export function ImagesPage() {
   }, [list])
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
-        title="图片"
-        sub={`${photos?.length ?? 0} 张 · 时间线按拍摄时间分组（无 EXIF 时回退入库时间）`}
-        right={
-          <>
-            {user && (
-              <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
-                <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
-              </Button>
-            )}
-            <span className="text-xs text-slate-400">游标分页 · 虚拟滚动</span>
-          </>
-        }
+    <div className="flex h-full min-h-[calc(100vh-4rem)]">
+      <CategorySidebar
+        route="images"
+        title="图片分类"
+        selected={catFilter}
+        onSelect={setCategory}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(true)}
       />
 
-      {/* 分类胶囊栏 */}
-      <CategoryBar route="images" selected={catFilter} onSelect={setCategory} className="mt-3" />
+      <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+        <PageHeader
+          title="图片"
+          sub={`${photos?.length ?? 0} 张 · 时间线按拍摄时间分组（无 EXIF 时回退入库时间）`}
+          right={
+            <div className="flex items-center gap-2">
+              <CategorySidebarToggle
+                collapsed={sidebarCollapsed}
+                onToggle={() => setSidebarCollapsed(false)}
+                title="图片分类"
+              />
+              {user && (
+                <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+                  <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+                </Button>
+              )}
+              <span className="text-xs text-slate-400">游标分页 · 虚拟滚动</span>
+            </div>
+          }
+        />
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button className={`rounded-full px-3 py-1.5 text-sm transition ${filter === 'all' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter('all')}>全部时间</button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className={`rounded-full px-3 py-1.5 text-sm transition ${filter === 'all' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-400'}`} onClick={() => setFilter('all')}>全部时间</button>
         {tagFilter && (
           <button className="rounded-full bg-brand-600 px-3 py-1.5 text-sm text-white transition" onClick={clearTag}>
             标签：{tagFilter} ✕
@@ -149,6 +162,7 @@ export function ImagesPage() {
       <div className="mt-6 text-center text-xs text-slate-400">滚动加载更多（游标分页）…</div>
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="images" onDone={exit} onCancel={exit} />}
+      </div>
     </div>
   )
 }

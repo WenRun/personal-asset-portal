@@ -52,14 +52,14 @@ def cleanup_derived(asset_id, data_root) -> int:
 
 
 def category_from_key(key: str) -> str | None:
-    """从 storage_key ("alias:rel_path") 提取首层子目录作为初始分类。
+    """从 storage_key ("alias:rel_path") 提取多级父目录作为初始分类。
     若在根目录（无子文件夹）或虚拟分轨键（如 cue:）则返回 None。"""
     if not key or key.startswith("cue:") or ":" not in key:
         return None
     _, rel = key.split(":", 1)
     parts = [p for p in rel.split("/") if p]
     if len(parts) > 1:
-        return parts[0]
+        return "/".join(parts[:-1])
     return None
 
 

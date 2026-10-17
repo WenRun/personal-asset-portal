@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -43,7 +43,7 @@ async def list_albums(category: str | None = None, db: AsyncSession = Depends(ge
     if category == "__uncategorized__":
         q = q.where(Asset.category.is_(None))
     elif category:
-        q = q.where(Asset.category == category)
+        q = q.where(or_(Asset.category == category, Asset.category.like(f"{category}/%")))
 
     q = (
         q.group_by(MusicAlbum.id, MusicArtist.name)
@@ -76,7 +76,7 @@ async def list_tracks(category: str | None = None, db: AsyncSession = Depends(ge
     if category == "__uncategorized__":
         q = q.where(Asset.category.is_(None))
     elif category:
-        q = q.where(Asset.category == category)
+        q = q.where(or_(Asset.category == category, Asset.category.like(f"{category}/%")))
 
     q = q.order_by(Asset.created_at.desc()).limit(500)
     rows = (await db.execute(q)).all()

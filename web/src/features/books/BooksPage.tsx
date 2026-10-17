@@ -5,7 +5,7 @@ import { ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
-import { CategoryBar } from '@/components/CategoryBar'
+import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
@@ -54,6 +54,7 @@ export function BooksPage() {
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [filter, setFilter] = useState<'all' | 'reading' | 'unread' | 'readable' | 'fav'>(params.get('favorite') ? 'fav' : 'all')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [coverFail, setCoverFail] = useState<Record<string, boolean>>({})
   const cardClick = (id: string) => (selMode ? toggleSel([id]) : nav(`/books/${id}`))
 
@@ -81,28 +82,44 @@ export function BooksPage() {
   type Book2 = NonNullable<typeof books>[number]
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
-        title="书籍"
-        sub={`${books?.length ?? 0} 本（支持 EPUB / PDF / MOBI / AZW3 / TXT 在线阅读与章节翻页）`}
-        right={user && (
-          <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
-            <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
-          </Button>
-        )}
+    <div className="flex h-full min-h-[calc(100vh-4rem)]">
+      <CategorySidebar
+        route="books"
+        title="书籍分类"
+        selected={catFilter}
+        onSelect={setCategory}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(true)}
       />
 
-      {/* 分类胶囊栏 */}
-      <CategoryBar route="books" selected={catFilter} onSelect={setCategory} className="mt-3" />
+      <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+        <PageHeader
+          title="书籍"
+          sub={`${books?.length ?? 0} 本（支持 EPUB / PDF / MOBI / AZW3 / TXT 在线阅读与章节翻页）`}
+          right={
+            <div className="flex items-center gap-2">
+              <CategorySidebarToggle
+                collapsed={sidebarCollapsed}
+                onToggle={() => setSidebarCollapsed(false)}
+                title="书籍分类"
+              />
+              {user && (
+                <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+                  <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+                </Button>
+              )}
+            </div>
+          }
+        />
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部状态</Chip>
-        {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
-        <Chip active={filter === 'reading'} onClick={() => setFilter('reading')}>在读</Chip>
-        <Chip active={filter === 'unread'} onClick={() => setFilter('unread')}>未读</Chip>
-        <Chip active={filter === 'readable'} onClick={() => setFilter('readable')}>可在线阅读</Chip>
-        <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}>★ 收藏</Chip>
-      </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部状态</Chip>
+          {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
+          <Chip active={filter === 'reading'} onClick={() => setFilter('reading')}>在读</Chip>
+          <Chip active={filter === 'unread'} onClick={() => setFilter('unread')}>未读</Chip>
+          <Chip active={filter === 'readable'} onClick={() => setFilter('readable')}>可在线阅读</Chip>
+          <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}>★ 收藏</Chip>
+        </div>
 
       {seriesList.map(([name, bs]) => (
         <div key={name} className="mt-6">
@@ -157,6 +174,7 @@ export function BooksPage() {
       </div>
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="books" onDone={exit} onCancel={exit} />}
+      </div>
     </div>
   )
 }

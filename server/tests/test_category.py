@@ -13,13 +13,16 @@ from app.domains.videos.parser import suggest_video_category
 class TestCategorySystem(unittest.TestCase):
 
     def test_scheme_a_directory_category_from_key(self):
-        """方案 A：由相对路径首层物理目录提取资产分类。"""
-        # 有子目录
-        self.assertEqual(category_from_key("books:计算机/Python/流畅的Python.epub"), "计算机")
-        self.assertEqual(category_from_key("music:周杰伦/范特西/01.爱在西元前.flac"), "周杰伦")
+        """方案 A：由相对路径物理目录提取多级资产分类。"""
+        # 单层子目录
+        self.assertEqual(category_from_key("books:计算机/流畅的Python.epub"), "计算机")
         self.assertEqual(category_from_key("fonts:等宽字体/JetBrainsMono.ttf"), "等宽字体")
-        self.assertEqual(category_from_key("images:2024旅行/洱海/IMG_001.jpg"), "2024旅行")
-        self.assertEqual(category_from_key("videos:教学视频/Docker入门/01.mp4"), "教学视频")
+
+        # 多层子目录
+        self.assertEqual(category_from_key("books:计算机/Python/Web/流畅的Python.epub"), "计算机/Python/Web")
+        self.assertEqual(category_from_key("music:周杰伦/范特西/01.爱在西元前.flac"), "周杰伦/范特西")
+        self.assertEqual(category_from_key("images:2024旅行/云南/洱海/IMG_001.jpg"), "2024旅行/云南/洱海")
+        self.assertEqual(category_from_key("videos:教学视频/Docker入门/01.mp4"), "教学视频/Docker入门")
 
         # 根目录下单文件：应无分类（待归类池）
         self.assertIsNone(category_from_key("music:单曲.mp3"))

@@ -213,3 +213,12 @@ export interface CategoriesResult {
   uncategorized: number
   categories: CategoryStat[]
 }
+
+export interface CategoryTreeNode {
+  fullPath: string
+  name: string
+  count: number
+  totalCount: number
+  depth: number
+  children: CategoryTreeNode[]
+}

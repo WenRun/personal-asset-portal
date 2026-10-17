@@ -8,7 +8,7 @@ import { useAuth } from '@/stores/auth'
 import { useFontFace } from '@/lib/useFontFace'
 import { useAssetNav, Badge, Button, Chip, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
-import { CategoryBar } from '@/components/CategoryBar'
+import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn } from '@/lib/utils'
@@ -90,6 +90,7 @@ export function FontsPage() {
   const { fontText, fontSize, fontWeight, setFontPreview } = usePrefs()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [filter, setFilter] = useState<'all' | 'han' | 'variable' | 'fav'>(params.get('favorite') ? 'fav' : 'all')
 
   const list = useMemo(() => {
@@ -113,42 +114,58 @@ export function FontsPage() {
   }, [list])
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
-        title="字体"
-        sub={`${families.length} 个字族 · ${fonts?.length ?? 0} 个文件（fontTools 解析）`}
-        right={user && (
-          <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
-            <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
-          </Button>
-        )}
+    <div className="flex h-full min-h-[calc(100vh-4rem)]">
+      <CategorySidebar
+        route="fonts"
+        title="字体分类"
+        selected={catFilter}
+        onSelect={setCategory}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(true)}
       />
 
-      {/* 分类胶囊栏 */}
-      <CategoryBar route="fonts" selected={catFilter} onSelect={setCategory} className="mt-3" />
-
-      {/* 全局预览文案控制条（prefsStore 共享，详情页样张同步） */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm md:flex-nowrap">
-        <span className="shrink-0 text-xs text-slate-400">预览文案</span>
-        <input
-          value={fontText}
-          onChange={(e) => setFontPreview({ fontText: e.target.value })}
-          className="min-w-0 flex-1 bg-transparent text-lg outline-none"
+      <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+        <PageHeader
+          title="字体"
+          sub={`${families.length} 个字族 · ${fonts?.length ?? 0} 个文件（fontTools 解析）`}
+          right={
+            <div className="flex items-center gap-2">
+              <CategorySidebarToggle
+                collapsed={sidebarCollapsed}
+                onToggle={() => setSidebarCollapsed(false)}
+                title="字体分类"
+              />
+              {user && (
+                <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+                  <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+                </Button>
+              )}
+            </div>
+          }
         />
-        <span className="shrink-0 text-xs text-slate-400">字号</span>
-        <input type="range" min={16} max={44} value={fontSize} onChange={(e) => setFontPreview({ fontSize: Number(e.target.value) })} className="w-24 accent-brand-600" />
-        <span className="shrink-0 text-xs text-slate-400">字重</span>
-        <input type="range" min={100} max={900} step={100} value={fontWeight} onChange={(e) => setFontPreview({ fontWeight: Number(e.target.value) })} className="w-20 accent-brand-600" />
-        <span className="shrink-0 font-mono text-xs text-slate-400">{fontWeight}</span>
-      </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部属性</Chip>
-        {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
-        <Chip active={filter === 'han'} onClick={() => setFilter('han')}>含中文</Chip>
-        <Chip active={filter === 'variable'} onClick={() => setFilter('variable')}>可变字体</Chip>
-        <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}>★ 收藏</Chip>
-      </div>
+        {/* 全局预览文案控制条（prefsStore 共享，详情页样张同步） */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm md:flex-nowrap">
+          <span className="shrink-0 text-xs text-slate-400">预览文案</span>
+          <input
+            value={fontText}
+            onChange={(e) => setFontPreview({ fontText: e.target.value })}
+            className="min-w-0 flex-1 bg-transparent text-lg outline-none"
+          />
+          <span className="shrink-0 text-xs text-slate-400">字号</span>
+          <input type="range" min={16} max={44} value={fontSize} onChange={(e) => setFontPreview({ fontSize: Number(e.target.value) })} className="w-24 accent-brand-600" />
+          <span className="shrink-0 text-xs text-slate-400">字重</span>
+          <input type="range" min={100} max={900} step={100} value={fontWeight} onChange={(e) => setFontPreview({ fontWeight: Number(e.target.value) })} className="w-20 accent-brand-600" />
+          <span className="shrink-0 font-mono text-xs text-slate-400">{fontWeight}</span>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部属性</Chip>
+          {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
+          <Chip active={filter === 'han'} onClick={() => setFilter('han')}>含中文</Chip>
+          <Chip active={filter === 'variable'} onClick={() => setFilter('variable')}>可变字体</Chip>
+          <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}>★ 收藏</Chip>
+        </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {families.map(({ family, files }) => {
@@ -170,6 +187,7 @@ export function FontsPage() {
       </div>
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="fonts" onDone={exit} onCancel={exit} />}
+      </div>
     </div>
   )
 }

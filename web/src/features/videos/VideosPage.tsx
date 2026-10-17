@@ -5,7 +5,7 @@ import { ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
-import { CategoryBar } from '@/components/CategoryBar'
+import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
@@ -41,6 +41,7 @@ export function VideosPage() {
   const nav = useAssetNav()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [filter, setFilter] = useState<'all' | 'series' | 'clip' | 'playable'>('all')
 
   const seriesList = useMemo(() => {
@@ -57,22 +58,38 @@ export function VideosPage() {
   const showClips = filter === 'all' || filter === 'clip' || filter === 'playable'
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
-        title="视频"
-        sub={`${seriesList.length} 个教程系列 · ${clips.length} 个素材（ffprobe 解析 · Direct Play）`}
-        right={user && (
-          <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
-            <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
-          </Button>
-        )}
+    <div className="flex h-full min-h-[calc(100vh-4rem)]">
+      <CategorySidebar
+        route="videos"
+        title="视频分类"
+        selected={catFilter}
+        onSelect={setCategory}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(true)}
       />
 
-      {/* 分类胶囊栏 */}
-      <CategoryBar route="videos" selected={catFilter} onSelect={setCategory} className="mt-3" />
+      <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+        <PageHeader
+          title="视频"
+          sub={`${seriesList.length} 个教程系列 · ${clips.length} 个素材（ffprobe 解析 · Direct Play）`}
+          right={
+            <div className="flex items-center gap-2">
+              <CategorySidebarToggle
+                collapsed={sidebarCollapsed}
+                onToggle={() => setSidebarCollapsed(false)}
+                title="视频分类"
+              />
+              {user && (
+                <Button size="sm" variant={selMode ? 'primary' : 'outline'} onClick={() => (selMode ? exit() : setSelMode(true))}>
+                  <ListChecks className="h-3.5 w-3.5" />{selMode ? '退出多选' : '批量选择'}
+                </Button>
+              )}
+            </div>
+          }
+        />
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部类型</Chip>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Chip active={filter === 'all'} onClick={() => setFilter('all')}>全部类型</Chip>
         {tagFilter && <Chip active onClick={clearTag}>标签：{tagFilter} ✕</Chip>}
         <Chip active={filter === 'series'} onClick={() => setFilter('series')}>教程系列</Chip>
         <Chip active={filter === 'clip'} onClick={() => setFilter('clip')}>素材</Chip>
@@ -176,6 +193,7 @@ export function VideosPage() {
       </div>
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="videos" onDone={exit} onCancel={exit} />}
+      </div>
     </div>
   )
 }
