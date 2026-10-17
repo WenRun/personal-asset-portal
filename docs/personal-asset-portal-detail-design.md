@@ -343,7 +343,7 @@ server/app/
    - 无变化 → 跳过。
 2. **fingerprint 任务**：按 §3.1 策略计算，写回，入队 `parse:{type}`。
 3. **parse 任务**：调对应 Parser → 写 `title / meta / 扩展表` → 产出派生任务（`derive:*`）与 `index_meili` → `status=ready`。
-4. **Parser 注册表**：`PARSERS: dict[str, Parser]`，键为扩展名小写（`.ttf/.otf/.woff/.woff2 → FontParser`，`.mp3/.flac/.m4a/.ogg/.wav → MusicParser`，`.mp4/.mkv/.mov/.webm/.avi → VideoParser`，`.epub/.pdf/.mobi/.azw3 → BookParser`，`.jpg/.jpeg/.png/.webp/.gif/.heic → ImageParser`）。
+4. **Parser 注册表**：`PARSERS: dict[str, Parser]`，键为扩展名小写（`.ttf/.otf/.woff/.woff2 → FontParser`，`.mp3/.flac/.m4a/.ogg/.wav → MusicParser`，`.mp4/.mkv/.mov/.webm/.avi → VideoParser`，`.epub/.pdf/.mobi/.azw3 → BookParser`，`.jpg/.jpeg/.jfif/.png/.webp/.gif/.bmp/.tif/.tiff/.heic/.heif/.avif/.svg/.ico/.psd/.ai + 相机 RAW（.crw/.cr2/.cr3/.nef/.nrw/.arw/.srf/.sr2/.raf/.orf/.rw2/.rwl/.pef/.srw/.x3f/.3fr/.erf/.iiq/.mrw/.dng）→ ImageParser`；HEIC/HEIF/AVIF 依赖 pillow-heif、pillow-avif-plugin 解码器注册；SVG 不做栅格缩略图、缩略图端点回退原图输出；AI 按 PDF 兼容格式用 PyMuPDF 渲染首页与取尺寸（老式 EPS 格式标解析警告）；RAW 用 exifread 读 EXIF（CR3 等容器读不到时从内嵌 JPEG 预览补），缩略图优先取内嵌预览、无预览时 rawpy 完整解码）。
 
 ```python
 @dataclass

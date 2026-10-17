@@ -27,6 +27,19 @@ async def thumbnail(asset_id: uuid.UUID, size: int = Query(256, description="缩
         raise not_found()
     p = derived_dir(str(a.id)) / f"thumb_{size}.webp"
     if not p.is_file():
+        if a.mime_type == "image/svg+xml":
+            # SVG 不生成栅格缩略图：回退原图（经 <img> 引用不执行内嵌脚本，
+            # CSP 兜底防直接开 URL 场景；nosniff 防内容嗅探）。
+            from app.core.pipeline import build_storage, roots_of
+
+            storage = build_storage(await roots_of(db))
+            return FileResponse(
+                storage.resolve(a.storage_key), media_type="image/svg+xml",
+                headers={
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'none'",
+                    "X-Content-Type-Options": "nosniff",
+                })
         raise not_found("缩略图尚未生成")
     return FileResponse(p, media_type="image/webp",
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
