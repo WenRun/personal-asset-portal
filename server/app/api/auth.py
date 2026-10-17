@@ -1,6 +1,7 @@
-"""认证路由（详细设计 §6.1）：注册 / 登录 / 登出 / me。"""
+"""认证路由（详细设计 §6.1）：注册 / 登录 / 登出 / me / 修改个人资料。"""
 
 import datetime as dt
+import re
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
@@ -20,6 +21,14 @@ router = APIRouter(prefix="/api/auth", tags=["认证"])
 class Credentials(BaseModel):
     username: str = Field(min_length=2, max_length=32)
     password: str = Field(min_length=8, max_length=128)
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _payload(user: User) -> dict:
+    return {"id": str(user.id), "username": user.username, "role": user.role,
+            "email": user.email, "phone": user.phone}
 
 
 def _set_cookie(response: Response, token: str, expires: dt.datetime) -> None:
@@ -44,7 +53,7 @@ async def register(body: Credentials, response: Response, db: AsyncSession = Dep
     await db.commit()
     token, expires = await create_session(db, user.id)
     _set_cookie(response, token, expires)
-    return {"id": str(user.id), "username": user.username, "role": user.role}
+    return _payload(user)
 
 
 @router.post("/login", summary="登录",
@@ -58,7 +67,7 @@ async def login(body: Credentials, response: Response, db: AsyncSession = Depend
     await db.commit()
     token, expires = await create_session(db, user.id)
     _set_cookie(response, token, expires)
-    return {"id": str(user.id), "username": user.username, "role": user.role}
+    return _payload(user)
 
 
 @router.post("/logout", summary="注销", description="删除服务端会话记录并清除 Cookie。")
@@ -77,20 +86,25 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
 async def me(user: User | None = Depends(get_current_user)):
     if user is None:
         raise unauthenticated()
-    return {"id": str(user.id), "username": user.username, "role": user.role}
+    return _payload(user)
 
 
 class ProfileUpdate(BaseModel):
-    """三项均可选：只传哪个改哪个；改密码必须同时携带 current_password。"""
+    """各项均可选：只传哪个改哪个；改密码必须同时携带 current_password。
+    email/phone：缺省=不改动；传空串=清除；传值=设置（服务端做轻量格式校验）。"""
     username: str | None = Field(default=None, min_length=2, max_length=32)
     current_password: str | None = Field(default=None, max_length=128)
     new_password: str | None = Field(default=None, min_length=8, max_length=128)
+    email: str | None = Field(default=None, max_length=254)
+    phone: str | None = Field(default=None, max_length=32)
 
 
-@router.patch("/me", summary="修改个人资料（用户名 / 密码）",
-              description="改密码需先校验当前密码（错误返回 400）；新用户名重复返回 409。改密码后当前会话保持有效。")
+@router.patch("/me", summary="修改个人资料（用户名 / 密码 / 邮箱 / 手机号）",
+              description="改密码需先校验当前密码（错误返回 400）；新用户名重复返回 409；"
+                          "邮箱/手机号缺省不改动、空串清除、格式非法返回 400。改密码后当前会话保持有效。")
 async def update_me(body: ProfileUpdate, db: AsyncSession = Depends(get_db),
                     user: User = Depends(require_member)):
+    provided = body.model_fields_set
     if body.new_password is not None:
         if body.current_password is None or not verify_password(body.current_password, user.password_hash):
             raise bad_request("当前密码不正确")
@@ -100,5 +114,15 @@ async def update_me(body: ProfileUpdate, db: AsyncSession = Depends(get_db),
         if exists is not None:
             raise conflict("用户名已存在")
         user.username = body.username
+    if "email" in provided:
+        email = (body.email or "").strip()
+        if email and not _EMAIL_RE.match(email):
+            raise bad_request("邮箱格式不正确")
+        user.email = email or None
+    if "phone" in provided:
+        phone = re.fullmatch(r"\+?\d{5,20}", (body.phone or "").replace(" ", "").replace("-", ""))
+        if body.phone and phone is None:
+            raise bad_request("手机号格式不正确")
+        user.phone = phone.group() if phone else None
     await db.commit()
-    return {"id": str(user.id), "username": user.username, "role": user.role}
+    return _payload(user)

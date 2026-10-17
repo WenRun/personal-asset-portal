@@ -11,6 +11,8 @@ export function ProfileDialog() {
   const updateProfile = useAuth((s) => s.updateProfile)
 
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -21,20 +23,28 @@ export function ProfileDialog() {
   useEffect(() => {
     if (open) {
       setUsername(user?.username ?? '')
+      setEmail(user?.email ?? '')
+      setPhone(user?.phone ?? '')
       setCurrent(''); setNext(''); setConfirm(''); setErr('')
     }
-  }, [open, user?.username])
+  }, [open, user?.username, user?.email, user?.phone])
 
   if (!user) return null
   const name = username.trim()
   const wantName = name !== user.username
+  const wantEmail = email.trim() !== (user.email ?? '')
+  const wantPhone = phone.trim() !== (user.phone ?? '')
   const wantPass = next.length > 0
-  const dirty = wantName || wantPass
+  const dirty = wantName || wantEmail || wantPhone || wantPass
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
     setErr('')
     if (wantName && (name.length < 2 || name.length > 32)) { setErr('用户名需 2–32 个字符'); return }
+    const mail = email.trim()
+    if (mail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) { setErr('邮箱格式不正确'); return }
+    const tel = phone.trim().replace(/[\s-]/g, '')
+    if (tel && !/^\+?\d{5,20}$/.test(tel)) { setErr('手机号格式不正确'); return }
     if (wantPass) {
       if (next.length < 8) { setErr('新密码至少 8 位'); return }
       if (next !== confirm) { setErr('两次输入的新密码不一致'); return }
@@ -45,6 +55,8 @@ export function ProfileDialog() {
       await updateProfile({
         ...(wantName ? { username: name } : {}),
         ...(wantPass ? { current_password: current, new_password: next } : {}),
+        email: mail,
+        phone: tel,
       })
       setProfile(false)
     } catch (ex) {
@@ -73,6 +85,14 @@ export function ProfileDialog() {
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-500">用户名（2–32 个字符）</label>
           <Input className="w-full" maxLength={32} value={username} onChange={(e) => setUsername(e.target.value)} />
+        </div>
+
+        <div className="border-t border-slate-100 pt-4">
+          <div className="mb-3 text-xs font-medium text-slate-400">联系方式（选填，留空即清除）</div>
+          <div className="space-y-3">
+            <Input className="w-full" type="email" maxLength={254} placeholder="邮箱" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input className="w-full" type="tel" maxLength={32} placeholder="手机号" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
         </div>
 
         <div className="border-t border-slate-100 pt-4">

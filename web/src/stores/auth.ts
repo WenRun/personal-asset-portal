@@ -9,8 +9,8 @@ interface AuthState {
   hydrate: () => Promise<void>
   login: (username: string, password: string) => Promise<User>
   register: (username: string, password: string) => Promise<User>
-  /** 修改用户名 / 密码，成功后同步本地用户缓存 */
-  updateProfile: (payload: { username?: string; current_password?: string; new_password?: string }) => Promise<User>
+  /** 修改用户名 / 密码 / 邮箱 / 手机号，成功后同步本地用户缓存 */
+  updateProfile: (payload: { username?: string; current_password?: string; new_password?: string; email?: string; phone?: string }) => Promise<User>
   logout: () => Promise<void>
 }
 

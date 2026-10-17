@@ -78,7 +78,7 @@ export interface RawAsset {
   designer?: string | null
 }
 
-export interface UserPayload { id: string; username: string; role: 'admin' | 'member' }
+export interface UserPayload { id: string; username: string; role: 'admin' | 'member'; email: string | null; phone: string | null }
 
 export interface ListParams { q?: string; tag?: string; category?: string; favorite?: boolean }
 
@@ -350,7 +350,7 @@ export const api = {
   login: (username: string, password: string) => req<UserPayload>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => req<UserPayload>('/api/auth/me'),
-  updateProfile: (payload: { username?: string; current_password?: string; new_password?: string }) =>
+  updateProfile: (payload: { username?: string; current_password?: string; new_password?: string; email?: string; phone?: string }) =>
     req<UserPayload>('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 
   // 统计 / 最近

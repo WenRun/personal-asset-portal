@@ -5,6 +5,8 @@ export interface User {
   id: string
   username: string
   role: Role
+  email: string | null
+  phone: string | null
 }
 
 // ---- 字体 ----
