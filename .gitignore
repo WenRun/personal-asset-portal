@@ -24,3 +24,6 @@ gui-test-screenshots/
 # IDE
 .idea/
 .zcode/
+
+# 本地私有部署脚本（包含 NAS 部署参数与密码，切勿提交）
+deploy/release-to-nas.sh

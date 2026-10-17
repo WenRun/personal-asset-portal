@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 一键发布到 NAS 生产环境（http://192.168.31.31:8080）
+# 一键发布到 NAS 生产环境（示例模板）
 #
 # 启动方式：
 #   ./deploy/release-to-nas.sh                # 交互菜单（推荐）
@@ -8,22 +8,16 @@
 #   ./deploy/release-to-nas.sh --skip-push    # 非交互：直接构建（等价菜单 2）
 #   ./deploy/release-to-nas.sh --branch dev   # 非交互：发布指定分支（等价菜单 3）
 #
-# 交互菜单：
-#   1) 提交代码并构建 —— git add -A + commit（可输入说明）+ push + 同步 NAS + 重建
-#   2) 直接构建       —— 不提交不推送，用当前分支已提交内容 同步 + 重建
-#   3) 发布其他分支   —— 输入分支名，推送该分支 + 用该分支内容 同步 + 重建
-#
 # 环境变量：
 #   NAS_SUDO_PASSWORD   NAS 上 sudo 所需密码（docker 命令需 sudo）。
 #                       未设置时脚本会交互提示输入（不回显）。
-#                       安全：不要把真实密码写进这个文件（它会被 git 跟踪/推送）。
 #
 # 注意：发布会替换线上代码（外部可访问），请先在本地验证改动无误再执行。
 
 set -euo pipefail
 
 # ---------- 配置（按需要修改） ----------
-NAS_HOST="wenrun@192.168.31.31"          # SSH 直连 IP（记忆：~/.ssh/config 里的 NAS 别名已失效）
+NAS_HOST="wenrun@192.168.31.31"          # SSH 直连 IP
 NAS_DIR="/vol1/1000/asset-portal"        # NAS 上项目的部署目录
 DEFAULT_BRANCH="main"                    # 默认发布分支
 # ---------- 配置结束 ----------
