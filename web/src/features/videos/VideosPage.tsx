@@ -38,6 +38,10 @@ export function VideosPage() {
       return Promise.all(all.map(async (s) => ({ ...s, episodeList: (await api.seriesEpisodes(s.id)).episodes })))
     },
   })
+  const { data: progressMap } = useQuery({
+    queryKey: ['progress', 'all'],
+    queryFn: () => api.getAllProgress(),
+  })
   const nav = useAssetNav()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
@@ -54,6 +58,16 @@ export function VideosPage() {
 
   const seriesAssetIds = useMemo(() => new Set(seriesList.flatMap((s) => s.episodeList.map((e) => e.asset_id))), [seriesList])
   const clips = useMemo(() => (videos ?? []).filter((v) => !seriesAssetIds.has(v.id)), [videos, seriesAssetIds])
+  // 素材片段播放进度（播完会被详情页清零，故 0 视为无进度，不区分未看/看完）
+  const clipPos = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const c of clips) {
+      const p = progressMap?.[c.id]?.position
+      const sec = typeof p?.seconds === 'number' ? p.seconds : 0
+      if (sec > 0) m[c.id] = sec
+    }
+    return m
+  }, [clips, progressMap])
   const showSeries = filter === 'all' || filter === 'series'
   const showClips = filter === 'all' || filter === 'clip' || filter === 'playable'
 
@@ -171,6 +185,18 @@ export function VideosPage() {
                       <span className={`absolute left-2 top-2 rounded px-1.5 py-0.5 text-[10px] text-white ${c.playable ? 'bg-emerald-600/90' : 'bg-amber-600/90'}`}>
                         {c.playable ? '可播放' : '仅下载'}
                       </span>
+                      {(clipPos[c.id] ?? 0) > 0 && (
+                        <>
+                          <span className="absolute right-2 top-2 rounded bg-brand-600 px-1.5 py-0.5 text-[10px] text-white">
+                            看到 {fmtTime(clipPos[c.id])}
+                          </span>
+                          {c.durationSec > 0 && (
+                            <div className="absolute inset-x-0 bottom-0 h-1 bg-white/30">
+                              <div className="h-full bg-brand-500" style={{ width: `${Math.min(100, (clipPos[c.id] / c.durationSec) * 100)}%` }} />
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                     <div className="mt-1.5 truncate text-sm font-medium">{c.title}</div>
                     <div className="flex items-center justify-between gap-1 mt-0.5">
