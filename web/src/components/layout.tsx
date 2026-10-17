@@ -72,6 +72,10 @@ function Sidebar() {
     }
   }
 
+  // 二级菜单可见性：工具箱对所有登录用户开放；标签管理/任务中心/设置仅管理员；游客一律隐藏
+  const subNavCls = ({ isActive }: { isActive: boolean }) =>
+    cn('flex items-center gap-3 rounded-lg px-3 py-2 transition', isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white')
+
   const inner = (
     <div className="flex h-full flex-col bg-slate-900 text-slate-300">
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-800 px-5">
@@ -102,59 +106,29 @@ function Sidebar() {
             {countOf(key) && <span className="ml-auto text-xs text-slate-500">{countOf(key)}</span>}
           </NavLink>
         ))}
-        <div className="mt-3 space-y-1 border-t border-slate-800 pt-3">
-          <NavLink
-            to="/tags"
-            onClick={() => handleNavClick('/tags')}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 transition',
-                isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
-              )
-            }
-          >
-            <Tag className="h-4 w-4" />标签管理
-          </NavLink>
-          <NavLink
-            to="/jobs"
-            onClick={() => handleNavClick('/jobs')}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 transition',
-                isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
-              )
-            }
-          >
-            <Wrench className="h-4 w-4" />任务中心
-            {(stats?.jobs.failed ?? 0) > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{stats?.jobs.failed}</span>}
-          </NavLink>
-          {user && (
-            <NavLink
-              to="/tools"
-              onClick={() => handleNavClick('/tools')}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 transition',
-                  isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
-                )
-              }
-            >
+        {user && (
+          <div className="mt-3 space-y-1 border-t border-slate-800 pt-3">
+            {user.role === 'admin' && (
+              <NavLink to="/tags" onClick={() => handleNavClick('/tags')} className={subNavCls}>
+                <Tag className="h-4 w-4" />标签管理
+              </NavLink>
+            )}
+            {user.role === 'admin' && (
+              <NavLink to="/jobs" onClick={() => handleNavClick('/jobs')} className={subNavCls}>
+                <Wrench className="h-4 w-4" />任务中心
+                {(stats?.jobs.failed ?? 0) > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{stats?.jobs.failed}</span>}
+              </NavLink>
+            )}
+            <NavLink to="/tools" onClick={() => handleNavClick('/tools')} className={subNavCls}>
               <Package className="h-4 w-4" />工具箱
             </NavLink>
-          )}
-          <NavLink
-            to="/settings"
-            onClick={() => handleNavClick('/settings')}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 transition',
-                isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white',
-              )
-            }
-          >
-            <Settings className="h-4 w-4" />设置
-          </NavLink>
-        </div>
+            {user.role === 'admin' && (
+              <NavLink to="/settings" onClick={() => handleNavClick('/settings')} className={subNavCls}>
+                <Settings className="h-4 w-4" />设置
+              </NavLink>
+            )}
+          </div>
+        )}
       </nav>
 
       <div className="flex shrink-0 items-center gap-3 border-t border-slate-800 p-4">
