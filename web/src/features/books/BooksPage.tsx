@@ -50,6 +50,10 @@ export function BooksPage() {
       category: catFilter || undefined,
     }),
   })
+  const { data: progressMap } = useQuery({
+    queryKey: ['progress', 'all'],
+    queryFn: () => api.getAllProgress(),
+  })
   const nav = useAssetNav()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
@@ -59,13 +63,17 @@ export function BooksPage() {
   const cardClick = (id: string) => (selMode ? toggleSel([id]) : nav(`/books/${id}`))
 
   const list = useMemo(() => {
-    const arr = books ?? []
+    const arr = (books ?? []).map((b) => {
+      const pos = progressMap?.[b.id]?.position
+      const pct = typeof pos?.pct === 'number' ? pos.pct : 0
+      return { ...b, progressPct: pct }
+    })
     if (filter === 'reading') return arr.filter((b) => b.progressPct > 0 && b.progressPct < 100)
     if (filter === 'unread') return arr.filter((b) => b.progressPct === 0)
     if (filter === 'readable') return arr.filter((b) => b.formats.some((f) => f.readable))
     if (filter === 'fav') return arr.filter((b) => b.rating >= 5)
     return arr
-  }, [books, filter])
+  }, [books, progressMap, filter])
 
   const seriesList = useMemo(() => {
     const groups = new Map<string, typeof list>()
@@ -77,7 +85,7 @@ export function BooksPage() {
 
   const fmtState = (b: Book2) =>
     b.progressPct === 100 ? <span className="text-[10px] text-emerald-600">已读</span>
-      : b.progressPct > 0 ? <span className="text-[10px] text-brand-600">在读 {b.progressPct}%</span>
+      : b.progressPct > 0 ? <span className="text-[10px] text-brand-600">在读 {Math.round(b.progressPct)}%</span>
         : <span className="text-[10px] text-slate-400">未读</span>
   type Book2 = NonNullable<typeof books>[number]
 
