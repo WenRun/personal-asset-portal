@@ -51,13 +51,6 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-/** 仪表盘要求登录；访客按设计文档 §7.2 重定向到 /videos 浏览页 */
-function DashboardGate() {
-  const user = useAuth((s) => s.user)
-  if (!user) return <Navigate to="/videos" replace />
-  return <DashboardPage />
-}
-
 export default function App() {
   const hydrate = useAuth((s) => s.hydrate)
   useEffect(() => { void hydrate() }, [hydrate])
@@ -69,7 +62,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/share/:token" element={<SharePage />} />
           <Route element={<AppShell />}>
-            <Route path="/" element={<DashboardGate />} />
+            {/* 仪表盘公开（§7.2 已放开）：统计与最近入库游客可见，任务摘要仅登录用户 */}
+            <Route path="/" element={<DashboardPage />} />
             {/* 浏览页：公开（访客可浏览） */}
             <Route path="/fonts" element={<FontsPage />} />
             <Route path="/music" element={<MusicPage />} />

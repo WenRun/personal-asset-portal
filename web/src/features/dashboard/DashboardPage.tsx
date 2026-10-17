@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { api, API_BASE } from '@/api/client'
 import { assetHit, type Hit } from '@/lib/search'
-import { Badge, HueCover, PageHeader } from '@/components/ui'
+import { useAuth } from '@/stores/auth'
+import { Badge, HueCover, PageHeader, useAssetNav } from '@/components/ui'
 
 function RecentCardCover({ hit }: { hit: Hit }) {
   const [failed, setFailed] = useState(false)
@@ -32,9 +33,11 @@ function RecentCardCover({ hit }: { hit: Hit }) {
 
 export function DashboardPage() {
   const qc = useQueryClient()
+  const user = useAuth((s) => s.user)
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15_000 })
   const { data: recentRaw } = useQuery({ queryKey: ['recent'], queryFn: () => api.recent(12) })
-  const nav = useNavigate()
+  // 访客点最近入库卡片 → 弹注册引导（与各浏览页一致），登录用户正常跳详情
+  const cardNav = useAssetNav()
 
   const recent = (recentRaw ?? []).map(assetHit)
 
@@ -85,14 +88,14 @@ export function DashboardPage() {
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+        <div className={`rounded-xl border border-slate-200 bg-white p-4 ${user ? 'md:col-span-2' : 'md:col-span-3'}`}>
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-semibold">最近入库</div>
             <span className="text-xs text-slate-400">跨五类聚合</span>
           </div>
           <div className="grid grid-cols-4 gap-2">
             {recent.slice(0, 8).map((h) => (
-              <div key={h.to} className="group cursor-pointer" onClick={() => nav(h.to)}>
+              <div key={h.to} className="group cursor-pointer" onClick={() => cardNav(h.to)}>
                 <RecentCardCover hit={h} />
                 <div className="mt-1 truncate text-xs font-medium group-hover:text-brand-600">{h.title}</div>
                 <div className="truncate text-[10px] text-slate-400">{h.sub}</div>
@@ -106,6 +109,7 @@ export function DashboardPage() {
           </div>
         </div>
 
+        {user && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-semibold">任务状态</div>
@@ -121,6 +125,7 @@ export function DashboardPage() {
             worker 在线 · 并发 2 · <Badge tone="green">DB 队列</Badge>
           </div>
         </div>
+        )}
       </div>
     </div>
   )
