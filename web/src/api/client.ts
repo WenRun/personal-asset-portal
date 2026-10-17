@@ -350,6 +350,8 @@ export const api = {
   login: (username: string, password: string) => req<UserPayload>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => req<UserPayload>('/api/auth/me'),
+  updateProfile: (payload: { username?: string; current_password?: string; new_password?: string }) =>
+    req<UserPayload>('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 
   // 统计 / 最近
   stats: () => req<StatsPayload>('/api/stats'),

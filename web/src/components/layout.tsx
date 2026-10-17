@@ -13,6 +13,7 @@ import { Button } from '@/components/ui'
 import { UploadButton } from '@/components/UploadButton'
 import { PlayerBar } from '@/components/PlayerBar'
 import { CommandPalette } from '@/components/CommandPalette'
+import { ProfileDialog } from '@/components/ProfileDialog'
 
 const NAV = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard, key: '' },
@@ -28,6 +29,7 @@ function Sidebar() {
   const logout = useAuth((s) => s.logout)
   const sidebarOpen = useUI((s) => s.sidebarOpen)
   const setSidebar = useUI((s) => s.setSidebar)
+  const setProfile = useUI((s) => s.setProfile)
   const nav = useNavigate()
   const qc = useQueryClient()
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15_000 })
@@ -158,14 +160,20 @@ function Sidebar() {
       <div className="flex shrink-0 items-center gap-3 border-t border-slate-800 p-4">
         {user ? (
           <>
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-500 text-sm font-semibold text-white">
-              {user.username[0].toUpperCase()}
-            </div>
-            <div className="min-w-0 text-sm">
-              <div className="truncate text-white">{user.username}</div>
-              <div className="text-[10px] text-slate-500">{user.role === 'admin' ? '管理员' : '注册用户'}</div>
-            </div>
-            <button className="ml-auto p-1.5 text-slate-400 hover:text-white" title="登出" onClick={() => { logout(); nav('/login') }}>
+            <button
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 -m-1 text-left transition hover:bg-slate-800"
+              title="点击修改个人资料"
+              onClick={() => setProfile(true)}
+            >
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-500 text-sm font-semibold text-white">
+                {user.username[0].toUpperCase()}
+              </div>
+              <div className="min-w-0 text-sm">
+                <div className="truncate text-white">{user.username}</div>
+                <div className="text-[10px] text-slate-500">{user.role === 'admin' ? '管理员' : '注册用户'}</div>
+              </div>
+            </button>
+            <button className="shrink-0 p-1.5 text-slate-400 hover:text-white" title="登出" onClick={() => { logout(); nav('/login') }}>
               <LogOut className="h-4 w-4" />
             </button>
           </>
@@ -297,6 +305,7 @@ export function AppShell() {
         <PlayerBar />
       </div>
       <CommandPalette />
+      <ProfileDialog />
     </div>
   )
 }

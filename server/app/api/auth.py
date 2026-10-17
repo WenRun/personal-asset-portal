@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.deps import COOKIE_NAME, create_session, get_app_settings, get_current_user
+from app.core.deps import COOKIE_NAME, create_session, get_app_settings, get_current_user, require_member
 from app.core.db import get_db
 from app.core.errors import bad_request, conflict, unauthenticated
 from app.core.models import SessionToken, User
@@ -77,4 +77,28 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
 async def me(user: User | None = Depends(get_current_user)):
     if user is None:
         raise unauthenticated()
+    return {"id": str(user.id), "username": user.username, "role": user.role}
+
+
+class ProfileUpdate(BaseModel):
+    """三项均可选：只传哪个改哪个；改密码必须同时携带 current_password。"""
+    username: str | None = Field(default=None, min_length=2, max_length=32)
+    current_password: str | None = Field(default=None, max_length=128)
+    new_password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+@router.patch("/me", summary="修改个人资料（用户名 / 密码）",
+              description="改密码需先校验当前密码（错误返回 400）；新用户名重复返回 409。改密码后当前会话保持有效。")
+async def update_me(body: ProfileUpdate, db: AsyncSession = Depends(get_db),
+                    user: User = Depends(require_member)):
+    if body.new_password is not None:
+        if body.current_password is None or not verify_password(body.current_password, user.password_hash):
+            raise bad_request("当前密码不正确")
+        user.password_hash = hash_password(body.new_password)
+    if body.username is not None and body.username != user.username:
+        exists = (await db.execute(select(User).where(User.username == body.username))).scalar_one_or_none()
+        if exists is not None:
+            raise conflict("用户名已存在")
+        user.username = body.username
+    await db.commit()
     return {"id": str(user.id), "username": user.username, "role": user.role}
