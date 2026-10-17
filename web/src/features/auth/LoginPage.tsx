@@ -6,6 +6,7 @@ import { Button, Input } from '@/components/ui'
 export function LoginPage() {
   const user = useAuth((s) => s.user)
   const login = useAuth((s) => s.login)
+  const register = useAuth((s) => s.register)
   const nav = useNavigate()
   const [tab, setTab] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
@@ -18,9 +19,14 @@ export function LoginPage() {
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
     setErr('')
+    const name = username.trim()
+    if (tab === 'register') { // 长度限制与服务端 Credentials 校验保持一致
+      if (name.length < 2 || name.length > 32) { setErr('用户名需 2–32 个字符'); return }
+      if (password.length < 8) { setErr('密码至少 8 位'); return }
+    }
     setBusy(true)
     try {
-      await (tab === 'login' ? login(username, password) : login(username, password))
+      await (tab === 'login' ? login : register)(name, password)
       nav('/')
     } catch (ex) {
       setErr((ex as Error).message)
@@ -55,12 +61,12 @@ export function LoginPage() {
           </div>
           <form className="space-y-4 p-6" onSubmit={submit}>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">用户名</label>
-              <Input className="w-full" placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <label className="mb-1 block text-xs font-medium text-slate-500">{tab === 'register' ? '用户名（2–32 个字符）' : '用户名'}</label>
+              <Input className="w-full" maxLength={32} placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">密码</label>
-              <Input className="w-full" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <label className="mb-1 block text-xs font-medium text-slate-500">{tab === 'register' ? '密码（至少 8 位）' : '密码'}</label>
+              <Input className="w-full" type="password" maxLength={128} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             {err && <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{err}</div>}
             <div className="flex items-center justify-between text-xs">
