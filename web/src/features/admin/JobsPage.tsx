@@ -221,8 +221,11 @@ export function JobsPage() {
               >
                 {label}
                 {v === 'all' && <span className="ml-1 text-slate-400">{Object.values(pageData?.counts ?? {}).reduce((a, b) => a + b, 0)}</span>}
-                {v !== 'all' && <span className="ml-1 text-slate-400">{countOf(v)}</span>}
-                {v === 'failed' && countOf('failed') > 0 && statusFilter !== 'failed' && <span className="ml-1 text-rose-500">{countOf('failed')}</span>}
+                {v !== 'all' && (
+                  <span className={cn('ml-1', v === 'failed' && countOf('failed') > 0 && statusFilter !== 'failed' ? 'text-rose-500' : 'text-slate-400')}>
+                    {countOf(v)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
