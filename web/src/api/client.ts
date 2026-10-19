@@ -148,6 +148,7 @@ function toBook(r: RawAsset): Book {
     progressPct: 0,
     lastChapter: undefined,
     rating: r.rating ?? 0,
+    favorite: r.is_favorite,
     tags: (r.tags ?? []).map((t) => t.name),
     category: r.category,
     suggested_category: r.suggested_category,
@@ -221,6 +222,7 @@ function toClip(r: RawAsset): Clip {
     episode: r.episode ?? null,
     cover_url: r.cover_url ?? null,
     rating: r.rating ?? 0,
+    favorite: r.is_favorite,
   }
 }
 
@@ -443,6 +445,8 @@ export const api = {
     req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   font: async (id: string) => toFont(await detailRaw(id)),
+  /** 按类型列原始资产（收藏页等跨类型场景直接用 RawAsset 渲染） */
+  assetsByType: (route: 'fonts' | 'music' | 'videos' | 'books' | 'images', p?: ListParams) => listRaw(route, p),
 
   // 分类（M7）
   categories: (route: string) => req<CategoriesResult>(`/api/${route}/categories`),

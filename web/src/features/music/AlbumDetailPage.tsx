@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Heart, Link2, Pause, Play, Trash2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePlayer } from '@/stores/player'
@@ -13,7 +13,14 @@ import { TrackAudioBadge } from './TrackAudioBadge'
 
 export function AlbumDetailPage() {
   const { id } = useParams()
+  const qc = useQueryClient()
   const { data: album } = useQuery({ queryKey: ['album', id], queryFn: () => api.album(id!), enabled: !!id })
+  // 专辑 ID 不是资产 ID，收藏落在曲目级：拉全库收藏曲目集合来推导「整张已收藏」状态
+  const { data: favMusic } = useQuery({
+    queryKey: ['favorites', 'music'],
+    queryFn: () => api.assetsByType('music', { favorite: true }),
+  })
+  const [favSaving, setFavSaving] = useState(false)
   const { queue, index, playing, albumId: curAlbumId, playAlbum, toggle } = usePlayer()
   const isAdmin = useAuth((s) => s.user)?.role === 'admin'
   // 专辑 ID 不是资产 ID：分享与删除都落在曲目（asset）级行上
@@ -25,6 +32,21 @@ export function AlbumDetailPage() {
 
   const activeIdx = curAlbumId === album.id ? index : -1
   const totalSec = album.tracks.reduce((s, t) => s + t.durationSec, 0)
+  const favIds = new Set((favMusic ?? []).map((a) => a.id))
+  const albumAllFav = album.tracks.length > 0 && album.tracks.every((t) => favIds.has(t.id))
+
+  // 整张专辑一键收藏/取消：逐曲目写 is_favorite（专辑是曲目聚合，无独立资产可标）
+  const toggleAlbumFav = async () => {
+    if (favSaving || album.tracks.length === 0) return
+    const next = !albumAllFav
+    setFavSaving(true)
+    try {
+      await Promise.all(album.tracks.map((t) => api.patchAsset(t.id, { is_favorite: next })))
+      void qc.invalidateQueries({ queryKey: ['favorites'] })
+    } finally {
+      setFavSaving(false)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-6">
@@ -63,7 +85,15 @@ export function AlbumDetailPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             {album.tracks.length > 0 && <Button onClick={() => playAlbum(album)}><Play className="h-4 w-4" fill="currentColor" />播放全部</Button>}
             <Button variant="outline">下载整专辑 (.zip)</Button>
-            <Button variant="outline">♥ 收藏</Button>
+            <Button
+              variant="outline"
+              disabled={favSaving || album.tracks.length === 0}
+              onClick={() => void toggleAlbumFav()}
+              className={albumAllFav ? 'text-rose-600' : ''}
+            >
+              <Heart className="h-4 w-4" fill={albumAllFav ? 'currentColor' : 'none'} />
+              {albumAllFav ? '取消收藏专辑' : '收藏专辑'}
+            </Button>
             <Button variant="outline">编辑</Button>
           </div>
         </div>

@@ -9,6 +9,7 @@ import { BackLink, Badge, Button, HueCover, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
+import { FavoriteButton } from '@/components/FavoriteButton'
 import { cn } from '@/lib/utils'
 
 export function ImageDetailPage() {
@@ -82,6 +83,11 @@ export function ImageDetailPage() {
         <span className="font-mono text-sm text-slate-400">{photo.fileName}</span>
         <Badge className="bg-slate-800 text-slate-400">相册：{photo.album}</Badge>
         <div className="ml-auto flex items-center gap-1">
+          <FavoriteButton
+            assetId={photo.id}
+            favorite={photo.favorite}
+            className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-rose-300"
+          />
           <a
             href={api.downloadUrl(photo.id)}
             download

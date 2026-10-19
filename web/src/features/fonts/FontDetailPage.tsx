@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Heart, Info, Link2, Pencil, Trash2, X } from 'lucide-react'
+import { Info, Link2, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
 import { useAuth } from '@/stores/auth'
@@ -10,6 +10,7 @@ import { BackLink, Badge, Button } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
+import { FavoriteButton } from '@/components/FavoriteButton'
 import { cn } from '@/lib/utils'
 
 /** 字体详情（§5.1）：同字族字重列表 + FontFace 实时样张 + 可变轴 + 字符集覆盖率 */
@@ -36,7 +37,6 @@ export function FontDetailPage() {
   })
   const { fontText, fontSize, setFontPreview } = usePrefs()
 
-  const [fav, setFav] = useState<boolean | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [wght, setWght] = useState<number | null>(null)
 
@@ -143,9 +143,7 @@ export function FontDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button className={fav ?? font.favorite ? 'text-rose-500' : 'text-slate-300 hover:text-rose-400'} onClick={() => setFav(!(fav ?? font.favorite))}>
-                <Heart className="h-5 w-5" fill={(fav ?? font.favorite) ? 'currentColor' : 'none'} />
-              </button>
+              {current && <FavoriteButton assetId={current.id} favorite={!!current.favorite} iconClassName="h-5 w-5" />}
               <button className="rounded p-1 text-slate-400 hover:bg-slate-100 lg:hidden" onClick={() => setInfoOpen(false)}>
                 <X className="h-4 w-4" />
               </button>

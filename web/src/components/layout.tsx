@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Film, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Music,
+  BookOpen, Film, Heart, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Music,
   Package, Search, Settings, Tag, Type, Wrench, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -63,6 +63,8 @@ function Sidebar() {
     } else if (to === '/jobs') {
       void qc.invalidateQueries({ queryKey: ['jobs'], refetchType: 'all' })
       void qc.invalidateQueries({ queryKey: ['confirm'], refetchType: 'all' })
+    } else if (to === '/favorites') {
+      void qc.invalidateQueries({ queryKey: ['favorites'], refetchType: 'all' })
     } else if (to === '/tools') {
       void qc.invalidateQueries({ queryKey: ['packs'], refetchType: 'all' })
       void qc.invalidateQueries({ queryKey: ['shares'], refetchType: 'all' })
@@ -108,6 +110,9 @@ function Sidebar() {
         ))}
         {user && (
           <div className="mt-3 space-y-1 border-t border-slate-800 pt-3">
+            <NavLink to="/favorites" onClick={() => handleNavClick('/favorites')} className={subNavCls}>
+              <Heart className="h-4 w-4" />我的收藏
+            </NavLink>
             {user.role === 'admin' && (
               <NavLink to="/tags" onClick={() => handleNavClick('/tags')} className={subNavCls}>
                 <Tag className="h-4 w-4" />标签管理

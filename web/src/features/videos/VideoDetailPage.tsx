@@ -11,6 +11,7 @@ import { BackLink, Badge, Button, HueCover } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
+import { FavoriteButton } from '@/components/FavoriteButton'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
 /** 视频详情（§5.3）：Direct Play <video> 真实播放 + 观看进度云端同步 + 全屏/网页全屏/画中画/倍速/音量控制 + 系列集数平滑切换 */
@@ -433,6 +434,12 @@ export function VideoDetailPage() {
           <a href={api.downloadUrl(video.id)}>
             <Button variant="outline">下载{isClip ? '视频' : '本集'}</Button>
           </a>
+          <FavoriteButton
+            assetId={video.id}
+            favorite={!!video.favorite}
+            withLabel
+            className="h-[38px] rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          />
           {/* 5 颗黄色小星星评分组件（悬停高亮 + 点击保存） */}
           <div
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-slate-300"

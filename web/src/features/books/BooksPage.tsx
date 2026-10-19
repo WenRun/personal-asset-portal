@@ -71,7 +71,7 @@ export function BooksPage() {
     if (filter === 'reading') return arr.filter((b) => b.progressPct > 0 && b.progressPct < 100)
     if (filter === 'unread') return arr.filter((b) => b.progressPct === 0)
     if (filter === 'readable') return arr.filter((b) => b.formats.some((f) => f.readable))
-    if (filter === 'fav') return arr.filter((b) => b.rating >= 5)
+    if (filter === 'fav') return arr.filter((b) => b.favorite)
     return arr
   }, [books, progressMap, filter])
 

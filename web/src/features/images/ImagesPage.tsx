@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { Check, Heart, ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
@@ -30,6 +30,7 @@ export function ImagesPage() {
     queryFn: () => api.photos({ tag: tagFilter || undefined, category: catFilter || undefined }),
   })
   const nav = useAssetNav()
+  const qc = useQueryClient()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -142,7 +143,15 @@ export function ImagesPage() {
                 <div className="absolute inset-0 bg-slate-900/0 transition group-hover:bg-slate-900/20" />
                 <button
                   className={cn('absolute right-2 top-2 rounded-full bg-white/90 p-1 shadow transition', (favs[p.id] || p.favorite) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
-                  onClick={(e) => { e.stopPropagation(); setFavs({ ...favs, [p.id]: !favs[p.id] }) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // 乐观翻转 + PATCH 持久化（此前只改本地内存，刷新即丢）；失败回滚
+                    const next = !(favs[p.id] ?? p.favorite)
+                    setFavs((curr) => ({ ...curr, [p.id]: next }))
+                    api.patchAsset(p.id, { is_favorite: next })
+                      .then(() => qc.invalidateQueries({ queryKey: ['favorites'] }))
+                      .catch(() => setFavs((curr) => ({ ...curr, [p.id]: !next })))
+                  }}
                 >
                   <Heart className={cn('h-4 w-4', (favs[p.id] || p.favorite) ? 'text-rose-500' : 'text-slate-400')} fill={(favs[p.id] || p.favorite) ? 'currentColor' : 'none'} />
                 </button>

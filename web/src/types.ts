@@ -112,6 +112,7 @@ export interface Clip {
   episode?: number | null
   cover_url?: string | null
   rating?: number
+  favorite?: boolean
 }
 export type VideoAsset = Series | Clip
 
@@ -129,6 +130,7 @@ export interface Book {
   progressPct: number
   lastChapter?: string
   rating: number
+  favorite: boolean
   tags: string[]
   category?: string | null
   suggested_category?: string | null

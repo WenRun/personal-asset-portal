@@ -8,6 +8,7 @@ import { BackLink, Badge, Button, RatingStars } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
+import { FavoriteButton } from '@/components/FavoriteButton'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { fmtDate } from '@/lib/utils'
 import { BookReader } from './BookReader'
@@ -138,6 +139,12 @@ export function BookDetailPage() {
             <span className="text-xs text-slate-400">{(rating ?? book.rating)}.0 · 我的评分</span>
 
             <div className="ml-auto flex items-center gap-2">
+              <FavoriteButton
+                assetId={book.id}
+                favorite={book.favorite}
+                withLabel
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              />
               {isAdmin && (
                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} title="编辑书籍元信息">
                   <Pencil className="h-3.5 w-3.5" />编辑

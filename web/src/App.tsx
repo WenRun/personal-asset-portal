@@ -23,6 +23,7 @@ const BooksPage = page(() => import('@/features/books/BooksPage'), 'BooksPage')
 const BookDetailPage = page(() => import('@/features/books/BookDetailPage'), 'BookDetailPage')
 const ImagesPage = page(() => import('@/features/images/ImagesPage'), 'ImagesPage')
 const ImageDetailPage = page(() => import('@/features/images/ImageDetailPage'), 'ImageDetailPage')
+const FavoritesPage = page(() => import('@/features/favorites/FavoritesPage'), 'FavoritesPage')
 const SearchPage = page(() => import('@/features/search/SearchPage'), 'SearchPage')
 const JobsPage = page(() => import('@/features/admin/JobsPage'), 'JobsPage')
 const TagsPage = page(() => import('@/features/admin/TagsPage'), 'TagsPage')
@@ -78,6 +79,8 @@ export default function App() {
             <Route path="/books/:id" element={<RequireUser><BookDetailPage /></RequireUser>} />
             <Route path="/images/:id" element={<RequireUser><ImageDetailPage /></RequireUser>} />
             <Route path="/search" element={<RequireUser><SearchPage /></RequireUser>} />
+            {/* 我的收藏：收藏按用户无关（资产级标记），入口仅登录用户可见 */}
+            <Route path="/favorites" element={<RequireUser><FavoritesPage /></RequireUser>} />
             {/* 管理端 */}
             <Route path="/jobs" element={<RequireAdmin><JobsPage /></RequireAdmin>} />
             <Route path="/tags" element={<RequireUser><TagsPage /></RequireUser>} />
