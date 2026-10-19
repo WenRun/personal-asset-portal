@@ -258,6 +258,7 @@ export function FontDetailPage() {
       {font && (
         <EditAssetDialog
           assetId={current?.id ?? font.id}
+          route="fonts"
           initialTitle={current?.family || current?.title || font.family}
           initialCategory={current?.category ?? font.category}
           suggestedCategory={current?.suggested_category ?? font.suggested_category}

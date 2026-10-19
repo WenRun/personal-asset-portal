@@ -8,6 +8,7 @@ import { useAuth } from '@/stores/auth'
 import { BackLink, Badge, Button, EqBars, HueCover } from '@/components/ui'
 import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
+import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { cleanTrackTitle, fmtTime } from '@/lib/utils'
 import { TrackAudioBadge } from './TrackAudioBadge'
 
@@ -27,6 +28,7 @@ export function AlbumDetailPage() {
   const [shareTrack, setShareTrack] = useState<{ id: string; title: string } | null>(null)
   const [delTrack, setDelTrack] = useState<{ id: string; title: string } | null>(null)
   const [coverFail, setCoverFail] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   if (!album) return <div className="p-6 text-slate-400">加载中…</div>
 
@@ -94,7 +96,9 @@ export function AlbumDetailPage() {
               <Heart className="h-4 w-4" fill={albumAllFav ? 'currentColor' : 'none'} />
               {albumAllFav ? '取消收藏专辑' : '收藏专辑'}
             </Button>
-            <Button variant="outline">编辑</Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setEditOpen(true)}>编辑</Button>
+            )}
           </div>
         </div>
       </div>
@@ -195,6 +199,24 @@ export function AlbumDetailPage() {
       )}
       {delTrack && (
         <DeleteAssetDialog assetId={delTrack.id} assetTitle={delTrack.title} listPath={`/music/albums/${album.id}`} open onClose={() => setDelTrack(null)} />
+      )}
+      {editOpen && album && (
+        <EditAssetDialog
+          assetId={album.id}
+          route="music"
+          initialTitle={album.title}
+          initialCategory={album.category}
+          suggestedCategory={album.suggested_category}
+          initialNote={album.note}
+          initialTags={album.tags}
+          initialRating={album.rating}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSuccess={() => {
+            void qc.invalidateQueries({ queryKey: ['album', album.id] })
+            void qc.invalidateQueries({ queryKey: ['categories'] })
+          }}
+        />
       )}
     </div>
   )

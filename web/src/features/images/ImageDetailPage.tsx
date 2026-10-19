@@ -269,6 +269,7 @@ export function ImageDetailPage() {
       {photo && (
         <EditAssetDialog
           assetId={photo.id}
+          route="images"
           initialTitle={photo.title}
           initialCategory={photo.category}
           suggestedCategory={photo.suggested_category}

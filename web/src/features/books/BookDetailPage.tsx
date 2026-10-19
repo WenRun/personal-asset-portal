@@ -236,6 +236,7 @@ export function BookDetailPage() {
       {editOpen && (
         <EditAssetDialog
           assetId={book.id}
+          route="books"
           initialTitle={book.title}
           initialCategory={book.category}
           suggestedCategory={book.suggested_category}

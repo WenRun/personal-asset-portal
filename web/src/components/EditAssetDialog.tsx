@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Folder, Pencil, Plus, Sparkles, Star, X } from 'lucide-react'
+import { Folder, FolderTree, Pencil, Plus, Sparkles, Star, X } from 'lucide-react'
 import { api } from '@/api/client'
+import { CategoryTreePicker, type CategoryRoute } from '@/components/CategoryTreePicker'
 import { Button, Input, Modal } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
 /** 资产信息编辑弹层（admin 可用，支持标题、分类、备注、标签与评分修改） */
 export function EditAssetDialog({
   assetId,
+  route,
   initialTitle,
   initialCategory,
   suggestedCategory,
@@ -19,6 +21,8 @@ export function EditAssetDialog({
   onSuccess,
 }: {
   assetId: string
+  /** 资产所属栏目，用于拉取对应分类树；不传则不显示树选择入口 */
+  route?: CategoryRoute
   initialTitle: string
   initialCategory?: string | null
   suggestedCategory?: string | null
@@ -38,6 +42,7 @@ export function EditAssetDialog({
   const [hoverRating, setHoverRating] = useState(0)
   const [tagInput, setTagInput] = useState('')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [treeOpen, setTreeOpen] = useState(false)
 
   // 当弹窗打开时，根据传入的初始值重置表单状态
   useEffect(() => {
@@ -50,6 +55,7 @@ export function EditAssetDialog({
       setHoverRating(0)
       setTagInput('')
       setErrorMsg(null)
+      setTreeOpen(false)
     }
   }, [open, initialTitle, initialCategory, initialNote, initialTags, initialRating])
 
@@ -168,14 +174,40 @@ export function EditAssetDialog({
             )}
           </div>
           <div className="space-y-1.5">
-            <Input
-              id="asset-category"
-              value={category}
-              maxLength={128}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="输入分类路径，支持斜杠多级（如：计算机/Python/Web开发、流行/华语…）"
-              className="w-full text-xs"
-            />
+            <div className="relative">
+              <Input
+                id="asset-category"
+                value={category}
+                maxLength={128}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="输入分类路径，支持斜杠多级（如：计算机/Python/Web开发、流行/华语…）"
+                className={cn('w-full text-xs', route && 'pr-9')}
+              />
+              {route && (
+                <button
+                  type="button"
+                  onClick={() => setTreeOpen((v) => !v)}
+                  title="从分类树选择"
+                  className={cn(
+                    'absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded transition',
+                    treeOpen ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:bg-slate-100 hover:text-brand-600',
+                  )}
+                >
+                  <FolderTree className="h-4 w-4" />
+                </button>
+              )}
+              {route && treeOpen && (
+                <CategoryTreePicker
+                  route={route}
+                  selected={category}
+                  onPick={(fullPath) => {
+                    setCategory(fullPath)
+                    setTreeOpen(false)
+                  }}
+                  onClose={() => setTreeOpen(false)}
+                />
+              )}
+            </div>
             {suggestedCategory && suggestedCategory !== category && (
               <div className="flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50/80 border border-amber-200/70 rounded-lg px-2.5 py-1.5">
                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500" />

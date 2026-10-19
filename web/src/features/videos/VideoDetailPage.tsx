@@ -850,6 +850,7 @@ export function VideoDetailPage() {
 
       <EditAssetDialog
         assetId={video.id}
+        route="videos"
         initialTitle={video.title}
         initialCategory={video.category}
         suggestedCategory={video.suggested_category}
