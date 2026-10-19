@@ -29,6 +29,7 @@ const JobsPage = page(() => import('@/features/admin/JobsPage'), 'JobsPage')
 const TagsPage = page(() => import('@/features/admin/TagsPage'), 'TagsPage')
 const SettingsPage = page(() => import('@/features/admin/SettingsPage'), 'SettingsPage')
 const ToolsPage = page(() => import('@/features/admin/ToolsPage'), 'ToolsPage')
+const UsersPage = page(() => import('@/features/admin/UsersPage'), 'UsersPage')
 
 function PageFallback() {
   return (
@@ -84,6 +85,7 @@ export default function App() {
             {/* 管理端 */}
             <Route path="/jobs" element={<RequireAdmin><JobsPage /></RequireAdmin>} />
             <Route path="/tags" element={<RequireUser><TagsPage /></RequireUser>} />
+            <Route path="/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
             <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
             {/* 工具箱：打包/集合为 member 级，分享标签页内部按角色隐藏（与 API 权限一致） */}
             <Route path="/tools" element={<RequireUser><ToolsPage /></RequireUser>} />

@@ -1,25 +1,27 @@
-"""管理路由（详细设计 §6.5/§6.6）：扫描、任务、设置；任务进度 SSE 实时推送。"""
+"""管理路由（详细设计 §6.5/§6.6）：扫描、任务、设置、用户管理；任务进度 SSE 实时推送。"""
 
 import asyncio
 import json
 import logging
 import uuid
 from pathlib import Path
+from typing import Literal
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.deps import get_app_settings, require_admin
+from app.core.deps import COOKIE_NAME, get_app_settings, require_admin
 from app.core.db import SessionLocal, get_db
 from app.core.errors import bad_request, not_found
 from app.core.jobs import JOB_NOTIFY_CHANNEL, enqueue, notify_job_changed
-from app.core.models import Asset, DownloadPack, Job, MusicTrack, Setting, User
+from app.core.models import Asset, DownloadPack, Job, MusicTrack, SessionToken, Setting, User
 from app.core.registry import ASSET_TYPES
+from app.core.security import hash_password
 
 log = logging.getLogger("portal.admin")
 
@@ -278,3 +280,99 @@ async def put_settings_api(body: SettingsBody, db: AsyncSession = Depends(get_db
         await _upsert("max_upload_gb", body.max_upload_gb)
     await db.commit()
     return await get_app_settings(db)
+
+
+# ---------- 用户管理 ----------
+
+def _user_dict(u: User) -> dict:
+    return {
+        "id": str(u.id), "username": u.username, "role": u.role,
+        "email": u.email, "phone": u.phone, "is_active": u.is_active,
+        "created_at": u.created_at.isoformat(),
+        "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+    }
+
+
+async def _admin_count(db: AsyncSession) -> int:
+    return (await db.execute(select(func.count()).select_from(User).where(User.role == "admin"))).scalar_one()
+
+
+async def _get_user_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:
+    user = await db.get(User, user_id)
+    if user is None:
+        raise not_found("用户不存在")
+    return user
+
+
+@router.get("/users", summary="用户列表（分页）",
+            description="管理员。按注册时间倒序返回所有用户（不含密码哈希），返回 {items, total}。")
+async def list_users(limit: int = Query(50, description="每页条数，服务端截断为最大 200"),
+                     offset: int = Query(0, ge=0, description="偏移量（翻页用）"),
+                     db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    total = (await db.execute(select(func.count()).select_from(User))).scalar_one()
+    rows = (
+        await db.execute(select(User).order_by(User.created_at.desc(), User.id.desc())
+                         .offset(offset).limit(min(limit, 200)))
+    ).scalars().all()
+    return {"total": total, "items": [_user_dict(u) for u in rows]}
+
+
+class UserPatchBody(BaseModel):
+    role: Literal["admin", "member"] | None = None
+    is_active: bool | None = None
+
+
+@router.patch("/users/{user_id}", summary="修改用户角色 / 停用启用",
+              description="管理员。只传哪个改哪个。护栏：不能停用自己；目标是最后一名管理员时不能降级或停用；"
+                          "停用同时清空其全部会话（立即踢下线）。")
+async def patch_user(user_id: uuid.UUID, body: UserPatchBody, db: AsyncSession = Depends(get_db),
+                     me: User = Depends(require_admin)):
+    user = await _get_user_or_404(db, user_id)
+    if body.is_active is False and user.id == me.id:
+        raise bad_request("不能停用当前登录账号")
+    # 摘掉最后一名管理员的管理权或停用其账号（含自己降级自己）都会让系统无人管理，一律拦截
+    demoting_or_disabling = (body.role == "member" and user.role == "admin") or body.is_active is False
+    if demoting_or_disabling and user.role == "admin" and await _admin_count(db) <= 1:
+        raise bad_request("系统至少需保留一名管理员，请先将其他用户设为管理员")
+    if body.role is not None:
+        user.role = body.role
+    if body.is_active is not None:
+        user.is_active = body.is_active
+        if not body.is_active:
+            await db.execute(delete(SessionToken).where(SessionToken.user_id == user.id))
+    await db.commit()
+    return _user_dict(user)
+
+
+class ResetPasswordBody(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/users/{user_id}/reset-password", summary="重置用户密码",
+             description="管理员。写入新密码哈希并删除该用户所有其他会话（强制重新登录）；"
+                         "操作者本人的当前会话保持有效。")
+async def reset_user_password(user_id: uuid.UUID, body: ResetPasswordBody, request: Request,
+                              db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    user = await _get_user_or_404(db, user_id)
+    user.password_hash = hash_password(body.new_password)
+    cond = [SessionToken.user_id == user.id]
+    current_token = request.cookies.get(COOKIE_NAME)
+    if current_token:
+        cond.append(SessionToken.id != current_token)
+    await db.execute(delete(SessionToken).where(*cond))
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/users/{user_id}", summary="删除用户",
+               description="管理员。删除用户并级联清理其会话、收藏、打包、集合、进度与分享记录（数据库外键级联）；"
+                           "不能删除自己，也不能删除最后一名管理员。")
+async def delete_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db), me: User = Depends(require_admin)):
+    user = await _get_user_or_404(db, user_id)
+    if user.id == me.id:
+        raise bad_request("不能删除当前登录账号")
+    if user.role == "admin" and await _admin_count(db) <= 1:
+        raise bad_request("系统至少需保留一名管理员，请先将其他用户设为管理员")
+    await db.execute(delete(User).where(User.id == user.id))
+    await db.commit()
+    return {"ok": True}

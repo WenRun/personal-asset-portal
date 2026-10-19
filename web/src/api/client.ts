@@ -80,6 +80,18 @@ export interface RawAsset {
 
 export interface UserPayload { id: string; username: string; role: 'admin' | 'member'; email: string | null; phone: string | null }
 
+/** 管理端用户列表条目（/api/admin/users，不含密码哈希） */
+export interface AdminUser {
+  id: string
+  username: string
+  role: 'admin' | 'member'
+  email: string | null
+  phone: string | null
+  is_active: boolean
+  created_at: string
+  last_login_at: string | null
+}
+
 export interface ListParams { q?: string; tag?: string; category?: string; favorite?: boolean }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -509,6 +521,15 @@ export const api = {
   settings: () => req<AppSettings>('/api/admin/settings'),
   updateSettings: (patch: { scan_roots?: ScanRoot[]; registration_open?: boolean; max_upload_gb?: number }) => req<AppSettings>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),
   scan: (rootAlias: string) => req<{ job_id: string }>('/api/admin/scan', { method: 'POST', body: JSON.stringify({ root_alias: rootAlias }) }),
+
+  // 用户管理（admin）
+  adminUsers: (limit = 200) => req<{ total: number; items: AdminUser[] }>(`/api/admin/users?limit=${limit}&offset=0`),
+  patchUser: (id: string, patch: { role?: 'admin' | 'member'; is_active?: boolean }) =>
+    req<AdminUser>(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  resetUserPassword: (id: string, newPassword: string) =>
+    req<{ ok: boolean }>(`/api/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) }),
+  deleteUser: (id: string) => req<{ ok: boolean }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
+
   upload: (file: File) => {
     const fd = new FormData()
     fd.append('file', file)

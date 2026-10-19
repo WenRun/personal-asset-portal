@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookOpen, Film, Heart, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Music,
-  Package, Search, Settings, Tag, Type, Wrench, X,
+  Package, Search, Settings, Tag, Type, Users, Wrench, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
@@ -60,6 +60,8 @@ function Sidebar() {
       void qc.invalidateQueries({ queryKey: ['recent'], refetchType: 'all' })
     } else if (to === '/tags') {
       void qc.invalidateQueries({ queryKey: ['tags'], refetchType: 'all' })
+    } else if (to === '/users') {
+      void qc.invalidateQueries({ queryKey: ['admin-users'], refetchType: 'all' })
     } else if (to === '/jobs') {
       void qc.invalidateQueries({ queryKey: ['jobs'], refetchType: 'all' })
       void qc.invalidateQueries({ queryKey: ['confirm'], refetchType: 'all' })
@@ -74,7 +76,7 @@ function Sidebar() {
     }
   }
 
-  // 二级菜单可见性：工具箱对所有登录用户开放；标签管理/任务中心/设置仅管理员；游客一律隐藏
+  // 二级菜单可见性：工具箱对所有登录用户开放；标签管理/任务中心/用户管理/设置仅管理员；游客一律隐藏
   const subNavCls = ({ isActive }: { isActive: boolean }) =>
     cn('flex items-center gap-3 rounded-lg px-3 py-2 transition', isActive ? 'bg-brand-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white')
 
@@ -122,6 +124,11 @@ function Sidebar() {
               <NavLink to="/jobs" onClick={() => handleNavClick('/jobs')} className={subNavCls}>
                 <Wrench className="h-4 w-4" />任务中心
                 {(stats?.jobs.failed ?? 0) > 0 && <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">{stats?.jobs.failed}</span>}
+              </NavLink>
+            )}
+            {user.role === 'admin' && (
+              <NavLink to="/users" onClick={() => handleNavClick('/users')} className={subNavCls}>
+                <Users className="h-4 w-4" />用户管理
               </NavLink>
             )}
             <NavLink to="/tools" onClick={() => handleNavClick('/tools')} className={subNavCls}>
