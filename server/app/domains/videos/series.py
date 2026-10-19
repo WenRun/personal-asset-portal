@@ -17,10 +17,12 @@ RULES = [
 
 # 章节目录名（课程/第N章 xx/文件）：命中时系列向上卷积到课程（祖父目录）
 CHAPTER_RE = re.compile(r"^(?:第\s*0*(?P<cn>\d{1,3})\s*[章节回]|(?:chapter|part)\s*0*(?P<cn2>\d{1,3})[ ._-]?)", re.IGNORECASE)
-# 章内文件名的集数模式（纯序号开头 / 第N讲 / EPnn 结尾）
+# 章内文件名的集数模式（章号-集号 / 纯序号开头 / 第N讲 / EPnn 前缀或结尾）
 EP_ONLY_RULES = [
+    re.compile(r"^(?P<ch>\d{1,3})-0*(?P<ep>\d{1,3})(?:[ ._-]+|$)"),
     re.compile(r"^0*(?P<ep>\d{1,3})(?:[ ._-]+|$)"),
     re.compile(r"第\s*0*(?P<ep>\d{1,3})\s*[讲集课回]"),
+    re.compile(r"^EP?0*(?P<ep>\d{1,3})(?:[ ._-]+|$)", re.IGNORECASE),
     re.compile(r"[ ._-]EP?0*(?P<ep>\d{1,3})$", re.IGNORECASE),
 ]
 
