@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.models import Asset, DownloadPack
+from app.core.models import Asset, DownloadPack, UserFavorite
 from app.core.pipeline import build_storage, register, roots_of
 
 
@@ -28,7 +28,8 @@ async def pack_zip(db: AsyncSession, payload: dict) -> None:
     else:
         cond = [Asset.asset_type == params.get("type", "image"), Asset.deleted_at.is_(None)]
         if params.get("favorite"):
-            cond.append(Asset.is_favorite.is_(True))
+            # 仅打包发起人自己的收藏（收藏按用户隔离）
+            cond.append(Asset.id.in_(select(UserFavorite.asset_id).where(UserFavorite.user_id == pack.user_id)))
         rows = (await db.execute(select(Asset).where(*cond).limit(500))).scalars().all()
 
     if not rows:

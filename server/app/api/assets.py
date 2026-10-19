@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, Path, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, tuple_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_app_settings, get_current_user, require_admin, require_member
 from app.core.db import get_db
 from app.core.errors import bad_request, forbidden, not_found, unauthenticated
 from app.core.jobs import enqueue
-from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicAlbum, MusicTrack, Tag, User, VideoDetail
+from app.core.models import Asset, AssetTag, BookDetail, FontDetail, ImageDetail, Job, MusicAlbum, MusicTrack, Tag, User, UserFavorite, VideoDetail
 from app.core.registry import ROUTE_TO_TYPE, asset_type_of, ext_of
 from app.core.search import delete_document
 from app.core.storage import LocalStorage
@@ -58,7 +59,8 @@ async def stats(db: AsyncSession = Depends(get_db)):
 @router.get("/recent", summary="最近入库",
             description="公开。按入库时间倒序返回最近的资产卡片（仪表盘与侧栏用）。")
 async def recent(limit: int = Query(12, description="返回条数，默认 12（上限 50，超出自动截断）"),
-                 db: AsyncSession = Depends(get_db)):
+                 db: AsyncSession = Depends(get_db),
+                 user: User | None = Depends(get_current_user)):
     rows = (
         await db.execute(
             select(Asset).where(Asset.deleted_at.is_(None))
@@ -88,8 +90,9 @@ async def recent(limit: int = Query(12, description="返回条数，默认 12（
         music_cover_map = {aid: f"/api/music/albums/{alb_id}/cover?size=256" for aid, alb_id in m_rows}
 
     items = []
+    fav_ids = await _favorite_ids(db, user, [a.id for a in rows])
     for a in rows:
-        it = _item(a)
+        it = _item(a, is_favorite=a.id in fav_ids)
         if a.asset_type == "image":
             it["cover_url"] = f"/api/images/{a.id}/thumbnail?size=256"
         elif a.asset_type == "book":
@@ -119,16 +122,26 @@ def _cursor_decode(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise bad_request("非法游标") from exc
 
 
-def _item(a: Asset) -> dict:
+def _item(a: Asset, is_favorite: bool = False) -> dict:
     return {
         "id": str(a.id), "type": a.asset_type, "status": a.status,
         "title": a.title, "file_name": a.file_name, "size_bytes": a.size_bytes,
         "mime_type": a.mime_type, "category": a.category,
         "suggested_category": a.suggested_category,
-        "rating": a.rating, "is_favorite": a.is_favorite,
+        "rating": a.rating, "is_favorite": is_favorite,
         "note": a.note, "created_at": a.created_at.isoformat(),
         "cover_url": None,
     }
+
+
+async def _favorite_ids(db: AsyncSession, user: User | None, asset_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """当前登录用户在给定资产中的收藏集合；游客恒为空（收藏按用户隔离）。"""
+    if user is None or not asset_ids:
+        return set()
+    rows = await db.execute(
+        select(UserFavorite.asset_id).where(UserFavorite.user_id == user.id, UserFavorite.asset_id.in_(asset_ids))
+    )
+    return set(rows.scalars().all())
 
 
 async def _storage(db: AsyncSession) -> LocalStorage:
@@ -191,7 +204,10 @@ async def list_assets(
     page_size = max(1, min(page_size, 200))
     cond = [Asset.asset_type == ROUTE_TO_TYPE[route], Asset.deleted_at.is_(None)]
     if favorite:
-        cond.append(Asset.is_favorite.is_(True))
+        if user is None:
+            # 游客没有自己的收藏（收藏按用户隔离），直接返回空页
+            return {"items": [], "next_cursor": None}
+        cond.append(Asset.id.in_(select(UserFavorite.asset_id).where(UserFavorite.user_id == user.id)))
     if category is not None:
         c = category.strip()
         if c == "__uncategorized__":
@@ -218,7 +234,8 @@ async def list_assets(
         rows = rows[:page_size]
         last = rows[-1]
         next_cursor = _cursor_encode(last.created_at, last.id)
-    items = [_item(a) for a in rows]
+    fav_ids = await _favorite_ids(db, user, [a.id for a in rows])
+    items = [_item(a, is_favorite=a.id in fav_ids) for a in rows]
     if rows:
         # 批量补标签（列表页标签筛选/展示用；一次查询避免 N+1）
         tag_rows = (
@@ -318,7 +335,8 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     tags = (
         await db.execute(select(Tag).join(AssetTag, AssetTag.tag_id == Tag.id).where(AssetTag.asset_id == a.id))
     ).scalars().all()
-    out = {**_item(a), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
+    fav_ids = await _favorite_ids(db, user, [a.id])
+    out = {**_item(a, is_favorite=a.id in fav_ids), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
     if a.asset_type == "video":
         d = await db.get(VideoDetail, a.id)
@@ -454,10 +472,20 @@ async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = 
     # 非管理员仅允许修改评分与收藏标记
     if user.role != "admin" and (body.title is not None or body.note is not None or body.tags is not None or body.category is not None):
         raise forbidden()
-    for field in ("title", "note", "rating", "is_favorite"):
+    for field in ("title", "note", "rating"):
         val = getattr(body, field)
         if val is not None:
             setattr(a, field, val)
+    if body.is_favorite is not None:
+        # 收藏按用户隔离：写当前用户的 user_favorites，不动资产本身
+        if body.is_favorite:
+            await db.execute(
+                pg_insert(UserFavorite).values(user_id=user.id, asset_id=a.id).on_conflict_do_nothing()
+            )
+        else:
+            await db.execute(
+                delete(UserFavorite).where(UserFavorite.user_id == user.id, UserFavorite.asset_id == a.id)
+            )
     if body.category is not None:
         c = body.category.strip()
         a.category = None if (not c or c == "__clear__") else c
@@ -477,7 +505,9 @@ async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = 
     tags = (
         await db.execute(select(Tag).join(AssetTag, AssetTag.tag_id == Tag.id).where(AssetTag.asset_id == a.id))
     ).scalars().all()
-    return {**_item(a), "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    fav_ids = await _favorite_ids(db, user, [a.id])
+    return {**_item(a, is_favorite=a.id in fav_ids),
+            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
 
 
 @router.delete("/assets/{asset_id}", summary="删除资产",
@@ -520,7 +550,8 @@ async def restore_asset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     await _reindex(db, a)
     # 重新派生：软删时派生物已清理，重跑解析链补齐缩略图/封面（解析器幂等，安全）
     await jobs_enqueue(db, f"parse:{a.asset_type}", {"asset_id": str(a.id)}, priority=5)
-    return _item(a)
+    fav_ids = await _favorite_ids(db, user, [a.id])
+    return _item(a, is_favorite=a.id in fav_ids)
 
 
 # ---------- 标签挂载（admin） ----------
