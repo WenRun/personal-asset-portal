@@ -29,7 +29,12 @@ _register((
     ".ape", ".dsf", ".dff", ".aiff", ".aif", ".opus", ".wma", ".alac",
     ".cue",
 ), "music")
-_register((".mp4", ".mkv", ".mov", ".webm", ".avi"), "video")
+_register((
+    ".mp4", ".m4v", ".mkv", ".mov", ".webm", ".avi", ".ts",
+    # 第二批常见格式：能入库/下载/搜索；在线播放仍由 probe 编码门槛判定（多数仅下载）
+    ".f4v", ".flv", ".rm", ".rmvb", ".wmv", ".mpg", ".mpeg", ".m2ts", ".mts",
+    ".3gp", ".3g2", ".vob", ".asf",
+), "video")
 _register((".epub", ".pdf", ".mobi", ".azw3", ".txt"), "book")
 _register((
     ".jpg", ".jpeg", ".jfif", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff",
@@ -49,7 +54,15 @@ MIME_OVERRIDES = {
     ".wma": "audio/x-ms-wma", ".alac": "audio/x-alac",
     ".cue": "application/x-cue",
     ".epub": "application/epub+zip",
-    ".pdf": "application/pdf", ".mkv": "video/x-matroska", ".heic": "image/heic",
+    ".pdf": "application/pdf", ".mkv": "video/x-matroska", ".m4v": "video/mp4",
+    ".ts": "video/mp2t", ".heic": "image/heic",
+    # 第二批视频格式（多数仅下载，MIME 用于存储与下载口径）
+    ".f4v": "video/mp4", ".flv": "video/x-flv",
+    ".rm": "application/vnd.rn-realmedia", ".rmvb": "application/vnd.rn-realmedia-vbr",
+    ".wmv": "video/x-ms-wmv", ".mpg": "video/mpeg", ".mpeg": "video/mpeg",
+    ".m2ts": "video/mp2t", ".mts": "video/mp2t",
+    ".3gp": "video/3gpp", ".3g2": "video/3gpp2", ".vob": "video/mpeg",
+    ".asf": "video/x-ms-asf",
     ".heif": "image/heif", ".avif": "image/avif",
     ".jfif": "image/jpeg", ".bmp": "image/bmp", ".tif": "image/tiff", ".tiff": "image/tiff",
     ".svg": "image/svg+xml", ".ico": "image/x-icon", ".psd": "image/vnd.adobe.photoshop",

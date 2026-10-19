@@ -6,7 +6,8 @@ from pathlib import Path
 
 PLAYABLE_VIDEO = {"h264", "hevc", "vp8", "vp9", "av1"}
 PLAYABLE_AUDIO = {"aac", "mp3", "opus", "flac", "vorbis"}
-PLAYABLE_CONTAINER = {"mp4", "m4v", "mov", "webm"}
+# matroska 覆盖 mkv 与 webm（内封编码达到下方白名单门槛即可 Direct Play）
+PLAYABLE_CONTAINER = {"mp4", "m4v", "mov", "webm", "matroska"}
 
 
 def ffprobe(path: Path) -> dict | None:
@@ -31,14 +32,21 @@ def probe_video(path: Path) -> dict:
     vstream = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
     astream = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), None)
     fmt = data.get("format", {})
-    container = (fmt.get("format_name") or "").split(",")[0]
+    fmt_name = fmt.get("format_name") or ""
+    container = fmt_name.split(",")[0]
     vcodec = vstream.get("codec_name") if vstream else None
     acodec = astream.get("codec_name") if astream else None
     duration_ms = int(float(fmt.get("duration") or 0) * 1000) or None
     width = vstream.get("width") if vstream else None
     height = vstream.get("height") if vstream else None
 
-    streamable = container in PLAYABLE_CONTAINER and vcodec in PLAYABLE_VIDEO and (acodec in PLAYABLE_AUDIO or astream is None)
+    # ffprobe 对 mkv/webm 都报 "matroska,webm"：只取首段永远匹配不到 "webm"，须按全部容器名比对
+    containers = set(fmt_name.split(","))
+    streamable = (
+        bool(containers & PLAYABLE_CONTAINER)
+        and vcodec in PLAYABLE_VIDEO
+        and (acodec in PLAYABLE_AUDIO or astream is None)
+    )
 
     fields = {
         "duration_ms": duration_ms,
