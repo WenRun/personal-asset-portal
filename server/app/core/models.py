@@ -157,6 +157,7 @@ class VideoDetail(Base):
     kind: Mapped[str] = mapped_column(Text, default="clip")  # clip | tutorial
     series_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_series.id", ondelete="SET NULL"), nullable=True)
     episode: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    chapter: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)  # 教程章节号（第N章 → N），集数为章内序号
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)

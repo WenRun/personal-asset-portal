@@ -47,6 +47,7 @@ export interface RawAsset {
   kind?: 'clip' | 'tutorial' | null
   series_id?: string | null
   episode?: number | null
+  chapter?: number | null
   duration_sec?: number | null
   resolution?: string | null
   container?: string | null
@@ -232,6 +233,7 @@ function toClip(r: RawAsset): Clip {
     note: r.note ?? '',
     series_id: r.series_id ?? null,
     episode: r.episode ?? null,
+    chapter: r.chapter ?? null,
     cover_url: r.cover_url ?? null,
     rating: r.rating ?? 0,
     favorite: r.is_favorite,
@@ -436,7 +438,7 @@ export const api = {
     ),
   musicAlbumCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/music/albums/${id}/cover?size=${size}`,
   videoSeries: () => req<{ id: string; name: string; episodes: number; first_ep: number | null; last_ep: number | null; duration_sec: number; cover_url: string | null }[]>('/api/videos/series'),
-  seriesEpisodes: (id: string) => req<{ id: string; name: string; description: string; episode_count: number; watched: number; cover_url: string | null; episodes: { asset_id: string; episode: number | null; title: string; duration_sec: number; position_sec: number; streamable: boolean; cover_url: string | null }[] }>(`/api/videos/series/${id}/episodes`),
+  seriesEpisodes: (id: string) => req<{ id: string; name: string; description: string; episode_count: number; watched: number; cover_url: string | null; episodes: { asset_id: string; episode: number | null; chapter: number | null; chapter_title: string | null; title: string; duration_sec: number; position_sec: number; streamable: boolean; cover_url: string | null }[] }>(`/api/videos/series/${id}/episodes`),
   videoCoverUrl: (coverUrl: string) => `${BASE}${coverUrl}`,
   videoStreamUrl: (assetId: string) => `${BASE}/api/videos/${assetId}/stream`,
   confirmList: () => req<{ id: string; file: string; series: string | null; hint: string }[]>('/api/admin/confirm'),

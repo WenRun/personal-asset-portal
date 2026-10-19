@@ -275,7 +275,7 @@ async def list_assets(
             if d is not None:
                 it.update({
                     "kind": d.kind, "series_id": str(d.series_id) if d.series_id else None,
-                    "episode": d.episode, "duration_sec": int((d.duration_ms or 0) / 1000),
+                    "episode": d.episode, "chapter": d.chapter, "duration_sec": int((d.duration_ms or 0) / 1000),
                     "resolution": f"{d.width}x{d.height}" if d.width else None,
                     "container": d.container, "video_codec": d.video_codec, "audio_codec": d.audio_codec,
                     "streamable": d.streamable,
@@ -343,7 +343,7 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
         if d is not None:
             out.update({
                 "kind": d.kind, "series_id": str(d.series_id) if d.series_id else None,
-                "episode": d.episode, "duration_sec": int((d.duration_ms or 0) / 1000),
+                "episode": d.episode, "chapter": d.chapter, "duration_sec": int((d.duration_ms or 0) / 1000),
                 "resolution": f"{d.width}x{d.height}" if d.width else None,
                 "container": d.container, "video_codec": d.video_codec, "audio_codec": d.audio_codec,
                 "streamable": d.streamable,

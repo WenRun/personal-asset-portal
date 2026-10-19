@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -786,7 +786,7 @@ export function VideoDetailPage() {
 
           <div>
             <div className="mb-1 text-[10px] font-semibold text-brand-600">
-              {isClip ? '素材片段' : `教程系列 · 第 ${video.episode ?? '?'} 集`}
+              {isClip ? '素材片段' : video.chapter ? `教程系列 · 第${video.chapter}章 第${video.episode ?? '?'}集` : `教程系列 · 第 ${video.episode ?? '?'} 集`}
             </div>
             <h1 className="text-xl font-bold">{video.title}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
@@ -820,26 +820,34 @@ export function VideoDetailPage() {
                 <Badge tone="brand">看到 {series.watched}/{series.episode_count}</Badge>
               </div>
               <div className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto text-sm">
-                {series.episodes.map((e) => {
+                {series.episodes.map((e, i) => {
                   const active = e.asset_id === id
                   const epPct = e.duration_sec ? Math.min(100, (e.position_sec / e.duration_sec) * 100) : 0
+                  // 章节分组：章节标题变化处插入小节标题行（无章节的系列不受影响）
+                  const chapterStart = !!e.chapter_title && e.chapter_title !== (i > 0 ? series.episodes[i - 1].chapter_title : null)
                   return (
-                    <div
-                      key={e.asset_id}
-                      className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 transition', active ? 'bg-brand-50' : 'hover:bg-slate-50')}
-                      onClick={() => { if (!active) switchEpisode(e.asset_id) }}
-                    >
-                      <span className={cn('w-6 text-center text-xs', active ? 'font-bold text-brand-600' : e.position_sec > 0 ? 'text-emerald-500' : 'text-slate-300')}>
-                        {e.episode ?? '·'}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className={cn('truncate', active && 'font-medium')}>{e.title}</div>
-                        {epPct > 0 && epPct < 100 && (
-                          <div className="mt-1 h-1 rounded-full bg-slate-200"><div className="h-1 rounded-full bg-brand-500" style={{ width: `${epPct}%` }} /></div>
-                        )}
+                    <Fragment key={e.asset_id}>
+                      {chapterStart && (
+                        <div className="bg-slate-50 px-4 py-1.5 text-[11px] font-medium text-slate-500">
+                          {e.chapter_title}
+                        </div>
+                      )}
+                      <div
+                        className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 transition', active ? 'bg-brand-50' : 'hover:bg-slate-50')}
+                        onClick={() => { if (!active) switchEpisode(e.asset_id) }}
+                      >
+                        <span className={cn('w-6 text-center text-xs', active ? 'font-bold text-brand-600' : e.position_sec > 0 ? 'text-emerald-500' : 'text-slate-300')}>
+                          {e.episode ?? '·'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className={cn('truncate', active && 'font-medium')}>{e.title}</div>
+                          {epPct > 0 && epPct < 100 && (
+                            <div className="mt-1 h-1 rounded-full bg-slate-200"><div className="h-1 rounded-full bg-brand-500" style={{ width: `${epPct}%` }} /></div>
+                          )}
+                        </div>
+                        <span className="font-mono text-xs text-slate-400">{fmtTime(e.duration_sec)}</span>
                       </div>
-                      <span className="font-mono text-xs text-slate-400">{fmtTime(e.duration_sec)}</span>
-                    </div>
+                    </Fragment>
                   )
                 })}
               </div>

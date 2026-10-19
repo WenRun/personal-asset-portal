@@ -110,6 +110,7 @@ export interface Clip {
   note?: string
   series_id?: string | null
   episode?: number | null
+  chapter?: number | null
   cover_url?: string | null
   rating?: number
   favorite?: boolean

@@ -43,8 +43,16 @@ async def parse_video(db: AsyncSession, payload: dict) -> None:
     rec = recognize(asset.file_name, asset.storage_key, storage)
     fields["kind"] = rec["kind"]
     meta["recognized_pattern"] = rec.get("rule")
+    # 章节字段随每次解析重置：目录结构调整后重扫描能正确收敛
+    fields["chapter"] = rec.get("chapter")
+    if rec.get("chapter_title"):
+        meta["chapter_title"] = rec["chapter_title"]
+    else:
+        meta.pop("chapter_title", None)
     if rec.get("need_confirm"):
         meta["need_confirm"] = True
+    else:
+        meta.pop("need_confirm", None)
 
     series_id = None
     if rec.get("series_name"):

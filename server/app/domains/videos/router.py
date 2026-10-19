@@ -73,7 +73,7 @@ async def series_episodes(series_id: uuid.UUID, db: AsyncSession = Depends(get_d
             .join(VideoDetail, VideoDetail.asset_id == Asset.id)
             .join(UserProgress, (UserProgress.asset_id == Asset.id) & (UserProgress.user_id == user.id), isouter=True)
             .where(VideoDetail.series_id == series_id, Asset.deleted_at.is_(None))
-            .order_by(VideoDetail.episode.nullsfirst(), Asset.created_at)
+            .order_by(VideoDetail.chapter.nullsfirst(), VideoDetail.episode.nullslast(), Asset.created_at)
         )
     ).all()
     watched = 0
@@ -83,7 +83,8 @@ async def series_episodes(series_id: uuid.UUID, db: AsyncSession = Depends(get_d
         if ep_pos and d.duration_ms and ep_pos >= d.duration_ms / 1000 * 0.95:
             watched += 1
         eps.append({
-            "asset_id": str(a.id), "episode": d.episode, "title": a.title,
+            "asset_id": str(a.id), "episode": d.episode, "chapter": d.chapter,
+            "chapter_title": (a.meta or {}).get("chapter_title"), "title": a.title,
             "duration_sec": int((d.duration_ms or 0) / 1000), "position_sec": ep_pos,
             "streamable": d.streamable, "cover_url": f"/api/videos/cover/{d.cover_path}" if d.cover_path else None,
         })
