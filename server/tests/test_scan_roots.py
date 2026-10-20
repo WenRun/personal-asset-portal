@@ -22,6 +22,13 @@ from app.core.pipeline import scan_root
 from app.core.registry import ASSET_TYPES, asset_type_of
 
 
+def db_result(items):
+    """构造 mock_db.execute 的返回值（scalars().all() → items）。"""
+    r = MagicMock()
+    r.scalars.return_value.all.return_value = items
+    return r
+
+
 class TestScanRootsValidation(unittest.TestCase):
     def test_scan_root_model(self):
         """验证 ScanRoot 模型接受 types 列表，默认可为空。"""
@@ -143,10 +150,8 @@ class TestScanRootsAsync(unittest.IsolatedAsyncioTestCase):
 
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
-        mock_exec_result = MagicMock()
-        # existing 查询返回历史记录
-        mock_exec_result.scalars.return_value.all.return_value = [legacy_cover_asset]
-        mock_db.execute.return_value = mock_exec_result
+        # 依次返回：existing 查询 → CUE 孤儿分轨全局对账查询（无孤儿）
+        mock_db.execute.side_effect = [db_result([legacy_cover_asset]), db_result([])]
 
         # 配置该根目录白名单仅允许 ['music']
         custom_settings = {
@@ -208,9 +213,8 @@ class TestScanRootsAsync(unittest.IsolatedAsyncioTestCase):
 
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
-        mock_exec_result = MagicMock()
-        mock_exec_result.scalars.return_value.all.return_value = [alive_asset]
-        mock_db.execute.return_value = mock_exec_result
+        # 依次返回：existing 查询 → CUE 孤儿分轨全局对账查询（无孤儿）
+        mock_db.execute.side_effect = [db_result([alive_asset]), db_result([])]
 
         custom_settings = {
             "scan_roots": [{"alias": "test_empty", "path": str(music_dir), "types": ["music"]}]
@@ -241,9 +245,8 @@ class TestScanRootsAsync(unittest.IsolatedAsyncioTestCase):
 
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
-        mock_exec_result = MagicMock()
-        mock_exec_result.scalars.return_value.all.return_value = [alive_asset]
-        mock_db.execute.return_value = mock_exec_result
+        # 依次返回：existing 查询 → CUE 孤儿分轨全局对账查询（无孤儿）
+        mock_db.execute.side_effect = [db_result([alive_asset]), db_result([])]
 
         custom_settings = {
             "scan_roots": [{"alias": "test_missing", "path": str(missing_dir), "types": ["music"]}]

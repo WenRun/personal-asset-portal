@@ -7,7 +7,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search as meili
@@ -142,10 +142,29 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
         a.deleted_at = datetime.now().astimezone()
         cleaned += cleanup_derived(a.id, get_settings().data_root)
         await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
+
+    # CUE 分轨随母带：分轨 storage_key 为 cue: 派生键、不属于任何扫描根，须按 meta 关联全局
+    # 对账——母带/CUE 表已软删或缺失时，其分轨子资产一并软删，否则成为列表里的幽灵记录。
+    alive_sheet_ids = select(cast(Asset.id, Text)).where(
+        Asset.meta["is_cue_sheet"].as_boolean().is_(True), Asset.deleted_at.is_(None)
+    )
+    orphan_tracks = (
+        await db.execute(
+            select(Asset).where(
+                Asset.deleted_at.is_(None),
+                Asset.meta["is_cue_track"].as_boolean().is_(True),
+                Asset.meta["cue_asset_id"].as_string().not_in(alive_sheet_ids),
+            )
+        )
+    ).scalars().all()
+    for a in orphan_tracks:
+        a.deleted_at = datetime.now().astimezone()
+        cleaned += cleanup_derived(a.id, get_settings().data_root)
+        await enqueue(db, "index_meili", {"asset_id": str(a.id)}, priority=8)
     await db.commit()
     log.info(
-        "scan_root %s: %d new files, %d missing -> soft-deleted (%d derived dirs cleaned)",
-        alias, new_files, len(missing), cleaned,
+        "scan_root %s: %d new files, %d missing -> soft-deleted, %d orphan cue tracks -> soft-deleted (%d derived dirs cleaned)",
+        alias, new_files, len(missing), len(orphan_tracks), cleaned,
     )
 
 
