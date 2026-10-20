@@ -190,6 +190,78 @@ class TestScanRootsAsync(unittest.IsolatedAsyncioTestCase):
             ]
             self.assertEqual(len(meili_calls), 1)
 
+    async def test_scan_root_reconcile_when_root_emptied(self):
+        """目录被清空（存在但 0 文件）时应照常对账：库内存活记录自动软删，而非跳过。"""
+        music_dir = self.tmp_dir / "emptied_library"
+        music_dir.mkdir(parents=True, exist_ok=True)  # 目录存在但为空
+
+        alive_asset = Asset(
+            asset_type="music",
+            status="ready",
+            title="gone",
+            storage_key="test_empty:some.mp3",
+            file_name="some.mp3",
+            size_bytes=100,
+            file_mtime=0,
+            deleted_at=None,
+        )
+
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalars.return_value.all.return_value = [alive_asset]
+        mock_db.execute.return_value = mock_exec_result
+
+        custom_settings = {
+            "scan_roots": [{"alias": "test_empty", "path": str(music_dir), "types": ["music"]}]
+        }
+
+        with patch("app.core.pipeline.get_app_settings", return_value=custom_settings), \
+             patch("app.core.pipeline.enqueue", new_callable=AsyncMock), \
+             patch("app.core.pipeline.cleanup_derived", return_value=1) as mock_cleanup:
+            await scan_root(mock_db, {"root_alias": "test_empty"})
+
+            self.assertIsNotNone(alive_asset.deleted_at)
+            mock_cleanup.assert_called_once()
+
+    async def test_scan_root_skip_reconcile_when_root_missing(self):
+        """根目录缺失（疑似挂载丢失）时应跳过对账：库内存活记录保持原样。"""
+        missing_dir = self.tmp_dir / "never_created"  # 不创建该目录
+
+        alive_asset = Asset(
+            asset_type="music",
+            status="ready",
+            title="kept",
+            storage_key="test_missing:some.mp3",
+            file_name="some.mp3",
+            size_bytes=100,
+            file_mtime=0,
+            deleted_at=None,
+        )
+
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalars.return_value.all.return_value = [alive_asset]
+        mock_db.execute.return_value = mock_exec_result
+
+        custom_settings = {
+            "scan_roots": [{"alias": "test_missing", "path": str(missing_dir), "types": ["music"]}]
+        }
+
+        with patch("app.core.pipeline.get_app_settings", return_value=custom_settings), \
+             patch("app.core.pipeline.enqueue", new_callable=AsyncMock) as mock_enqueue, \
+             patch("app.core.pipeline.cleanup_derived", return_value=1) as mock_cleanup:
+            await scan_root(mock_db, {"root_alias": "test_missing"})
+
+            self.assertIsNone(alive_asset.deleted_at)
+            mock_cleanup.assert_not_called()
+            meili_calls = [
+                call for call in mock_enqueue.call_args_list
+                if call.args[1] == "index_meili"
+            ]
+            self.assertEqual(len(meili_calls), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

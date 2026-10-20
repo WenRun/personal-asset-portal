@@ -2,6 +2,7 @@
 
 import logging
 import mimetypes
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -66,7 +67,8 @@ def category_from_key(key: str) -> str | None:
 @register("scan_root")
 async def scan_root(db: AsyncSession, payload: dict) -> None:
     """扫描资源根目录：新文件登记 pending；mtime/size 变化重指纹；
-    库内有、盘上没有（或不在类型白名单内）的记录自动软删（对账，可恢复）——文件被删除/移动/改名/排除后重扫即同步。"""
+    库内有、盘上没有（或不在类型白名单内）的记录自动软删（对账，可恢复）——文件被删除/移动/改名/排除后重扫即同步；
+    对账安全阀：根目录缺失/不可读时跳过（疑似挂载丢失，防误删全库）；目录存在但被清空则照常对账。"""
     alias = payload["root_alias"]
     settings_kv = await get_app_settings(db)
     scan_roots = settings_kv.get("scan_roots", [])
@@ -76,6 +78,13 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
 
     allowed_types = set(root_cfg.get("types") or ASSET_TYPES)
     roots = {r["alias"]: r["path"] for r in scan_roots}
+    # 对账前置检查（须在 build_storage 之前：后者会对缺失根目录自动 mkdir）：目录存在且可列出
+    # 内容才允许「盘上没有即软删」；目录缺失/不可读多为挂载丢失或路径配错，据此跳过对账防误删。
+    try:
+        os.listdir(Path(root_cfg["path"]).expanduser())
+        root_readable = True
+    except OSError:
+        root_readable = False
     storage = build_storage(roots)
     existing = {
         a.storage_key: a
@@ -121,12 +130,12 @@ async def scan_root(db: AsyncSession, payload: dict) -> None:
             row.status = "pending"
             await enqueue(db, "fingerprint", {"asset_id": str(row.id)}, priority=5)
 
-    # 对账（安全阀）：磁盘上一个文件都没有但库内有存活记录时跳过——疑似挂载丢失/目录
-    # 被误清空，绝不能据此把整个库软删。
+    # 对账（安全阀）：根目录缺失/不可读（疑似挂载丢失、路径配错）时跳过——绝不能据此把整个库
+    # 软删；目录真实存在（哪怕被用户清空）则照常对账，盘上没有的记录自动软删（可恢复）。
     alive = [a for a in existing.values() if a.deleted_at is None]
     missing = [a for a in alive if a.storage_key not in seen]
-    if missing and not seen:
-        log.warning("scan_root %s: 磁盘 0 个文件但库内有 %d 条记录，跳过对账（疑似挂载丢失）", alias, len(alive))
+    if missing and not root_readable:
+        log.warning("scan_root %s: 根目录缺失或不可读，库内 %d 条存活记录保持原样，跳过对账（疑似挂载丢失）", alias, len(alive))
         missing = []
     cleaned = 0
     for a in missing:
