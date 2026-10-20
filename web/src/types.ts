@@ -72,7 +72,7 @@ export interface Album {
   favorite: boolean
   createdAt: string
   note: string
-  /** 专辑曲目所在目录（data 根目录后的部分） */
+  /** 专辑曲目所在目录（library/ 后的部分） */
   path?: string | null
 }
 
@@ -116,7 +116,7 @@ export interface Clip {
   cover_url?: string | null
   rating?: number
   favorite?: boolean
-  /** 展示用资源路径：data 根目录后的部分 */
+  /** 展示用资源路径：library/ 后的部分 */
   path?: string | null
 }
 export type VideoAsset = Series | Clip
@@ -143,7 +143,7 @@ export interface Book {
   createdAt: string
   desc: string
   language: string
-  /** 展示用资源路径：data 根目录后的部分 */
+  /** 展示用资源路径：library/ 后的部分 */
   path?: string | null
 }
 

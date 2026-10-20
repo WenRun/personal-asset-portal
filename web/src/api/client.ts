@@ -30,7 +30,7 @@ export interface RawAsset {
   meta?: Record<string, unknown>
   fingerprint?: string
   storage_key?: string
-  /** 展示用资源路径：data 根目录后的部分（详情接口返回） */
+  /** 展示用资源路径：library/ 后的部分（详情接口返回） */
   rel_path?: string | null
   tags?: { id: string; name: string }[]
   // M1 图片域字段（列表/详情合并返回）
@@ -464,7 +464,7 @@ export const api = {
     req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   font: async (id: string) => toFont(await detailRaw(id)),
-  /** 详情接口的资源路径（data 根目录后的部分）；列表接口不含此字段，按需单取 */
+  /** 详情接口的资源路径（library/ 后的部分）；列表接口不含此字段，按需单取 */
   assetPath: (id: string) => detailRaw(id).then((r) => r.rel_path ?? null),
   /** 按类型列原始资产（收藏页等跨类型场景直接用 RawAsset 渲染） */
   assetsByType: (route: 'fonts' | 'music' | 'videos' | 'books' | 'images', p?: ListParams) => listRaw(route, p),

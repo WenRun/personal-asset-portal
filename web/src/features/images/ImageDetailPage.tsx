@@ -29,7 +29,7 @@ export function ImageDetailPage() {
     window.setTimeout(() => setToastMsg((curr) => (curr === text ? null : curr)), 2000)
   }
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
-  // 资源路径（data 根目录后的部分）：列表接口不含此字段，按详情单取；游客无权限时显示 —
+  // 资源路径（library/ 后的部分）：列表接口不含此字段，按详情单取；游客无权限时显示 —
   const { data: pathInfo } = useQuery({
     queryKey: ['asset-path', id],
     queryFn: () => api.assetPath(id!),

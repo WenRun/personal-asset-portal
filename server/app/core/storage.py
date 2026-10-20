@@ -51,15 +51,19 @@ class LocalStorage:
         return p
 
     def display_path(self, key: str) -> str:
-        """展示用路径：data 根目录内的文件显示为相对 data 的路径（如 library/images/a.jpg），
-        根目录外的回落为绝对路径。"""
+        """展示用路径：data 根目录内的文件显示为相对 data 的路径，并省略顶层 library/ 段
+        （如 /data/library/images/a.jpg → images/a.jpg）；根目录外的回落为绝对路径。"""
         from app.core.config import get_settings
 
         p = self.resolve(key)
         try:
-            return p.relative_to(get_settings().data_root).as_posix()
+            rel = p.relative_to(get_settings().data_root)
         except ValueError:
             return p.as_posix()
+        parts = rel.parts
+        if parts and parts[0] == "library":
+            rel = Path(*parts[1:])
+        return rel.as_posix()
 
     def stat(self, key: str) -> FileStat:
         p = self.resolve(key)
