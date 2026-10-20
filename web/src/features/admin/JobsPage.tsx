@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { Badge, Button, PageHeader } from '@/components/ui'
 import type { JobPayload, JobTarget } from '@/api/client'
@@ -156,9 +156,40 @@ export function JobsPage() {
   const countOf = (s: JobPayload['status']) => pageData?.counts?.[s] ?? 0
   const pendingConfirms = confirms?.length ?? 0
 
+  // 任务删除 / 批量删除：仅删除任务记录本身，不影响资产数据；运行中的任务不可删
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const delJob = useMutation({
+    mutationFn: (id: string) => api.deleteJob(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
+  })
+  const batchDelJobs = useMutation({
+    mutationFn: (ids: string[]) => api.batchDeleteJobs(ids),
+    onSuccess: () => { setSelected(new Set()); qc.invalidateQueries({ queryKey: ['jobs'] }) },
+  })
+  const pageIds = items.filter((j) => j.status !== 'running').map((j) => j.id)
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+  const toggleSelect = (id: string) =>
+    setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleSelectAll = () =>
+    setSelected((s) => {
+      const n = new Set(s)
+      if (allSelected) pageIds.forEach((id) => n.delete(id))
+      else pageIds.forEach((id) => n.add(id))
+      return n
+    })
+  const changePage = (p: number) => { setPage(p); setSelected(new Set()) }
+  const doDelete = (j: JobPayload) => {
+    if (confirm(`删除任务「${KIND_LABELS[j.kind] ?? j.kind}」的记录？\n仅删除任务记录本身，不影响资产数据。`)) delJob.mutate(j.id)
+  }
+  const doBatchDelete = () => {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    if (confirm(`删除选中的 ${ids.length} 条任务记录？\n仅删除任务记录本身，不影响资产数据；运行中的会自动跳过。`)) batchDelJobs.mutate(ids)
+  }
+
   const applyFilter = (v: 'all' | JobPayload['status']) => {
     setStatusFilter(v)
-    setPage(1) // 换筛选回第一页，避免留在超出结果的页码上
+    changePage(1) // 换筛选回第一页，避免留在超出结果的页码上
   }
 
   const statusPill = (s: JobPayload['status']) =>
@@ -230,10 +261,24 @@ export function JobsPage() {
             ))}
           </div>
 
+          {selected.size > 0 && (
+            <div className="mt-2 flex items-center gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm">
+              <span className="font-medium text-brand-700">已选 {selected.size} 条</span>
+              <Button size="sm" className="bg-rose-600 hover:bg-rose-500" disabled={batchDelJobs.isPending} onClick={doBatchDelete}>
+                <Trash2 className="h-3 w-3" />批量删除
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>取消选择</Button>
+            </div>
+          )}
+
           <div className={cn('mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-white transition', isFetching && 'opacity-60')}>
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-400">
                 <tr>
+                  <th className="w-10 px-3 py-2.5">
+                    <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allSelected}
+                      disabled={pageIds.length === 0} title="全选本页（运行中除外）" onChange={toggleSelectAll} />
+                  </th>
                   <th className="px-4 py-2.5 text-left font-medium">任务</th>
                   <th className="px-4 py-2.5 text-left font-medium">对象</th>
                   <th className="px-4 py-2.5 text-left font-medium">状态</th>
@@ -246,6 +291,11 @@ export function JobsPage() {
               <tbody className="divide-y divide-slate-100">
                 {items.map((j) => (
                   <tr key={j.id} className={j.status === 'failed' ? 'bg-rose-50/40' : ''}>
+                    <td className="px-3 py-2.5">
+                      <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={selected.has(j.id)}
+                        disabled={j.status === 'running'} title={j.status === 'running' ? '运行中的任务不可删除' : undefined}
+                        onChange={() => toggleSelect(j.id)} />
+                    </td>
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-slate-700">{KIND_LABELS[j.kind] ?? j.kind}</div>
                       <code className="text-[10px] text-slate-400">{j.kind}</code>
@@ -261,14 +311,21 @@ export function JobsPage() {
                     <td className="whitespace-nowrap px-4 py-2.5"><DurationCell j={j} now={now} /></td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-slate-400">{new Date(j.created_at).toLocaleString('zh-CN')}</td>
                     <td className="px-4 py-2.5 text-right">
-                      {j.status === 'failed' && (
-                        <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => retry.mutate(j.id)}><RefreshCw className="h-3 w-3" />重试</Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {j.status === 'failed' && (
+                          <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => retry.mutate(j.id)}><RefreshCw className="h-3 w-3" />重试</Button>
+                        )}
+                        {j.status !== 'running' && (
+                          <Button size="sm" variant="outline" className="whitespace-nowrap text-slate-500 hover:text-rose-600" title="删除任务记录" onClick={() => doDelete(j)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {(total === 0 || items.length === 0) && (
-                  <tr><td colSpan={7} className="p-10 text-center text-slate-400">
+                  <tr><td colSpan={8} className="p-10 text-center text-slate-400">
                     {total === 0 && statusFilter === 'all'
                       ? '还没有任务 —— 上传或扫描后，这里会出现「扫描目录 → 计算文件指纹 → 解析 → 更新搜索索引」链路'
                       : '该状态下暂无任务'}

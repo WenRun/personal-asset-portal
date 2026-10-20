@@ -224,6 +224,46 @@ async def retry_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: Us
     return {"ok": True}
 
 
+class JobsBatchBody(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1)
+
+
+@router.delete("/jobs/{job_id}", summary="删除任务记录",
+               description="管理员。从任务中心删除一条任务记录（仅记录本身，不影响资产数据）；运行中的任务不可删除。")
+async def delete_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    job = await db.get(Job, job_id)
+    if job is None:
+        raise not_found()
+    if job.status == "running":
+        raise bad_request("运行中的任务不能删除，请等它完成或失败后再删")
+    await db.delete(job)
+    await db.commit()
+    await notify_job_changed(db, job.id)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/jobs/batch-delete", summary="批量删除任务记录",
+             description="管理员。批量删除任务记录；运行中的任务自动跳过，返回 {deleted, skipped}。")
+async def batch_delete_jobs(body: JobsBatchBody, db: AsyncSession = Depends(get_db),
+                            _: User = Depends(require_admin)):
+    rows = (await db.execute(select(Job).where(Job.id.in_(body.ids)))).scalars().all()
+    deleted = skipped = 0
+    first_deleted: uuid.UUID | None = None
+    for j in rows:
+        if j.status == "running":
+            skipped += 1
+            continue
+        await db.delete(j)
+        deleted += 1
+        first_deleted = first_deleted or j.id
+    await db.commit()
+    if first_deleted is not None:
+        await notify_job_changed(db, first_deleted)
+        await db.commit()
+    return {"deleted": deleted, "skipped": skipped}
+
+
 # ---------- 系统设置 ----------
 
 class ScanRoot(BaseModel):

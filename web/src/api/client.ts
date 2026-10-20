@@ -512,6 +512,9 @@ export const api = {
     return req<JobsPagePayload>(`/api/admin/jobs?${q}`)
   },
   retryJob: (id: string) => req<{ ok: boolean }>(`/api/admin/jobs/${id}/retry`, { method: 'POST' }),
+  deleteJob: (id: string) => req<{ ok: boolean }>(`/api/admin/jobs/${id}`, { method: 'DELETE' }),
+  batchDeleteJobs: (ids: string[]) =>
+    req<{ deleted: number; skipped: number }>('/api/admin/jobs/batch-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   /** 任务中心 SSE 订阅：单例多路复用，snapshot 事件携带全量任务列表；断线由 EventSource 自动重连。
    *  返回取消函数。 */
   jobsStream: (onJobs: (jobs: JobPayload[]) => void, onState?: (state: 'connecting' | 'live') => void): (() => void) => {
