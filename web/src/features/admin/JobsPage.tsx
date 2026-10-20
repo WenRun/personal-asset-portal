@@ -309,12 +309,14 @@ export function JobsPage() {
 
 
 function ConfirmCard({ item, onConfirm, onSkip }: {
-  item: { id: string; file: string; hint: string }
+  item: { id: string; file: string; hint: string; series_name: string | null; episode_hint: number | null }
   onConfirm: (name: string, ep: number) => void
   onSkip: () => void
 }) {
-  const [name, setName] = useState(item.file.replace(/\.[^.]+$/, "").replace(/[ ._-]*(S\d+E\d+|第\d+[讲集课回]|EP?\d+).*$/i, "") || item.file)
-  const [ep, setEp] = useState(1)
+  // 系列名优先用当前归属系列（章节卷积后即课程名），集数用后端按顺序递增的建议值
+  const guessedName = item.file.replace(/\.[^.]+$/, "").replace(/[ ._-]*(S\d+E\d+|第\d+[讲集课回]|EP?\d+).*$/i, "") || item.file
+  const [name, setName] = useState(item.series_name ?? guessedName)
+  const [ep, setEp] = useState(item.episode_hint ?? 1)
   return (
     <div className="rounded-xl border border-amber-200 bg-white p-4">
       <div className="text-sm font-medium">{item.file}</div>

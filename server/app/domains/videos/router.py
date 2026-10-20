@@ -1,5 +1,6 @@
 """视频端点（详细设计 §5.3/§6.3）：系列墙（公开）、集数列表（member，含进度）、Direct Play 流（member）、封面、确认队列。"""
 
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -150,22 +151,63 @@ async def confirm_series(body: ConfirmBody, db: AsyncSession = Depends(get_db), 
 
 
 @admin_router.get("/confirm", summary="待确认视频列表",
-                  description="管理员。返回所有 need_confirm=true 的视频及其识别提示（命中规则 / 集数存疑）。")
+                  description="管理员。返回所有 need_confirm=true 的视频及其识别提示；"
+                              "episode_hint 按「同系列同章已确认最大集号 + 1」跨队列项顺序递增（文件名自然排序），"
+                              "series_name 为当前归属系列（可直接确认，无需重新填写）。")
 async def confirm_list(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """入库确认队列（§5.3 need_confirm）：人工校对系列/集数。"""
     rows = (
         await db.execute(
-            select(Asset, VideoDetail)
+            select(Asset, VideoDetail, VideoSeries)
             .join(VideoDetail, VideoDetail.asset_id == Asset.id)
+            .outerjoin(VideoSeries, VideoSeries.id == VideoDetail.series_id)
             .where(Asset.meta["need_confirm"].as_boolean().is_(True), Asset.deleted_at.is_(None))
         )
     ).all()
-    return [
-        {
+
+    def natkey(s: str):
+        return tuple((1, int(p)) if p.isdigit() else (0, p) for p in re.split(r"(\d+)", s.lower()))
+
+    # 已占用集数基线：同系列同章内已确认（非 need_confirm）的最大集号
+    sids = {d.series_id for _, d, s in rows if d.series_id is not None}
+    used: dict[tuple, int] = {}
+    if sids:
+        existing = (
+            await db.execute(
+                select(VideoDetail.series_id, VideoDetail.chapter, VideoDetail.episode)
+                .join(Asset, Asset.id == VideoDetail.asset_id)
+                .where(VideoDetail.series_id.in_(sids), Asset.deleted_at.is_(None),
+                       Asset.meta["need_confirm"].as_boolean().is_not(True),
+                       VideoDetail.episode.is_not(None))
+            )
+        ).all()
+        for sid, ch, ep in existing:
+            key = (sid, ch)
+            used[key] = max(used.get(key, 0), ep)
+
+    # 分组（系列, 章）内按文件名自然排序，顺序递增给出建议集号
+    items = []
+    for a, d, s in rows:
+        hint = f"识别规则 {a.meta.get('recognized_pattern', '父目录兜底')} · 集数存疑"
+        if d.chapter is not None:
+            hint += f" · 第{d.chapter}章"
+        items.append({
             "id": str(a.id), "file": a.file_name, "series": d.series_id,
-            "hint": f"识别规则 {a.meta.get('recognized_pattern', '父目录兜底')} · 集数存疑",
-        }
-        for a, d in rows
-    ]
+            "series_name": s.name if s else None, "chapter": d.chapter, "hint": hint,
+        })
+    groups: dict[tuple, list[dict]] = {}
+    for it in items:
+        groups.setdefault((it["series"], it["chapter"]), []).append(it)
+    out = []
+    for key, group in groups.items():
+        group.sort(key=lambda it: natkey(it["file"]))
+        next_ep = used.get(key, 0) + 1
+        for it in group:
+            it["episode_hint"] = next_ep
+            next_ep += 1
+            out.append(it)
+    out.sort(key=lambda it: (it["series_name"] or "", it["chapter"] is not None, it["chapter"] or 0, natkey(it["file"])))
+    return out
 
 
 @admin_router.put("/videos/{asset_id}/cover", summary="更换视频封面帧",

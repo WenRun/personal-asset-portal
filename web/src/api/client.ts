@@ -446,7 +446,7 @@ export const api = {
   seriesEpisodes: (id: string) => req<{ id: string; name: string; description: string; episode_count: number; watched: number; cover_url: string | null; episodes: { asset_id: string; episode: number | null; chapter: number | null; chapter_title: string | null; title: string; duration_sec: number; position_sec: number; streamable: boolean; cover_url: string | null }[] }>(`/api/videos/series/${id}/episodes`),
   videoCoverUrl: (coverUrl: string) => `${BASE}${coverUrl}`,
   videoStreamUrl: (assetId: string) => `${BASE}/api/videos/${assetId}/stream`,
-  confirmList: () => req<{ id: string; file: string; series: string | null; hint: string }[]>('/api/admin/confirm'),
+  confirmList: () => req<{ id: string; file: string; series: string | null; series_name: string | null; chapter: number | null; hint: string; episode_hint: number | null }[]>('/api/admin/confirm'),
   // M6：打包 / 分享 / 智能集合
   createPack: (body: { asset_ids?: string[]; type?: string; favorite?: boolean }) =>
     req<{ id: string; status: string }>('/api/download-packs', { method: 'POST', body: JSON.stringify(body) }),
