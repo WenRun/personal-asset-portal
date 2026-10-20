@@ -30,6 +30,8 @@ export interface RawAsset {
   meta?: Record<string, unknown>
   fingerprint?: string
   storage_key?: string
+  /** 展示用资源路径：data 根目录后的部分（详情接口返回） */
+  rel_path?: string | null
   tags?: { id: string; name: string }[]
   // M1 图片域字段（列表/详情合并返回）
   taken_at?: string | null
@@ -169,6 +171,7 @@ function toBook(r: RawAsset): Book {
     createdAt: r.created_at,
     desc: r.note ?? '',
     language: r.language ?? '',
+    path: r.rel_path ?? null,
   }
 }
 
@@ -237,6 +240,7 @@ function toClip(r: RawAsset): Clip {
     cover_url: r.cover_url ?? null,
     rating: r.rating ?? 0,
     favorite: r.is_favorite,
+    path: r.rel_path ?? null,
   }
 }
 
@@ -406,7 +410,7 @@ export const api = {
       `/api/music/albums${category ? `?category=${encodeURIComponent(category)}` : ''}`,
     ),
   album: async (id: string): Promise<Album> => {
-    const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; format?: string | null; lrc: boolean; streamable: boolean; size_bytes: number; is_cue_track?: boolean }[] }>(`/api/music/albums/${id}`)
+    const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; path?: string | null; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; format?: string | null; lrc: boolean; streamable: boolean; size_bytes: number; is_cue_track?: boolean }[] }>(`/api/music/albums/${id}`)
     const firstFormat = d.tracks.find((t) => t.format)?.format?.toUpperCase() || ''
     return {
       id: d.id,
@@ -415,6 +419,7 @@ export const api = {
       year: d.year ?? 0,
       genre: '',
       format: firstFormat,
+      path: d.path ?? null,
       khz: Math.round(((d.tracks.find((t) => t.sample_rate_hz)?.sample_rate_hz ?? 0) / 1000) * 10) / 10,
       bit: 0,
       tracks: d.tracks.map((t) => ({
@@ -459,6 +464,8 @@ export const api = {
     req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   font: async (id: string) => toFont(await detailRaw(id)),
+  /** 详情接口的资源路径（data 根目录后的部分）；列表接口不含此字段，按需单取 */
+  assetPath: (id: string) => detailRaw(id).then((r) => r.rel_path ?? null),
   /** 按类型列原始资产（收藏页等跨类型场景直接用 RawAsset 渲染） */
   assetsByType: (route: 'fonts' | 'music' | 'videos' | 'books' | 'images', p?: ListParams) => listRaw(route, p),
 

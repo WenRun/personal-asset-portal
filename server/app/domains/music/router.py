@@ -116,9 +116,24 @@ async def album_detail(album_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
             .order_by(MusicTrack.disc_no.nullsfirst(), MusicTrack.track_no.nullsfirst(), Asset.created_at)
         )
     ).all()
+
+    # 展示用资源路径：专辑曲目通常同目录，取首轨所在目录；CUE 分轨回落到母带音频所在目录
+    album_path = None
+    try:
+        storage = build_storage(await roots_of(db))
+        for a, _t in tracks:
+            try:
+                key = (a.meta or {}).get("audio_storage_key") or a.storage_key
+                album_path = posixpath.dirname(storage.display_path(key)) or None
+                break
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001
+        album_path = None
+
     return {
         "id": str(al.id), "name": al.name, "artist": artist.name if artist else "未知艺术家",
-        "year": al.year, "has_cover": bool(al.cover_path),
+        "year": al.year, "has_cover": bool(al.cover_path), "path": album_path,
         "tracks": [
             {
                 "asset_id": str(a.id), "no": t.track_no, "title": a.title,

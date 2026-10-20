@@ -29,6 +29,13 @@ export function ImageDetailPage() {
     window.setTimeout(() => setToastMsg((curr) => (curr === text ? null : curr)), 2000)
   }
   const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
+  // 资源路径（data 根目录后的部分）：列表接口不含此字段，按详情单取；游客无权限时显示 —
+  const { data: pathInfo } = useQuery({
+    queryKey: ['asset-path', id],
+    queryFn: () => api.assetPath(id!),
+    enabled: !!id,
+    retry: false,
+  })
   const [rating, setRating] = useState<number | null>(null)
   const [viewerFail, setViewerFail] = useState(false)
   const stripRef = useRef<HTMLDivElement>(null)
@@ -223,6 +230,7 @@ export function ImageDetailPage() {
                   ['ISO', photo.iso ? String(photo.iso) : '—'],
                   ['尺寸', photo.w ? `${photo.w} × ${photo.h}` : '—'],
                   ['文件', `${photo.fileName.split('.').pop()?.toUpperCase()} · ${photo.sizeMB}MB`],
+                  ['路径', pathInfo ?? '—'],
                   ['GPS', photo.gps],
                 ].map(([k, v]) => (
                   <div key={k} className="flex py-1.5">

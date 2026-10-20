@@ -50,6 +50,17 @@ class LocalStorage:
             raise bad_request("路径逃逸")
         return p
 
+    def display_path(self, key: str) -> str:
+        """展示用路径：data 根目录内的文件显示为相对 data 的路径（如 library/images/a.jpg），
+        根目录外的回落为绝对路径。"""
+        from app.core.config import get_settings
+
+        p = self.resolve(key)
+        try:
+            return p.relative_to(get_settings().data_root).as_posix()
+        except ValueError:
+            return p.as_posix()
+
     def stat(self, key: str) -> FileStat:
         p = self.resolve(key)
         if not p.is_file():

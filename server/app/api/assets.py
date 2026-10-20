@@ -338,6 +338,11 @@ async def asset_detail(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     fav_ids = await _favorite_ids(db, user, [a.id])
     out = {**_item(a, is_favorite=a.id in fav_ids), "meta": a.meta, "fingerprint": a.fingerprint, "storage_key": a.storage_key,
            "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
+    # 展示用资源路径（data 根目录后的部分）；解析失败不影响详情主体
+    try:
+        out["rel_path"] = (await _storage(db)).display_path(a.storage_key)
+    except Exception:  # noqa: BLE001
+        out["rel_path"] = None
     if a.asset_type == "video":
         d = await db.get(VideoDetail, a.id)
         if d is not None:

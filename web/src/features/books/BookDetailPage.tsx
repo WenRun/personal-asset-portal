@@ -214,6 +214,10 @@ export function BookDetailPage() {
                 </dd>
               </div>
               <div className="flex py-2">
+                <dt className="w-24 shrink-0 text-slate-400">路径</dt>
+                <dd className="min-w-0 break-all font-mono text-xs leading-5">{book.path || '—'}</dd>
+              </div>
+              <div className="flex py-2">
                 <dt className="w-24 shrink-0 text-slate-400">入库时间</dt>
                 <dd>{fmtDate(book.createdAt)}</dd>
               </div>

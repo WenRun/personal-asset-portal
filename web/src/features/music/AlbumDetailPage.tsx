@@ -84,6 +84,11 @@ export function AlbumDetailPage() {
             <Badge>{album.tracks.length} 首 · {fmtTime(totalSec)}</Badge>
             <Badge>{(album.tracks.reduce((s, t) => s + t.bitrateK, 0) / 1000).toFixed(1)}Mbps 均值</Badge>
           </div>
+          {album.path && (
+            <div className="mt-2 truncate font-mono text-xs text-slate-400" title={`资源目录：${album.path}`}>
+              路径 · {album.path}/
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             {album.tracks.length > 0 && <Button onClick={() => playAlbum(album)}><Play className="h-4 w-4" fill="currentColor" />播放全部</Button>}
             <Button variant="outline">下载整专辑 (.zip)</Button>

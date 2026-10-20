@@ -797,6 +797,11 @@ export function VideoDetailPage() {
               {rating > 0 && <Badge tone="amber">★ {rating}.0</Badge>}
               <span className="text-slate-400">{fmtDate(video.addedAt)} 入库</span>
             </div>
+            {video.path && (
+              <div className="mt-2 truncate font-mono text-xs text-slate-400" title={`资源路径：${video.path}`}>
+                路径 · {video.path}
+              </div>
+            )}
             {video.note && <p className="mt-3 text-sm leading-relaxed text-slate-600">{video.note}</p>}
             <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
               {(video.tags ?? []).map((t) => (

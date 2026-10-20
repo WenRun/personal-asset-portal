@@ -50,6 +50,12 @@ export function FontDetailPage() {
 
   const currentId = selectedId ?? id ?? ''
   const current = siblings?.find((f) => f.id === currentId) ?? font
+  // 当前字重文件的资源路径（随字重切换取对应详情）
+  const { data: currentPath } = useQuery({
+    queryKey: ['asset-path', currentId],
+    queryFn: () => api.assetPath(currentId),
+    enabled: !!currentId,
+  })
   const currentWeight = wght ?? current?.files[0].weight ?? 400
   const axes = current?.axes ?? []
   const wghtAxis = axes.find((a) => a.tag === 'wght')
@@ -214,6 +220,10 @@ export function FontDetailPage() {
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">设计者</dt><dd>{font.designer || '—'}</dd></div>
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">许可</dt><dd>{font.license ? <span className="line-clamp-2 text-xs text-slate-500">{font.license}</span> : '—'}</dd></div>
               <div className="flex py-2"><dt className="w-20 shrink-0 text-slate-400">语言</dt><dd className="flex flex-wrap gap-1.5">{font.languages.map((l) => <Badge key={l}>{l}</Badge>)}</dd></div>
+              <div className="flex py-2">
+                <dt className="w-20 shrink-0 text-slate-400">路径</dt>
+                <dd className="min-w-0 break-all font-mono text-xs leading-5">{currentPath || '—'}</dd>
+              </div>
               <div className="flex py-2">
                 <dt className="w-20 shrink-0 text-slate-400">标签</dt>
                 <dd className="flex flex-wrap items-center gap-1.5">
