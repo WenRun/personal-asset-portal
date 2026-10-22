@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+# 飞牛 NAS 本地一键更新发版脚本（在 NAS 上直接执行 - 示例模板）
+#
+# 适用场景：
+#   你在外网或出差，电脑无法直连局域网 NAS 时：
+#   1. 在电脑/网页上修改代码并 push 到 GitHub（main 分支）
+#   2. 登录飞牛 NAS（通过远程 SSH / 飞牛桌面 Web 终端 / 飞牛计划任务）
+#   3. 在 NAS 上执行此脚本即可全自动拉取最新代码并重新构建容器
+#
+# 使用方法：
+#   bash /vol1/1000/asset-portal/deploy/nas-update.sh           # 更新 main 分支
+#   bash /vol1/1000/asset-portal/deploy/nas-update.sh <分支名>  # 更新指定分支
+
+set -euo pipefail
+
+# ==================== 基础配置 ====================
+TARGET_DIR="/vol1/1000/asset-portal"                      # NAS 上项目的部署目录
+REPO_URL="https://github.com/WenRun/personal-asset-portal.git" # 远程开源仓库地址
+DEFAULT_BRANCH="main"                                     # 默认拉取分支
+BRANCH="${1:-$DEFAULT_BRANCH}"
+
+# NAS 上 wenrun 用户的 sudo 密码（docker 命令需要 sudo 提权）
+# 方式 1: 直接在此填入 NAS 密码
+# 方式 2: 在 /vol1/1000/asset-portal/.env 中加入 NAS_SUDO_PASSWORD=你的密码
+SUDO_PASSWORD="${NAS_SUDO_PASSWORD:-}"
+# ==================================================
+
+# 终端高亮
+if [[ -t 1 ]]; then
+  GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; RED=$'\033[0;31m'; BLUE=$'\033[0;34m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
+else
+  GREEN=""; YELLOW=""; RED=""; BLUE=""; BOLD=""; RESET=""
+fi
+info() { printf '%s[信息]%s %s\n' "$GREEN" "$RESET" "$*"; }
+warn() { printf '%s[警告]%s %s\n' "$YELLOW" "$RESET" "$*"; }
+err()  { printf '%s[错误]%s %s\n' "$RED" "$RESET" "$*" >&2; }
+step() { printf '\n%s==> %s%s\n' "$BLUE" "$*" "$RESET"; }
+
+echo "======================================================"
+echo "    飞牛 NAS 生产环境一键更新（本地执行版）"
+echo "    部署目录: $TARGET_DIR"
+echo "    目标分支: $BRANCH"
+echo "    执行时间: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "======================================================"
+
+# 1. 确保进入项目目录
+if [[ ! -d "$TARGET_DIR" ]]; then
+  err "部署目录 $TARGET_DIR 不存在，请先核对路径！"
+  exit 1
+fi
+cd "$TARGET_DIR"
+
+# 尝试从本地 .env 中读取 NAS_SUDO_PASSWORD（如果配置了的话）
+if [[ -f .env && -z "${SUDO_PASSWORD:-}" ]]; then
+  ENV_PASS="$(grep -E '^NAS_SUDO_PASSWORD=' .env | cut -d '=' -f2- | tr -d '\"'\'' ' || true)"
+  if [[ -n "$ENV_PASS" ]]; then
+    SUDO_PASSWORD="$ENV_PASS"
+  fi
+fi
+
+# 2. 提权执行包装函数
+run_sudo() {
+  if [[ "$EUID" -eq 0 ]]; then
+    bash -c "$1"
+  else
+    if [[ -n "$SUDO_PASSWORD" ]]; then
+      sudo -S bash -c "$1" <<< "$SUDO_PASSWORD"
+    else
+      sudo bash -c "$1"
+    fi
+  fi
+}
+
+# 3. 生产安全防护：备份本地生产配置
+step "1/5 安全防护：备份关键生产配置文件"
+if [[ -f .env ]]; then
+  cp -a .env ".env.bak.$(date +%Y%m%d_%H%M%S)"
+  info "已创建 .env 安全快照（保留数据库口令与生产密钥）"
+else
+  warn "未检测到 .env 文件，若首次运行请确保创建了生产 .env 配置"
+fi
+
+# 4. 同步 GitHub 远程最新代码
+step "2/5 拉取 GitHub 仓库最新代码 ($BRANCH)"
+# 如果当前目录还没有 .git 仓库，先做初始化并关联 remote
+if [[ ! -d .git ]]; then
+  info "当前目录未初始化 Git，正在关联远程仓库: $REPO_URL ..."
+  git init
+  git remote add origin "$REPO_URL"
+else
+  git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
+fi
+
+info "正在从 GitHub 获取最新提交..."
+MAX_RETRIES=3
+RETRY_COUNT=0
+FETCH_SUCCESS=false
+
+while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+  if git fetch --depth=1 origin "$BRANCH"; then
+    FETCH_SUCCESS=true
+    break
+  else
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    warn "从 GitHub 拉取代码失败，正在进行第 $RETRY_COUNT 次重试..."
+    sleep 3
+  fi
+done
+
+if [[ "$FETCH_SUCCESS" != "true" ]]; then
+  err "无法连接到 GitHub 拉取代码，请检查 NAS 外网连通性或 GitHub 访问情况！"
+  exit 1
+fi
+
+git checkout -f -B "$BRANCH" "origin/$BRANCH"
+git reset --hard "origin/$BRANCH"
+
+COMMIT_HASH="$(git rev-parse --short HEAD)"
+COMMIT_MSG="$(git log -1 --pretty=%B | head -n 1)"
+info "代码已成功同步至最新提交: ${GREEN}$COMMIT_HASH - $COMMIT_MSG${RESET}"
+
+# 5. 权限修复（fnOS 特有：防止目录权限位变动导致只读或 000 权限）
+step "3/5 修复文件权限"
+chmod -R u+rwX,go+rX "$TARGET_DIR"
+info "目录权限已校验并修复"
+
+# 6. 重建并启动 Docker 容器
+step "4/5 重建并启动容器 (docker compose up -d --build)"
+info "正在执行镜像增量构建与容器更新，请稍候..."
+
+if run_sudo 'docker compose up -d --build'; then
+  info "${GREEN}✓${RESET} Docker 容器构建并启动成功"
+else
+  err "Docker 构建启动失败，请检查上方日志输出！"
+  exit 1
+fi
+
+# 7. 健康检查与验证
+step "5/5 检查容器运行状态"
+sleep 5
+echo "------------------------------------------------------"
+run_sudo 'docker compose ps' || true
+echo "------------------------------------------------------"
+
+echo
+info "${GREEN}${BOLD}发版全部完成！${RESET}"
+echo "  Web 地址: http://192.168.31.31:8080 （或你的飞牛远程访问地址）"
+echo "  如需排查问题，可执行查看日志："
+echo "    cd $TARGET_DIR && docker compose logs -f --tail 100"

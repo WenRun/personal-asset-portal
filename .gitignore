@@ -24,6 +24,8 @@ gui-test-screenshots/
 # IDE
 .idea/
 .zcode/
+.workbuddy-ai/
 
 # 本地私有部署脚本（包含 NAS 部署参数与密码，切勿提交）
 deploy/release-to-nas.sh
+deploy/nas-update.sh

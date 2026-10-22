@@ -54,14 +54,20 @@ def cleanup_derived(asset_id, data_root) -> int:
 
 def category_from_key(key: str) -> str | None:
     """从 storage_key ("alias:rel_path") 提取多级父目录作为初始分类。
-    若在根目录（无子文件夹）或虚拟分轨键（如 cue:）则返回 None。"""
+    若在根目录（无子文件夹）或虚拟分轨键（如 cue:）则返回 None。
+    针对 books 别名：若存在同名书籍独立文件夹（如 /分类/书名/书名.epub），
+    则剔除书名文件夹，提取其上层分类路径。"""
     if not key or key.startswith("cue:") or ":" not in key:
         return None
-    _, rel = key.split(":", 1)
+    alias, rel = key.split(":", 1)
     parts = [p for p in rel.split("/") if p]
-    if len(parts) > 1:
-        return "/".join(parts[:-1])
-    return None
+    if len(parts) <= 1:
+        return None
+    if alias == "books":
+        stem = parts[-1].rsplit(".", 1)[0]
+        if parts[-2] == stem:
+            return "/".join(parts[:-2]) if len(parts) > 2 else None
+    return "/".join(parts[:-1])
 
 
 @register("scan_root")

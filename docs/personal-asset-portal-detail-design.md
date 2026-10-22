@@ -1,7 +1,7 @@
 # 个人资源管理门户 · 详细设计文档（LLD）
 
-> 版本 v0.1 · 2026-10-05
-> 配套文档：《总体规划设计》v0.3（[personal-asset-portal-plan.md](./personal-asset-portal-plan.md)）
+> 版本 v0.1 · 2026-10-05 · **现行实现请看 [技术指南](./technical-guide.md)**（本文缺分类字段、按用户收藏、视频章节、CUE、36 种图片格式等后续变更）。
+> 配套文档：《总体规划设计》v0.3（[personal-asset-portal-plan.md](./personal-asset-portal-plan.md)）；索引见 [README](./README.md)。
 > 关系：规划文档定结论，本文给实现级细节（表结构 / 接口签名 / 端点清单 / 时序 / 目录规范）。两者冲突时以规划结论为准，并回改本文。
 > 阅读指引：M0 实现 §2–§4、§6、§8；M1–M5 分别实现 §5.5、§5.1、§5.4、§5.2、§5.3；M6 收尾 §9–§11。
 

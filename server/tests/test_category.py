@@ -18,6 +18,11 @@ class TestCategorySystem(unittest.TestCase):
         self.assertEqual(category_from_key("books:计算机/流畅的Python.epub"), "计算机")
         self.assertEqual(category_from_key("fonts:等宽字体/JetBrainsMono.ttf"), "等宽字体")
 
+        # 书籍同名独立子目录：自动识别为单书封装，提取上层分类
+        self.assertEqual(category_from_key("books:计算机/流畅的Python/流畅的Python.epub"), "计算机")
+        self.assertEqual(category_from_key("books:文学小说/现当代文学/白鹿原/白鹿原.epub"), "文学小说/现当代文学")
+        self.assertIsNone(category_from_key("books:白鹿原/白鹿原.epub"))  # 根目录下单书目录归为未分类
+
         # 多层子目录
         self.assertEqual(category_from_key("books:计算机/Python/Web/流畅的Python.epub"), "计算机/Python/Web")
         self.assertEqual(category_from_key("music:周杰伦/范特西/01.爱在西元前.flac"), "周杰伦/范特西")
