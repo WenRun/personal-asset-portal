@@ -185,6 +185,11 @@ export function JobsPage() {
     mutationFn: (ids: string[]) => api.batchDeleteJobs(ids),
     onSuccess: () => { setSelected(new Set()); qc.invalidateQueries({ queryKey: ['jobs'] }) },
   })
+  // 批量重试：仅失败页提供；非失败状态后端自动跳过
+  const batchRetryJobs = useMutation({
+    mutationFn: (ids: string[]) => api.batchRetryJobs(ids),
+    onSuccess: () => { setSelected(new Set()); qc.invalidateQueries({ queryKey: ['jobs'] }) },
+  })
   const pageIds = items.filter((j) => j.status !== 'running').map((j) => j.id)
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
   const toggleSelect = (id: string) =>
@@ -204,6 +209,10 @@ export function JobsPage() {
     const ids = [...selected]
     if (ids.length === 0) return
     if (confirm(`删除选中的 ${ids.length} 条任务记录？\n仅删除任务记录本身，不影响资产数据；运行中的会自动跳过。`)) batchDelJobs.mutate(ids)
+  }
+  const doBatchRetry = () => {
+    const ids = [...selected]
+    if (ids.length > 0) batchRetryJobs.mutate(ids)
   }
 
   const applyFilter = (v: 'all' | JobPayload['status']) => {
@@ -283,6 +292,11 @@ export function JobsPage() {
           {selected.size > 0 && (
             <div className="mt-2 flex items-center gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm">
               <span className="font-medium text-brand-700">已选 {selected.size} 条</span>
+              {statusFilter === 'failed' && (
+                <Button size="sm" disabled={batchRetryJobs.isPending} onClick={doBatchRetry}>
+                  <RefreshCw className="h-3 w-3" />批量重试
+                </Button>
+              )}
               <Button size="sm" className="bg-rose-600 hover:bg-rose-500" disabled={batchDelJobs.isPending} onClick={doBatchDelete}>
                 <Trash2 className="h-3 w-3" />批量删除
               </Button>

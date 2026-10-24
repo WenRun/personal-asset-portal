@@ -264,6 +264,29 @@ async def batch_delete_jobs(body: JobsBatchBody, db: AsyncSession = Depends(get_
     return {"deleted": deleted, "skipped": skipped}
 
 
+@router.post("/jobs/batch-retry", summary="批量重试失败任务",
+             description="管理员。批量将失败任务重置为排队、清零重试次数并清除错误信息；非失败状态的任务自动跳过，返回 {retried, skipped}。")
+async def batch_retry_jobs(body: JobsBatchBody, db: AsyncSession = Depends(get_db),
+                           _: User = Depends(require_admin)):
+    rows = (await db.execute(select(Job).where(Job.id.in_(body.ids)))).scalars().all()
+    retried = skipped = 0
+    first_retried: uuid.UUID | None = None
+    for j in rows:
+        if j.status != "failed":
+            skipped += 1
+            continue
+        j.status = "queued"
+        j.attempts = 0
+        j.last_error = None
+        retried += 1
+        first_retried = first_retried or j.id
+    await db.commit()
+    if first_retried is not None:
+        await notify_job_changed(db, first_retried)
+        await db.commit()
+    return {"retried": retried, "skipped": skipped}
+
+
 # ---------- 系统设置 ----------
 
 class ScanRoot(BaseModel):
