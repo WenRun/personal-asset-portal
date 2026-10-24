@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # Google Books API key（可选）：免 key 走按 IP 共享的匿名配额，常被陌生 IP 用光导致 429；
     # 申请免费的独立 key 后配额为 1000 次/天（console.cloud.google.com 开启 Books API 并创建 API 密钥）
     scrape_google_books_key: str | None = None
+    # 豆瓣刮削（第二期）：中文书评分/丛书/简介/封面最全的来源；国内直连不走代理、进程内限速约 1 次/秒
+    scrape_douban_enabled: bool = True
 
 
 @lru_cache

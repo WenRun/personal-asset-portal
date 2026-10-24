@@ -383,8 +383,8 @@ export function JobsPage() {
         <div className="mt-4 space-y-3">
           {/* 图书刮削：批量补信息入口 + 多候选人工选择 */}
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
-            <span className="font-medium text-slate-700">图书信息补全（Google Books）</span>
-            <span className="text-xs text-slate-400">缺作者/出版社/ISBN/简介或仅合成封面的书，联网补齐；只填空缺，不覆盖已有内容</span>
+            <span className="font-medium text-slate-700">图书信息补全（豆瓣优先 · Google 兜底）</span>
+            <span className="text-xs text-slate-400">缺作者/出版社/ISBN/简介/评分/封面的书自动补齐；只填空缺，不覆盖已有内容；多候选人工确认</span>
             <Button size="sm" className="ml-auto" disabled={scrapeMissing.isPending} onClick={() => scrapeMissing.mutate(false)}>
               <BookOpen className="h-3.5 w-3.5" />批量刮削缺失图书
             </Button>
@@ -444,10 +444,11 @@ function ConfirmCard({ item, onConfirm, onSkip }: {
 
 type BookConfirmCandidate = {
   source_id: string; title: string; authors: string[]; publisher: string | null
-  pub_year: number | null; isbn: string | null; cover_url: string | null; rating: number | null
+  pub_year: number | null; isbn: string | null; cover_url: string | null
+  rating: number | null; rating_source?: string | null; source?: 'google' | 'douban'; series_name?: string | null
 }
 
-/** 图书刮削多候选卡片：管理员从 Google Books 候选里选正确条目应用（只填空缺字段），或跳过此书 */
+/** 图书刮削多候选卡片：管理员从豆瓣/Google 候选里选正确条目应用（只填空缺字段），或跳过此书 */
 function BookConfirmCard({ item, onApply, onSkip }: {
   item: { asset_id: string; title: string; file_name: string; authors: string[]; hint: string; candidates: BookConfirmCandidate[] }
   onApply: (candidateId: string) => void
@@ -471,12 +472,22 @@ function BookConfirmCard({ item, onApply, onSkip }: {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium text-slate-700">{c.title}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="truncate font-medium text-slate-700">{c.title}</span>
+                <span className={`shrink-0 rounded px-1 py-px text-[10px] ${c.source === 'douban' ? 'bg-green-50 text-green-600' : 'bg-sky-50 text-sky-600'}`}>
+                  {c.source === 'douban' ? '豆瓣' : 'Google'}
+                </span>
+                {c.series_name && <span className="shrink-0 text-[10px] text-slate-400">{c.series_name}</span>}
+              </span>
               <span className="block truncate text-slate-400">
                 {[c.authors.join(' / '), c.publisher, c.pub_year, c.isbn].filter(Boolean).join(' · ')}
               </span>
             </span>
-            {c.rating != null && <span className="shrink-0 text-amber-500">★ {c.rating.toFixed(1)}</span>}
+            {c.rating != null && (
+              <span className={`shrink-0 font-medium ${c.source === 'douban' ? 'text-green-600' : 'text-amber-500'}`}>
+                {c.source === 'douban' ? `${c.rating.toFixed(1)}分` : `★ ${c.rating.toFixed(1)}`}
+              </span>
+            )}
           </label>
         ))}
       </div>

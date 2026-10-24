@@ -137,6 +137,11 @@ export function BookDetailPage() {
           <div className="mt-2 flex items-center gap-2">
             <RatingStars value={rating ?? book.rating} onChange={handleRatingChange} />
             <span className="text-xs text-slate-400">{(rating ?? book.rating)}.0 · 我的评分</span>
+            {book.doubanRating != null && (
+              <span className="rounded bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-600" title="豆瓣评分（刮削自动获取）">
+                豆瓣 {book.doubanRating.toFixed(1)}
+              </span>
+            )}
 
             <div className="ml-auto flex items-center gap-2">
               <FavoriteButton

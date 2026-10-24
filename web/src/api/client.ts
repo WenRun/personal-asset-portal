@@ -172,6 +172,10 @@ function toBook(r: RawAsset): Book {
     desc: r.note ?? '',
     language: r.language ?? '',
     path: r.rel_path ?? null,
+    doubanRating: (() => {
+      const bs = (r.meta?.book_scrape ?? {}) as Record<string, unknown>
+      return bs.rating_source === 'douban' && typeof bs.rating === 'number' ? bs.rating : null
+    })(),
   }
 }
 
@@ -450,7 +454,7 @@ export const api = {
   // 图书元数据刮削（Google Books）：批量补信息 + 多候选人工确认
   bookConfirmList: () => req<{
     asset_id: string; title: string; file_name: string; authors: string[]; hint: string
-    candidates: { source_id: string; title: string; authors: string[]; publisher: string | null; pub_year: number | null; isbn: string | null; pages: number | null; language: string | null; description: string | null; cover_url: string | null; rating: number | null }[]
+    candidates: { source_id: string; title: string; authors: string[]; publisher: string | null; pub_year: number | null; isbn: string | null; pages: number | null; language: string | null; description: string | null; cover_url: string | null; rating: number | null; rating_source?: string | null; source?: 'google' | 'douban'; series_name?: string | null }[]
   }[]>('/api/admin/books/confirm'),
   bookConfirmApply: (assetId: string, candidateId: string) =>
     req<{ ok: boolean }>('/api/admin/books/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, candidate_id: candidateId }) }),

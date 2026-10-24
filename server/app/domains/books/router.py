@@ -281,13 +281,13 @@ class ScrapeBody(BaseModel):
 
 
 @admin_router.post("/books/scrape", summary="批量刮削缺失图书信息",
-                   description="管理员。对所有仍缺信息（作者/出版社/ISBN/简介缺项或仅合成封面）且未刮削过的图书"
-                               "入队 scrape:book 任务（Google Books）；force=true 时对已 ok/not_found/ambiguous 的也重刮，"
-                               "用户明确「跳过」的永不重刮。返回入队数量。")
+                   description="管理员。范围：① 从未刮削且仍缺信息（作者/出版社/ISBN/简介缺项或仅合成封面）的书；"
+                               "② 豆瓣上线后还没试过豆瓣的存量书（自动补评分/丛书/封面，每本只补一次）。"
+                               "豆瓣优先、Google 兜底；force=true 全量重刮（人工「跳过」的永不重刮）。返回入队数量。")
 async def scrape_missing_books(body: ScrapeBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     if not get_settings().scrape_enabled:
         raise bad_request("刮削未启用（SCRAPE_ENABLED=false），启用后重试")
-    from app.domains.books.scrape import needs_scrape
+    from app.domains.books.scrape import _needs_douban_pass, needs_scrape
 
     rows = (
         await db.execute(
@@ -296,7 +296,7 @@ async def scrape_missing_books(body: ScrapeBody, db: AsyncSession = Depends(get_
             .where(Asset.asset_type == "book", Asset.deleted_at.is_(None))
         )
     ).all()
-    targets = [a for a, d in rows if body.force or needs_scrape(a, d)]
+    targets = [a for a, d in rows if body.force or needs_scrape(a, d) or _needs_douban_pass(a)]
     for a in targets:
         await enqueue(db, "scrape:book", {"asset_id": str(a.id), "force": body.force}, priority=7)
     await db.commit()

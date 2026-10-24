@@ -143,6 +143,7 @@ export interface Book {
   createdAt: string
   desc: string
   language: string
+  doubanRating: number | null
   /** 展示用资源路径：library/ 后的部分 */
   path?: string | null
 }

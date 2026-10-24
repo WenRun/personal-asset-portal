@@ -91,7 +91,10 @@ class BookCandidate:
     language: str | None = None
     description: str | None = None
     cover_url: str | None = None
-    rating: float | None = None  # Google 用户评分 1-5；仅存 meta 展示，与「我的评分」无关
+    rating: float | None = None            # 网络评分原始值（豆瓣 0-10 / Google 1-5）
+    rating_source: str | None = None       # "douban" | "google"，与 rating 搭配
+    source: str = "google"                 # "google" | "douban"（确认队列展示与详情补全用）
+    series_name: str | None = None         # 丛书（豆瓣独有）
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -133,6 +136,7 @@ def candidates_from_response(data: dict) -> list[BookCandidate]:
             description=_plain_description(vi.get("description")),
             cover_url=links.get("thumbnail") or links.get("smallThumbnail"),
             rating=vi.get("averageRating"),
+            rating_source="google" if vi.get("averageRating") is not None else None,
         ))
     return [c for c in out if c.title]
 
@@ -144,24 +148,26 @@ def upscale_cover_url(url: str) -> str:
 
 
 def cover_urls(primary_url: str, isbn: str | None) -> list[str]:
-    """封面下载候选 URL：Google 封面强制 https（明文 http 在部分出口网络直接被重置），
-    有 ISBN 时追加 OpenLibrary 兜底（Google 图片 CDN 常按出口 IP 封禁 403，OpenLibrary
-    对英文书覆盖好、中文书基本没有——豆瓣封面留给第二期）。"""
+    """封面下载候选 URL。豆瓣封面（doubanio.com）国内直连且原图即大图：不做变换、不兜底；
+    Google 封面强制 https（明文 http 在部分出口网络直接被重置），有 ISBN 时追加
+    OpenLibrary 兜底（Google 图片 CDN 常按出口 IP 封禁 403，OpenLibrary 对英文书覆盖好）。"""
+    if "doubanio.com" in primary_url:
+        return [primary_url]
     urls = [re.sub(r"^http://", "https://", upscale_cover_url(primary_url), count=1)]
     if isbn:
         urls.append(f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false")
     return urls
 
 
-def _client() -> httpx.AsyncClient:
+def _client(use_proxy: bool = True) -> httpx.AsyncClient:
     s = get_settings()
     kw: dict = {
         "timeout": s.scrape_timeout_seconds,
         "follow_redirects": True,
         "headers": {"User-Agent": UA, "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.5"},
     }
-    if s.scrape_proxy_url:
-        # 容错：host:port 形式（没写协议头）自动补 http://，httpx 不接受裸地址
+    # 容错：host:port 形式（没写协议头）自动补 http://，httpx 不接受裸地址
+    if use_proxy and s.scrape_proxy_url:
         proxy = s.scrape_proxy_url if "://" in s.scrape_proxy_url else f"http://{s.scrape_proxy_url}"
         kw["proxy"] = proxy
     return httpx.AsyncClient(**kw)
@@ -180,7 +186,6 @@ async def google_books_search(query: str) -> list[BookCandidate]:
         r.raise_for_status()
         return candidates_from_response(r.json())
 
-
 async def download_cover(primary_url: str, out_dir: Path, isbn: str | None = None) -> tuple[str | None, str | None]:
     """依次尝试候选 URL 下载封面到 out_dir/cover_src.{ext}，PIL 校验是真实图片才落盘。
     返回 (文件名, 失败原因)：成功时 (名字, None)；全失败时 (None, 最后一个错误)——
@@ -190,7 +195,8 @@ async def download_cover(primary_url: str, out_dir: Path, isbn: str | None = Non
     last_err = "no attempt"
     for url in cover_urls(primary_url, isbn):
         try:
-            async with _client() as c:
+            # 豆瓣图片国内直连（海外出口访问 doubanio 反而更易失败）；其余（Google/OpenLibrary）走代理
+            async with _client(use_proxy="doubanio.com" not in url) as c:
                 r = await c.get(url)
                 r.raise_for_status()
                 data = r.content
@@ -226,6 +232,8 @@ def fill_missing(asset: Asset, detail: BookDetail, cand: BookCandidate) -> None:
         detail.language = cand.language
     if detail.pages is None and cand.pages:
         detail.pages = cand.pages
+    if not detail.series_name and cand.series_name:
+        detail.series_name = cand.series_name
     if not (asset.note or "").strip() and cand.description:
         asset.note = cand.description
 
@@ -253,10 +261,11 @@ async def apply_candidate(db: AsyncSession, asset: Asset, detail: BookDetail, ca
 
     scrape_meta: dict = {
         "status": "ok",
-        "source": "google_books",
+        "source": cand.source,
         "matched_by": matched_by,       # isbn | title | manual（确认队列人工选择）
         "matched_title": cand.title,
         "rating": cand.rating,
+        "rating_source": cand.rating_source,  # 豆瓣 0-10 / Google 1-5；assets.rating 是「我的评分」，不写
         "time": _now(),
     }
 
@@ -276,7 +285,11 @@ async def apply_candidate(db: AsyncSession, asset: Asset, detail: BookDetail, ca
     meta = dict(asset.meta or {})
     if scrape_meta.get("cover"):
         meta["cover_synthetic"] = False
-    meta["book_scrape"] = scrape_meta
+    # 合并保留旧状态里的 providers_tried 等记录（成功时清掉过期的 douban_error）
+    merged = {**(meta.get("book_scrape") or {}), **scrape_meta}
+    if scrape_meta.get("status") == "ok":
+        merged.pop("douban_error", None)
+    meta["book_scrape"] = merged
     asset.meta = meta
     await enqueue(db, "index_meili", {"asset_id": str(asset.id)}, priority=8)
     if scrape_meta.get("cover"):
@@ -292,11 +305,18 @@ async def mark_skipped(db: AsyncSession, asset: Asset) -> None:
 
 
 async def apply_stored_candidate(db: AsyncSession, asset: Asset, candidate_id: str) -> None:
-    """确认队列人工选择候选后应用（候选明细已存在 meta.book_scrape.candidates，字段无需再查询）。"""
+    """确认队列人工选择候选后应用。豆瓣候选若来自 suggest（只有建议级字段），
+    先取详情页补全评分/出版社/丛书/简介/大图，再统一走 apply。"""
     cands = ((asset.meta or {}).get("book_scrape") or {}).get("candidates") or []
     raw = next((c for c in cands if c.get("source_id") == candidate_id), None)
     if raw is None:
         raise LookupError(f"候选不存在: {candidate_id}")
+    if raw.get("source") == "douban" and not raw.get("rating") and not raw.get("publisher"):
+        from app.domains.books.douban import douban_subject
+
+        sid = str(raw.get("source_id") or "").removeprefix("douban:")
+        if (full := await douban_subject(sid)) is not None:
+            raw = {**raw, **{k: v for k, v in full.to_dict().items() if v}}
     detail = await db.get(BookDetail, asset.id)
     if detail is None:
         detail = BookDetail(asset_id=asset.id)
@@ -322,6 +342,14 @@ def _title_matches(a: str | None, b: str | None) -> bool:
     return bool(na) and bool(nb) and (na in nb or nb in na)
 
 
+def _title_query(asset: Asset, detail: BookDetail) -> str:
+    """书名搜索词：书名 + 第一作者。"""
+    q = (asset.title or "").strip()
+    if detail.authors:
+        q = f"{q} {detail.authors[0]}"
+    return q
+
+
 async def _search_by_title(asset: Asset, detail: BookDetail) -> list[BookCandidate]:
     """书名搜索：先「书名+第一作者」，候选里没有书名能对上的（组合词污染召回，
     尤其中文书名配英文/无关作者名）再退到纯书名查询；仍无书名命中才返回首组结果兜底。"""
@@ -341,6 +369,15 @@ async def _search_by_title(asset: Asset, detail: BookDetail) -> list[BookCandida
     return fallback
 
 
+def _needs_douban_pass(asset: Asset) -> bool:
+    """第二期豆瓣补量判定：启用豆瓣且这本书还没试过豆瓣——已 ok（Google 来源）的存量书
+    借此补一次豆瓣评分/丛书/封面，providers_tried 记录后不再重复。"""
+    if not get_settings().scrape_douban_enabled:
+        return False
+    bs = (asset.meta or {}).get("book_scrape") or {}
+    return bs.get("status") != "skipped" and "douban" not in (bs.get("providers_tried") or [])
+
+
 @register("scrape:book")
 async def scrape_book(db: AsyncSession, payload: dict) -> None:
     """单本图书刮削：payload 支持 {asset_id} / {asset_id, force} / {asset_id, candidate_id}。"""
@@ -356,10 +393,13 @@ async def scrape_book(db: AsyncSession, payload: dict) -> None:
         await apply_stored_candidate(db, asset, str(cand_id))
         return
 
-    # 幂等：已终态的任务直接跳过（force 只能重刮 ok/not_found/ambiguous，尊重人工「跳过」）
+    # 人工「跳过」永远生效（force 也不覆盖）
     if prev.get("status") == "skipped":
         return
-    if not payload.get("force") and prev.get("status") in ("ok", "not_found", "ambiguous"):
+    # 幂等：已终态的任务跳过（force 只能重刮 ok/not_found/ambiguous）。
+    # 例外：第二期上线后「没试过豆瓣」的存量书放行一次（providers_tried 记录后不再重复）。
+    if not payload.get("force") and prev.get("status") in ("ok", "not_found", "ambiguous") \
+            and not _needs_douban_pass(asset):
         return
 
     detail = await db.get(BookDetail, asset.id)
@@ -373,28 +413,74 @@ async def scrape_book(db: AsyncSession, payload: dict) -> None:
     if isbn and not detail.isbn:
         detail.isbn = isbn
 
-    candidates: list[BookCandidate] = []
-    matched_by = "isbn"
-    if isbn:
-        candidates = await google_books_search(f"isbn:{isbn}")
-    if not candidates:
-        # ISBN 查不到（Google 对中文小众书覆盖一般）→ 书名+第一作者兜底，组合无结果再用纯书名
-        candidates = await _search_by_title(asset, detail)
-        matched_by = "title"
+    providers_tried: set[str] = set(prev.get("providers_tried") or [])
+    douban_err: str | None = None
+    applied = False
 
-    if not candidates:
-        _set_status(asset, "not_found")
-    elif matched_by == "isbn":
-        # ISBN 直查视为权威，直接应用（来源与匹配题名记入 meta 备查）
-        await apply_candidate(db, asset, detail, candidates[0], matched_by="isbn")
-    else:
-        # 书名搜索：唯一命中、或恰好只有一个候选书名与资产一致 → 直接应用；否则进确认队列
-        exacts = [c for c in candidates if _title_matches(asset.title, c.title)]
-        if len(candidates) == 1 or len(exacts) == 1:
-            pick = exacts[0] if len(exacts) == 1 else candidates[0]
-            await apply_candidate(db, asset, detail, pick, matched_by="title")
+    # ① 豆瓣优先（中文书最全：评分 0-10/丛书/中文简介/封面大图；国内直连、进程内限速）
+    if get_settings().scrape_douban_enabled:
+        from app.domains.books import douban
+
+        providers_tried.add("douban")
+        try:
+            if isbn and (c := await douban.douban_isbn_lookup(isbn)) is not None:
+                await apply_candidate(db, asset, detail, c, matched_by="isbn")
+                applied = True
+            if not applied:
+                # suggest 对长查询极敏感：书名+作者组合常直接 0 结果，只用纯书名查
+                cands = await douban.douban_search((asset.title or "").strip())
+                exacts = [c for c in cands if _title_matches(asset.title, c.title)]
+                if len(cands) == 1 or len(exacts) == 1:
+                    pick = exacts[0] if len(exacts) == 1 else cands[0]
+                    if (full := await douban.douban_subject(pick.source_id.removeprefix("douban:"))) is not None:
+                        pick = full  # suggest 只有建议级字段，详情页补全评分/出版社/丛书/简介
+                    await apply_candidate(db, asset, detail, pick, matched_by="title")
+                    applied = True
+                elif len(cands) > 1:
+                    # 豆瓣多候选：存建议级字段进确认队列（应用时会自动取详情页补全）
+                    _set_status(asset, "ambiguous", source="douban",
+                                providers_tried=sorted(providers_tried),
+                                candidates=[c.to_dict() for c in cands[:MAX_CANDIDATES]])
+                    await db.commit()
+                    return
+        except Exception as exc:  # noqa: BLE001  豆瓣失败不拦 Google 兜底，原因落 meta 备查
+            douban_err = f"{type(exc).__name__}: {str(exc)[:140]}"
+
+    # ② Google 兜底（英文书 / 豆瓣无收录）；此前 Google 已成功且本次只是豆瓣补量未命中时不重复消耗配额
+    if not applied and not (prev.get("status") == "ok" and prev.get("source") == "google"):
+        providers_tried.add("google")
+        candidates: list[BookCandidate] = []
+        matched_by = "isbn"
+        if isbn:
+            candidates = await google_books_search(f"isbn:{isbn}")
+        if not candidates:
+            candidates = await _search_by_title(asset, detail)
+            matched_by = "title"
+
+        if not candidates:
+            _set_status(asset, "not_found")
+        elif matched_by == "isbn":
+            # ISBN 直查视为权威，直接应用（来源与匹配题名记入 meta 备查）
+            await apply_candidate(db, asset, detail, candidates[0], matched_by="isbn")
+            applied = True
         else:
-            # 多候选且书名无法唯一对上：不自动落库，存候选进确认队列
-            _set_status(asset, "ambiguous", source="google_books",
-                        candidates=[c.to_dict() for c in candidates[:MAX_CANDIDATES]])
+            # 书名搜索：唯一命中、或恰好只有一个候选书名与资产一致 → 直接应用；否则进确认队列
+            exacts = [c for c in candidates if _title_matches(asset.title, c.title)]
+            if len(candidates) == 1 or len(exacts) == 1:
+                pick = exacts[0] if len(exacts) == 1 else candidates[0]
+                await apply_candidate(db, asset, detail, pick, matched_by="title")
+                applied = True
+            else:
+                _set_status(asset, "ambiguous", source="google",
+                            candidates=[c.to_dict() for c in candidates[:MAX_CANDIDATES]])
+
+    if not applied and not (asset.meta or {}).get("book_scrape", {}).get("status"):
+        _set_status(asset, "not_found")
+
+    # 统一记录已尝试来源与豆瓣错误（批量补量判定依据；apply/not_found 写入的状态在此合并）
+    bs = dict((asset.meta or {}).get("book_scrape") or {})
+    bs["providers_tried"] = sorted(providers_tried)
+    if douban_err:
+        bs["douban_error"] = douban_err
+    asset.meta = {**(asset.meta or {}), "book_scrape": bs}
     await db.commit()
