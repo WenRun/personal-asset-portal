@@ -335,13 +335,15 @@ fontTools 读 name 表 / OS/2 / 可变轴 `fvar` / cmap 语言。坏文件仍入
 | TXT | 编码探测 + 章回正则（无章则约 50 段一节） | 合成 `reader.epub` |
 | MOBI / AZW3 | 解包；有现成 epub 就用，否则 HTML 拆章 | 同一份 `derived/books/{id}/reader.epub` |
 
-**元数据刮削（Google Books，第一期）：** 书籍解析后仍有信息缺口（作者 / 出版社 / ISBN / 简介缺项，或只有合成封面）时入队 `scrape:book`。
+**元数据刮削（豆瓣优先 + Google Books 兜底）：** 书籍解析后仍有信息缺口（作者 / 出版社 / ISBN / 简介 / 评分缺项，或只有合成封面）时入队 `scrape:book`。
 
 - 查询顺序：ISBN 直查（权威，几乎不错配）→ 书名 + 第一作者搜索兜底；书名搜出多个候选不自动落库，进管理端「入库确认队列」人工选择（`GET/POST /api/admin/books/confirm`）。
 - 只填空缺：已有字段（含用户手填）绝不覆盖；网络评分存 `meta.book_scrape.rating`（`assets.rating` 是「我的评分」，不写网络分）；简介沿用 `assets.note`。
 - 封面：文件自带（EPUB 内嵌 / PDF 首页渲染）不动；仅无封面或 `meta.cover_synthetic`（TXT / 无封面 MOBI 的合成占位图）时下载网络封面到 `cover_src.*`，复用 `derive:book_cover`。重扫生成的新合成封面不会覆盖已下载的真实封面。
 - 幂等与结果：状态记在 `meta.book_scrape.status`（ok / not_found / ambiguous / skipped），自动路径不重复外呼；管理端 `POST /api/admin/books/scrape` 批量补信息（force 可重刮，用户「跳过」的永不重刮）。
-- 配置：`SCRAPE_ENABLED`（总开关，NAS 不通外网时关掉）、`SCRAPE_TIMEOUT_SECONDS`、`SCRAPE_PROXY_URL`（出站代理）、`SCRAPE_GOOGLE_BOOKS_KEY`（API key；免 key 走按 IP 共享匿名配额，常 429，建议申请免费 key 独立 1000 次/天）。豆瓣中文评分与封面是第二期。
+- 豆瓣（第二期）：中文书最全来源——评分 0-10 / 丛书 / 中文简介 / 封面大图。无官方 API，走网页端点（suggest / ISBN 跳转 / 详情页解析，免登录）；**国内直连不走代理**（海外出口反触发风控），进程内全局锁 + 1.2s 限速；suggest 长查询敏感，只用纯书名。失败记 `meta.book_scrape.douban_error` 且不拦 Google 兜底。
+- providers_tried 补量：豆瓣上线后，存量书（含 Google 已 ok 的）经批量按钮自动补一次豆瓣评分/封面，`meta.book_scrape.providers_tried` 记录后不再重复；确认队列应用豆瓣候选时自动取详情页补全（suggest 只有建议级字段）。
+- 配置：`SCRAPE_ENABLED`（总开关）、`SCRAPE_TIMEOUT_SECONDS`、`SCRAPE_PROXY_URL`（仅 Google 走）、`SCRAPE_GOOGLE_BOOKS_KEY`（API key；免 key 走按 IP 共享匿名配额，常 429，建议申请免费 key 独立 1000 次/天）、`SCRAPE_DOUBAN_ENABLED`（默认开）。豆瓣评分展示在详情页「我的评分」旁（绿色徽标），网络评分永不写入 `assets.rating`。
 - PDF 解析顺带扫前 8 页文本抽 ISBN（校验位把关），ISBN 查询的命中率比书名高得多。
 
 阅读器是详情页上的全屏浮层，不是独立路由。流式模式可分页或长卷；偏好（主题、字号等）存在浏览器。进度 `POST /api/progress`。章内滚动位置不记，续读回到章首（PDF 续到页）。
