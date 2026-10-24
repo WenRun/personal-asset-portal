@@ -226,6 +226,7 @@ CUE 分轨的 `storage_key` 以 `cue:` 开头，不属于任何扫描根，对�
 | `derive:font_specimen` / `derive:font_charset` | 样张 PNG、字符集覆盖率 JSON |
 | `derive:thumb_image` | 256 / 1024 / 2560 WebP |
 | `derive:book_cover` / `derive:music_cover` | 封面 WebP |
+| `scrape:book` | 联网刮削图书元数据（Google Books，第一期） |
 | `derive:music_stream` | 非原生格式 / 多声道 → `stream.mp3` |
 | `derive:cue_slices` | 预切 CUE 全部分轨 |
 | `pack_zip` | 批量打包下载 |
@@ -333,6 +334,15 @@ fontTools 读 name 表 / OS/2 / 可变轴 `fvar` / cmap 语言。坏文件仍入
 | PDF | PyMuPDF 元数据、页数、首页封面 | `/pdf/meta` + `/pdf/page/{n}` 出图 |
 | TXT | 编码探测 + 章回正则（无章则约 50 段一节） | 合成 `reader.epub` |
 | MOBI / AZW3 | 解包；有现成 epub 就用，否则 HTML 拆章 | 同一份 `derived/books/{id}/reader.epub` |
+
+**元数据刮削（Google Books，第一期）：** 书籍解析后仍有信息缺口（作者 / 出版社 / ISBN / 简介缺项，或只有合成封面）时入队 `scrape:book`。
+
+- 查询顺序：ISBN 直查（权威，几乎不错配）→ 书名 + 第一作者搜索兜底；书名搜出多个候选不自动落库，进管理端「入库确认队列」人工选择（`GET/POST /api/admin/books/confirm`）。
+- 只填空缺：已有字段（含用户手填）绝不覆盖；网络评分存 `meta.book_scrape.rating`（`assets.rating` 是「我的评分」，不写网络分）；简介沿用 `assets.note`。
+- 封面：文件自带（EPUB 内嵌 / PDF 首页渲染）不动；仅无封面或 `meta.cover_synthetic`（TXT / 无封面 MOBI 的合成占位图）时下载网络封面到 `cover_src.*`，复用 `derive:book_cover`。重扫生成的新合成封面不会覆盖已下载的真实封面。
+- 幂等与结果：状态记在 `meta.book_scrape.status`（ok / not_found / ambiguous / skipped），自动路径不重复外呼；管理端 `POST /api/admin/books/scrape` 批量补信息（force 可重刮，用户「跳过」的永不重刮）。
+- 配置：`SCRAPE_ENABLED`（总开关，NAS 不通外网时关掉）、`SCRAPE_TIMEOUT_SECONDS`、`SCRAPE_PROXY_URL`（出站代理）、`SCRAPE_GOOGLE_BOOKS_KEY`（API key；免 key 走按 IP 共享匿名配额，常 429，建议申请免费 key 独立 1000 次/天）。豆瓣中文评分与封面是第二期。
+- PDF 解析顺带扫前 8 页文本抽 ISBN（校验位把关），ISBN 查询的命中率比书名高得多。
 
 阅读器是详情页上的全屏浮层，不是独立路由。流式模式可分页或长卷；偏好（主题、字号等）存在浏览器。进度 `POST /api/progress`。章内滚动位置不记，续读回到章首（PDF 续到页）。
 

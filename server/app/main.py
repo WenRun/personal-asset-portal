@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from app.api import admin, assets, auth, search, tags
 from app.domains.images.router import router as images_router
 from app.domains.fonts.router import router as fonts_router
-from app.domains.books.router import router as books_router, progress_router as books_progress_router
+from app.domains.books.router import router as books_router, progress_router as books_progress_router, admin_router as books_admin_router
 from app.domains.music.router import router as music_router
 from app.domains.videos.router import router as videos_router, admin_router as videos_admin_router
 from app.api.m6 import router as m6_router, share_public as share_public_router
@@ -110,6 +110,7 @@ app.include_router(images_router)  # M1：/api/images/{id}/thumbnail|original
 app.include_router(fonts_router)   # M2：/api/fonts/{id}/file|charset|preview/specimen
 app.include_router(books_router)        # M3：/api/books/{id}/file|cover
 app.include_router(books_progress_router)  # M3：/api/progress
+app.include_router(books_admin_router)   # M3：图书刮削批量触发与候选确认（挂在 /api/admin 下）
 app.include_router(music_router)        # M4：/api/music/albums|tracks|{id}/stream
 app.include_router(videos_router)        # M5：/api/videos/series|stream|cover
 app.include_router(videos_admin_router)  # M5：确认队列与封面（挂在 /api/admin 下）

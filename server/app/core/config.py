@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     worker_concurrency: int = 2
 
+    # 图书元数据刮削（Google Books）：NAS 出网受限/不想联网补信息时置 false，入库解析不受影响
+    scrape_enabled: bool = True
+    scrape_timeout_seconds: float = 15.0   # 单次外部请求超时（查询与封面下载共用）
+    scrape_proxy_url: str | None = None    # 例 http://192.168.31.5:7890；空=直连
+    # Google Books API key（可选）：免 key 走按 IP 共享的匿名配额，常被陌生 IP 用光导致 429；
+    # 申请免费的独立 key 后配额为 1000 次/天（console.cloud.google.com 开启 Books API 并创建 API 密钥）
+    scrape_google_books_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -447,6 +447,17 @@ export const api = {
   videoCoverUrl: (coverUrl: string) => `${BASE}${coverUrl}`,
   videoStreamUrl: (assetId: string) => `${BASE}/api/videos/${assetId}/stream`,
   confirmList: () => req<{ id: string; file: string; series: string | null; series_name: string | null; chapter: number | null; hint: string; episode_hint: number | null }[]>('/api/admin/confirm'),
+  // 图书元数据刮削（Google Books）：批量补信息 + 多候选人工确认
+  bookConfirmList: () => req<{
+    asset_id: string; title: string; file_name: string; authors: string[]; hint: string
+    candidates: { source_id: string; title: string; authors: string[]; publisher: string | null; pub_year: number | null; isbn: string | null; pages: number | null; language: string | null; description: string | null; cover_url: string | null; rating: number | null }[]
+  }[]>('/api/admin/books/confirm'),
+  bookConfirmApply: (assetId: string, candidateId: string) =>
+    req<{ ok: boolean }>('/api/admin/books/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, candidate_id: candidateId }) }),
+  bookConfirmSkip: (assetId: string) =>
+    req<{ ok: boolean }>('/api/admin/books/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, skip: true }) }),
+  scrapeMissingBooks: (force = false) =>
+    req<{ enqueued: number }>('/api/admin/books/scrape', { method: 'POST', body: JSON.stringify({ force }) }),
   // M6：打包 / 分享 / 智能集合
   createPack: (body: { asset_ids?: string[]; type?: string; favorite?: boolean }) =>
     req<{ id: string; status: string }>('/api/download-packs', { method: 'POST', body: JSON.stringify(body) }),

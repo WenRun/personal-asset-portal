@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, Trash2 } from 'lucide-react'
+import { BookOpen, RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { Badge, Button, PageHeader } from '@/components/ui'
 import type { JobPayload, JobTarget } from '@/api/client'
@@ -23,6 +23,7 @@ const KIND_LABELS: Record<string, string> = {
   'derive:music_cover': '生成专辑封面',
   'derive:thumb_image': '生成图片缩略图',
   'derive:book_cover': '生成书籍封面',
+  'scrape:book': '刮削图书信息',
   'derive:font_specimen': '生成字体样张',
   'derive:font_charset': '统计字体字符集',
   pack_zip: '打包下载 ZIP',
@@ -118,6 +119,7 @@ export function JobsPage() {
   const [version, setVersion] = useState(0)
   useEffect(() => api.jobsStream(() => setVersion((v) => v + 1), setLive), [])
   const { data: confirms } = useQuery({ queryKey: ['confirm'], queryFn: api.confirmList, refetchInterval: 15_000 })
+  const { data: bookConfirms } = useQuery({ queryKey: ['bookConfirm'], queryFn: api.bookConfirmList, refetchInterval: 15_000 })
   const [tab, setTab] = useState<'jobs' | 'confirm'>('jobs')
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({})
   const [statusFilter, setStatusFilter] = useState<'all' | JobPayload['status']>('all')
@@ -134,6 +136,23 @@ export function JobsPage() {
   const confirmSeries = useMutation({
     mutationFn: (v: { id: string; name: string; ep: number }) => api.confirmSeries(v.id, v.name, v.ep),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['confirm'] }),
+  })
+  const bookApply = useMutation({
+    mutationFn: (v: { assetId: string; candidateId: string }) => api.bookConfirmApply(v.assetId, v.candidateId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookConfirm'] }),
+  })
+  const bookSkip = useMutation({
+    mutationFn: (assetId: string) => api.bookConfirmSkip(assetId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookConfirm'] }),
+  })
+  const [scrapeMsg, setScrapeMsg] = useState('')
+  const scrapeMissing = useMutation({
+    mutationFn: (force: boolean) => api.scrapeMissingBooks(force),
+    onSuccess: (r) => {
+      setScrapeMsg(`已入队 ${r.enqueued} 本，稍后可在任务中心看进度；搜出多个候选的会出现在这里`)
+      setTimeout(() => setScrapeMsg(''), 6000)
+      void qc.invalidateQueries({ queryKey: ['bookConfirm'] })
+    },
   })
 
   const retry = useMutation({
@@ -154,7 +173,7 @@ export function JobsPage() {
   const total = pageData?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const countOf = (s: JobPayload['status']) => pageData?.counts?.[s] ?? 0
-  const pendingConfirms = confirms?.length ?? 0
+  const pendingConfirms = (confirms?.length ?? 0) + (bookConfirms?.length ?? 0)
 
   // 任务删除 / 批量删除：仅删除任务记录本身，不影响资产数据；运行中的任务不可删
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -348,14 +367,30 @@ export function JobsPage() {
         </>
       ) : (
         <div className="mt-4 space-y-3">
+          {/* 图书刮削：批量补信息入口 + 多候选人工选择 */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+            <span className="font-medium text-slate-700">图书信息补全（Google Books）</span>
+            <span className="text-xs text-slate-400">缺作者/出版社/ISBN/简介或仅合成封面的书，联网补齐；只填空缺，不覆盖已有内容</span>
+            <Button size="sm" className="ml-auto" disabled={scrapeMissing.isPending} onClick={() => scrapeMissing.mutate(false)}>
+              <BookOpen className="h-3.5 w-3.5" />批量刮削缺失图书
+            </Button>
+            {scrapeMsg && <span className="text-xs text-brand-600">{scrapeMsg}</span>}
+          </div>
+
+          {(bookConfirms ?? []).map((b) => (
+            <BookConfirmCard key={b.asset_id} item={b}
+              onApply={(cid) => bookApply.mutate({ assetId: b.asset_id, candidateId: cid })}
+              onSkip={() => bookSkip.mutate(b.asset_id)} />
+          ))}
+
           {(confirms ?? []).filter((c) => !dismissed[c.id]).map((c) => (
             <ConfirmCard key={c.id} item={c}
               onConfirm={(name, ep) => confirmSeries.mutate({ id: c.id, name, ep })}
               onSkip={() => setDismissed((d) => ({ ...d, [c.id]: true }))} />
           ))}
-          {(confirms ?? []).length - Object.keys(dismissed).length <= 0 && (
+          {(confirms ?? []).length - Object.keys(dismissed).length <= 0 && (bookConfirms ?? []).length <= 0 && (
             <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-400">
-              队列清空 ✓（视频系列识别存疑时会出现在这里，人工校对系列名与集数）
+              队列清空 ✓（视频系列识别存疑、图书刮削多候选时会出现在这里待人工确认）
             </div>
           )}
         </div>
@@ -387,6 +422,52 @@ function ConfirmCard({ item, onConfirm, onSkip }: {
         <span className="text-slate-400">集</span>
         <Button size="sm" onClick={() => onConfirm(name, ep)}>确认</Button>
         <Button size="sm" variant="outline" onClick={() => onSkip()}>跳过</Button>
+      </div>
+    </div>
+  )
+}
+
+
+type BookConfirmCandidate = {
+  source_id: string; title: string; authors: string[]; publisher: string | null
+  pub_year: number | null; isbn: string | null; cover_url: string | null; rating: number | null
+}
+
+/** 图书刮削多候选卡片：管理员从 Google Books 候选里选正确条目应用（只填空缺字段），或跳过此书 */
+function BookConfirmCard({ item, onApply, onSkip }: {
+  item: { asset_id: string; title: string; file_name: string; authors: string[]; hint: string; candidates: BookConfirmCandidate[] }
+  onApply: (candidateId: string) => void
+  onSkip: () => void
+}) {
+  const [picked, setPicked] = useState(item.candidates[0]?.source_id ?? '')
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-white p-4">
+      <div className="flex items-baseline gap-2">
+        <div className="text-sm font-medium">{item.title || item.file_name}</div>
+        <div className="truncate text-xs text-slate-400">{item.file_name}{item.authors.length > 0 && ` · ${item.authors.join(' / ')}`}</div>
+        <Button size="sm" variant="outline" className="ml-auto shrink-0 text-slate-500" onClick={() => onSkip()}>跳过此书</Button>
+      </div>
+      <div className="mt-0.5 text-xs text-slate-400">{item.hint}</div>
+      <div className="mt-3 space-y-1.5">
+        {item.candidates.map((c) => (
+          <label key={c.source_id} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-xs transition ${picked === c.source_id ? 'border-brand-400 bg-brand-50/60' : 'border-slate-200 hover:border-slate-300'}`}>
+            <input type="radio" className="accent-brand-600" checked={picked === c.source_id} onChange={() => setPicked(c.source_id)} />
+            {c.cover_url && (
+              <img src={c.cover_url} alt="" referrerPolicy="no-referrer" className="h-14 w-10 shrink-0 rounded-sm object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium text-slate-700">{c.title}</span>
+              <span className="block truncate text-slate-400">
+                {[c.authors.join(' / '), c.publisher, c.pub_year, c.isbn].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+            {c.rating != null && <span className="shrink-0 text-amber-500">★ {c.rating.toFixed(1)}</span>}
+          </label>
+        ))}
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button size="sm" disabled={!picked} onClick={() => onApply(picked)}>应用所选</Button>
       </div>
     </div>
   )

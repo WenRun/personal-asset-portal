@@ -14,6 +14,7 @@ import app.domains.fonts.specimen  # noqa: F401  M2: derive:font_specimen
 import app.domains.fonts.charset  # noqa: F401  M2: derive:font_charset
 import app.domains.books.parser  # noqa: F401  M3: parse:book
 import app.domains.books.thumbs  # noqa: F401  M3: derive:book_cover
+import app.domains.books.scrape  # noqa: F401  M3: scrape:book（Google Books 元数据刮削）
 import app.domains.music.parser  # noqa: F401  M4: parse:music
 import app.domains.music.thumbs  # noqa: F401  M4: derive:music_cover
 import app.domains.music.transcode  # noqa: F401  DTS: derive:music_stream

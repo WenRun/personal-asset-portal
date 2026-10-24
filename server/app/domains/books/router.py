@@ -14,15 +14,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.deps import require_member
+from app.core.deps import require_admin, require_member
 from app.core.db import get_db
-from app.core.errors import not_found
-from app.core.models import Asset, User, UserProgress
+from app.core.errors import bad_request, not_found
+from app.core.jobs import enqueue
+from app.core.models import Asset, BookDetail, User, UserProgress
 from app.core.pipeline import build_storage, roots_of
 from app.domains.books.parser import ensure_reader_epub
 
 router = APIRouter(prefix="/api/books", tags=["书籍"])
 progress_router = APIRouter(prefix="/api/progress", tags=["阅读进度"])
+admin_router = APIRouter(prefix="/api/admin", tags=["书籍"])
 
 CT_BY_EXT = {
     ".xhtml": "application/xhtml+xml",
@@ -270,3 +272,83 @@ async def pdf_page(asset_id: uuid.UUID, page_num: int, dpi: int = Query(150, ge=
     finally:
         if doc is not None:
             doc.close()
+
+
+# ---------- 图书元数据刮削（管理员）：批量补信息 + 多候选人工确认 ----------
+
+class ScrapeBody(BaseModel):
+    force: bool = False
+
+
+@admin_router.post("/books/scrape", summary="批量刮削缺失图书信息",
+                   description="管理员。对所有仍缺信息（作者/出版社/ISBN/简介缺项或仅合成封面）且未刮削过的图书"
+                               "入队 scrape:book 任务（Google Books）；force=true 时对已 ok/not_found/ambiguous 的也重刮，"
+                               "用户明确「跳过」的永不重刮。返回入队数量。")
+async def scrape_missing_books(body: ScrapeBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    if not get_settings().scrape_enabled:
+        raise bad_request("刮削未启用（SCRAPE_ENABLED=false），启用后重试")
+    from app.domains.books.scrape import needs_scrape
+
+    rows = (
+        await db.execute(
+            select(Asset, BookDetail)
+            .outerjoin(BookDetail, BookDetail.asset_id == Asset.id)
+            .where(Asset.asset_type == "book", Asset.deleted_at.is_(None))
+        )
+    ).all()
+    targets = [a for a, d in rows if body.force or needs_scrape(a, d)]
+    for a in targets:
+        await enqueue(db, "scrape:book", {"asset_id": str(a.id), "force": body.force}, priority=7)
+    await db.commit()
+    return {"enqueued": len(targets)}
+
+
+@admin_router.get("/books/confirm", summary="待确认图书候选列表",
+                  description="管理员。返回刮削时书名搜索出多个候选、等待人工选择的图书及其候选明细"
+                              "（候选来自 meta.book_scrape.candidates，含书名/作者/出版社/年份/ISBN/封面）。")
+async def book_confirm_list(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    rows = (
+        await db.execute(
+            select(Asset, BookDetail)
+            .outerjoin(BookDetail, BookDetail.asset_id == Asset.id)
+            .where(
+                Asset.asset_type == "book",
+                Asset.deleted_at.is_(None),
+                Asset.meta["book_scrape"]["status"].astext == "ambiguous",
+            )
+        )
+    ).all()
+    out = []
+    for a, d in rows:
+        cands = ((a.meta or {}).get("book_scrape") or {}).get("candidates") or []
+        out.append({
+            "asset_id": str(a.id), "title": a.title, "file_name": a.file_name,
+            "authors": d.authors if d else [],
+            "hint": f"Google Books 书名搜索命中 {len(cands)} 个候选 · 请选择正确的条目",
+            "candidates": cands,
+        })
+    return out
+
+
+class BookConfirmBody(BaseModel):
+    asset_id: uuid.UUID
+    candidate_id: str | None = None
+    skip: bool = False
+
+
+@admin_router.post("/books/confirm", summary="确认图书候选 / 跳过",
+                   description="管理员。candidate_id 指定采用哪个候选（字段只填空缺、封面仅在无封面/合成封面时下载）；"
+                               "skip=true 表示这本书不补信息（后续批量刮削也不再处理）。")
+async def book_confirm(body: BookConfirmBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    a = await db.get(Asset, body.asset_id)
+    if a is None or a.deleted_at is not None or a.asset_type != "book":
+        raise not_found()
+    from app.domains.books.scrape import apply_stored_candidate, mark_skipped
+
+    if body.skip:
+        await mark_skipped(db, a)
+    elif body.candidate_id:
+        await apply_stored_candidate(db, a, body.candidate_id)
+    else:
+        raise bad_request("需提供 candidate_id 或 skip=true")
+    return {"ok": True}

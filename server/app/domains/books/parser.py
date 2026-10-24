@@ -420,14 +420,25 @@ def _parse_epub(path, meta: dict) -> dict:
 def _parse_pdf(path, meta: dict) -> dict:
     import pymupdf
 
+    from app.domains.books.scrape import extract_isbn_from_text
+
     doc = pymupdf.open(str(path))
     md = doc.metadata or {}
     pages = doc.page_count
     meta["pages"] = pages
+    # PDF 元数据常为空，版权页（书名/作者/ISBN）印在前几页正文里：扫文本抽 ISBN（校验位把关）
+    front_text = "\n".join(doc[i].get_text() for i in range(min(8, doc.page_count)))
+    isbn = extract_isbn_from_text(front_text) or extract_isbn_from_text(md.get("subject") or "") \
+        or extract_isbn_from_text(md.get("keywords") or "")
     cover = doc[0].get_pixmap(dpi=110).tobytes("png")
     doc.close()
     return {
-        "fields": {"authors": [md["author"]] if md.get("author") else [], "format": "pdf", "pages": pages},
+        "fields": {
+            "authors": [md["author"]] if md.get("author") else [],
+            "format": "pdf",
+            "pages": pages,
+            "isbn": isbn,
+        },
         "desc": None,
         "cover_bytes": cover,
         "cover_ext": "png",
@@ -466,6 +477,7 @@ def _parse_txt(path: Path, meta: dict, title_hint: str) -> dict:
         "title": title,
         "cover_bytes": cover_bytes,
         "cover_ext": "jpg",
+        "cover_synthetic": True,
         "epub_bytes": epub_bytes,
     }
 
@@ -526,9 +538,11 @@ def _parse_mobi_azw3(path: Path, meta: dict, title_hint: str, ext: str) -> dict:
     author_list = parsed_meta.get("fields", {}).get("authors", [])
     author = author_list[0] if author_list else ""
 
+    cover_synthetic = False
     if not cover_bytes:
         cover_bytes = _generate_synthetic_cover(title, author, ext.upper())
         cover_ext = "jpg"
+        cover_synthetic = True
 
     fields = {
         "format": ext,
@@ -545,6 +559,7 @@ def _parse_mobi_azw3(path: Path, meta: dict, title_hint: str, ext: str) -> dict:
         "title": title,
         "cover_bytes": cover_bytes,
         "cover_ext": cover_ext,
+        "cover_synthetic": cover_synthetic,
         "epub_bytes": epub_bytes,
     }
 
@@ -630,6 +645,7 @@ async def parse_book(db: AsyncSession, payload: dict) -> None:
     title = None
     cover_bytes = None
     cover_ext = "jpg"
+    cover_synthetic = False
     epub_bytes = None
     title_hint = asset.file_name.rsplit(".", 1)[0]
 
@@ -653,6 +669,7 @@ async def parse_book(db: AsyncSession, payload: dict) -> None:
             desc = r["desc"]
             cover_bytes = r["cover_bytes"]
             cover_ext = r["cover_ext"]
+            cover_synthetic = bool(r.get("cover_synthetic"))
             title = r["title"]
             epub_bytes = r.get("epub_bytes")
         elif ext in ("mobi", "azw3"):
@@ -661,6 +678,7 @@ async def parse_book(db: AsyncSession, payload: dict) -> None:
             desc = r["desc"]
             cover_bytes = r["cover_bytes"]
             cover_ext = r["cover_ext"]
+            cover_synthetic = bool(r.get("cover_synthetic"))
             title = r["title"]
             epub_bytes = r.get("epub_bytes")
         else:
@@ -668,6 +686,9 @@ async def parse_book(db: AsyncSession, payload: dict) -> None:
     except Exception as exc:  # noqa: BLE001
         meta["parse_warning"] = f"{type(exc).__name__}: {exc}"
 
+    # 上一轮封面性质（是否合成占位图）要在 meta 合并前取，用于决定重扫时是否覆盖封面
+    prev_cover_synthetic = bool((asset.meta or {}).get("cover_synthetic"))
+    meta["cover_synthetic"] = cover_synthetic
     asset.title = title or asset.title or title_hint
     asset.note = desc or asset.note
     asset.meta = {**asset.meta, **meta}
@@ -693,7 +714,19 @@ async def parse_book(db: AsyncSession, payload: dict) -> None:
         (out_dir / "reader.epub").write_bytes(epub_bytes)
 
     if cover_bytes is not None:
-        (out_dir / f"cover_src.{cover_ext}").write_bytes(cover_bytes)
-        await enqueue(db, "derive:book_cover", {"asset_id": str(asset.id)}, priority=5)
+        existing = next(out_dir.glob("cover_src.*"), None) if out_dir.is_dir() else None
+        # 新解析出的是合成占位封面、而盘上已有真实封面（如刮削下载的网络封面）时不覆盖；
+        # 文件自带封面（epub 内嵌 / PDF 首页）或此前也是合成封面则照常重写。
+        if existing is None or not cover_synthetic or prev_cover_synthetic:
+            (out_dir / f"cover_src.{cover_ext}").write_bytes(cover_bytes)
+            await enqueue(db, "derive:book_cover", {"asset_id": str(asset.id)}, priority=5)
 
     await enqueue(db, "index_meili", {"asset_id": str(asset.id)}, priority=8)
+
+    # 仍有信息缺口（作者/出版社/ISBN/简介缺项或仅合成封面）→ 入队联网刮削；
+    # 任务内幂等（meta.book_scrape.status 终态后不再外呼），SCRAPE_ENABLED=false 时此处直接不发。
+    if get_settings().scrape_enabled:
+        from app.domains.books.scrape import needs_scrape
+
+        if needs_scrape(asset, row):
+            await enqueue(db, "scrape:book", {"asset_id": str(asset.id)}, priority=7)
