@@ -10,6 +10,7 @@ from app.domains.books.parser import _parse_pdf
 from app.domains.books.scrape import (
     BookCandidate,
     _title_matches,
+    cover_urls,
     candidates_from_response,
     extract_isbn_from_text,
     fill_missing,
@@ -170,6 +171,20 @@ class TestNeedsScrape(unittest.TestCase):
     def test_none_detail(self):
         a, _ = make_book()
         self.assertTrue(needs_scrape(a, None))
+
+
+class TestCoverUrls(unittest.TestCase):
+    def test_google_url_https_and_zoom(self):
+        urls = cover_urls("http://books.google.com/books/content?id=x&printsec=frontcover&img=1&zoom=1&edge=curl", None)
+        self.assertEqual(len(urls), 1)
+        self.assertTrue(urls[0].startswith("https://"))       # 明文 http 强制 https
+        self.assertIn("zoom=3", urls[0])
+        self.assertNotIn("edge=curl", urls[0])
+
+    def test_isbn_appends_openlibrary(self):
+        urls = cover_urls("https://books.google.com/books/content?id=x&zoom=1", "9787111421900")
+        self.assertEqual(len(urls), 2)
+        self.assertEqual(urls[1], "https://covers.openlibrary.org/b/isbn/9787111421900-L.jpg?default=false")
 
 
 class TestTitleMatches(unittest.TestCase):

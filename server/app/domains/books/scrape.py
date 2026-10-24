@@ -143,6 +143,16 @@ def upscale_cover_url(url: str) -> str:
     return re.sub(r"zoom=\d", "zoom=3", u)
 
 
+def cover_urls(primary_url: str, isbn: str | None) -> list[str]:
+    """封面下载候选 URL：Google 封面强制 https（明文 http 在部分出口网络直接被重置），
+    有 ISBN 时追加 OpenLibrary 兜底（Google 图片 CDN 常按出口 IP 封禁 403，OpenLibrary
+    对英文书覆盖好、中文书基本没有——豆瓣封面留给第二期）。"""
+    urls = [re.sub(r"^http://", "https://", upscale_cover_url(primary_url), count=1)]
+    if isbn:
+        urls.append(f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false")
+    return urls
+
+
 def _client() -> httpx.AsyncClient:
     s = get_settings()
     kw: dict = {
@@ -171,24 +181,29 @@ async def google_books_search(query: str) -> list[BookCandidate]:
         return candidates_from_response(r.json())
 
 
-async def download_cover(url: str, out_dir: Path) -> str | None:
-    """下载网络封面到 out_dir/cover_src.{ext}，PIL 校验是真实图片才落盘；返回文件名或 None。"""
-    try:
-        async with _client() as c:
-            r = await c.get(upscale_cover_url(url))
-            r.raise_for_status()
-            data = r.content
-        from PIL import Image
+async def download_cover(primary_url: str, out_dir: Path, isbn: str | None = None) -> tuple[str | None, str | None]:
+    """依次尝试候选 URL 下载封面到 out_dir/cover_src.{ext}，PIL 校验是真实图片才落盘。
+    返回 (文件名, 失败原因)：成功时 (名字, None)；全失败时 (None, 最后一个错误)——
+    失败原因交给调用方记入 meta，绝不能静默吞掉（否则线上排查只能靠猜）。"""
+    from PIL import Image
 
-        img = Image.open(io.BytesIO(data))
-        img.load()
-        ext = (img.format or "JPEG").lower().replace("jpeg", "jpg")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        name = f"cover_src.{ext}"
-        (out_dir / name).write_bytes(data)
-        return name
-    except Exception:  # noqa: BLE001  封面拿不到不影响元数据：返回 None 由调用方记 meta 后继续
-        return None
+    last_err = "no attempt"
+    for url in cover_urls(primary_url, isbn):
+        try:
+            async with _client() as c:
+                r = await c.get(url)
+                r.raise_for_status()
+                data = r.content
+            img = Image.open(io.BytesIO(data))
+            img.load()
+            ext = (img.format or "JPEG").lower().replace("jpeg", "jpg")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            name = f"cover_src.{ext}"
+            (out_dir / name).write_bytes(data)
+            return name, None
+        except Exception as exc:  # noqa: BLE001  封面拿不到不影响元数据，但原因要带回去
+            last_err = f"{type(exc).__name__}: {str(exc)[:140]}"
+    return None, last_err
 
 
 # ---------- 落库（只填空缺）与状态 ----------
@@ -250,9 +265,13 @@ async def apply_candidate(db: AsyncSession, asset: Asset, detail: BookDetail, ca
     out_dir = derived_dir(str(asset.id))
     has_cover = out_dir.is_dir() and next(out_dir.glob("cover_src.*"), None) is not None
     if cand.cover_url and (not has_cover or (asset.meta or {}).get("cover_synthetic")):
-        name = await download_cover(cand.cover_url, out_dir)
+        name, cover_err = await download_cover(
+            cand.cover_url, out_dir, isbn=normalize_isbn(detail.isbn) or cand.isbn
+        )
         if name:
             scrape_meta["cover"] = name
+        elif cover_err:
+            scrape_meta["cover_error"] = cover_err  # 线上排查关键：封面失败原因落 meta，不静默
 
     meta = dict(asset.meta or {})
     if scrape_meta.get("cover"):
