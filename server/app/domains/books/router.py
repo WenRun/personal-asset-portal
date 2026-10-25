@@ -64,8 +64,10 @@ async def book_cover(asset_id: uuid.UUID, size: int = Query(256, description="�
     p = get_settings().data_root / "derived" / "books" / str(a.id) / f"cover_{size}.webp"
     if not p.is_file():
         raise not_found("封面尚未生成")
+    # 不用 immutable 长缓存：封面会因刮削替换（豆瓣封面/占位图重生成），URL 不变内容会变，
+    # 一年强缓存会让浏览器永远显示旧图；1 小时后自动取新，改动立等可查可强刷。
     return FileResponse(p, media_type="image/webp",
-                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+                        headers={"Cache-Control": "public, max-age=3600"})
 
 
 class ProgressBody(BaseModel):
