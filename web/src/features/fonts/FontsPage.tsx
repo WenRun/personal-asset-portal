@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { ListChecks } from 'lucide-react'
 import { api } from '@/api/client'
@@ -11,6 +10,7 @@ import { SelectionBar } from '@/components/SelectionBar'
 import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useBulkSelect } from '@/lib/useBulkSelect'
+import { InfiniteFooter, useInfiniteList, useSentinel } from '@/lib/infinite'
 import { cn } from '@/lib/utils'
 import type { FontFamily } from '@/types'
 
@@ -80,18 +80,22 @@ export function FontsPage() {
     setParams(p, { replace: true })
   }
 
-  const { data: fonts } = useQuery({
-    queryKey: ['fonts', tagFilter, catFilter],
-    queryFn: () => api.fonts({
+  // 滚动加载：游标分页逐页追加（每页 200），fonts 为已加载全部；字族聚合在客户端进行
+  const { data: fontsData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteList(
+    ['fonts', tagFilter, catFilter],
+    (cursor) => api.fonts({
       tag: tagFilter || undefined,
       category: catFilter || undefined,
+      cursor,
     }),
-  })
+  )
+  const fonts = useMemo(() => fontsData?.pages.flatMap((p) => p.items) ?? [], [fontsData])
   const { fontText, fontSize, fontWeight, setFontPreview } = usePrefs()
   const user = useAuth((s) => s.user)
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [filter, setFilter] = useState<'all' | 'han' | 'variable' | 'fav'>(params.get('favorite') ? 'fav' : 'all')
+  const sentinelRef = useSentinel(() => void fetchNextPage(), !!hasNextPage && !isFetchingNextPage, fonts.length)
 
   const list = useMemo(() => {
     const arr = fonts ?? []
@@ -127,7 +131,7 @@ export function FontsPage() {
       <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
         <PageHeader
           title="字体"
-          sub={`${families.length} 个字族 · ${fonts?.length ?? 0} 个文件（fontTools 解析）`}
+          sub={`${families.length} 个字族 · ${hasNextPage ? `已加载 ${fonts.length} 个文件（滚动到底自动续载）` : `${fonts.length} 个文件`}（fontTools 解析）`}
           right={
             <div className="flex items-center gap-2">
               <CategorySidebarToggle
@@ -185,6 +189,8 @@ export function FontsPage() {
       <div className="mt-4 text-center text-xs text-slate-400">
         样张为真实字体渲染（FontFace 加载 /api/fonts/&#123;id&#125;/file，失败回落服务端样张图）；字族打包下载见详情页
       </div>
+
+      <InfiniteFooter sentinelRef={sentinelRef} loading={isFetchingNextPage} hasMore={!!hasNextPage} loaded={fonts.length} unit="个文件" />
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="fonts" onDone={exit} onCancel={exit} />}
       </div>

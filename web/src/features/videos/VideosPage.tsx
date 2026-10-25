@@ -9,6 +9,7 @@ import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySid
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
+import { InfiniteFooter, useInfiniteList, useSentinel } from '@/lib/infinite'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
 type SeriesDetailed = Awaited<ReturnType<typeof api.videoSeries>>[number] & {
@@ -27,10 +28,12 @@ export function VideosPage() {
     setParams(p, { replace: true })
   }
 
-  const { data: videos } = useQuery({
-    queryKey: ['videos', tagFilter, catFilter],
-    queryFn: () => api.videos({ tag: tagFilter || undefined, category: catFilter || undefined }),
-  })
+  // 滚动加载：游标分页逐页追加（每页 200），videos 为已加载全部（系列列表接口独立、仍是全量）
+  const { data: videosData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteList(
+    ['videos', tagFilter, catFilter],
+    (cursor) => api.videos({ tag: tagFilter || undefined, category: catFilter || undefined, cursor }),
+  )
+  const videos = useMemo(() => videosData?.pages.flatMap((p) => p.items) ?? [], [videosData])
   const { data: series } = useQuery({
     queryKey: ['video-series'],
     queryFn: async (): Promise<SeriesDetailed[]> => {
@@ -47,6 +50,7 @@ export function VideosPage() {
   const { selMode, setSelMode, sel, toggleSel, exit } = useBulkSelect()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [filter, setFilter] = useState<'all' | 'series' | 'clip' | 'playable'>('all')
+  const sentinelRef = useSentinel(() => void fetchNextPage(), !!hasNextPage && !isFetchingNextPage, videos.length)
 
   const seriesList = useMemo(() => {
     const all = series ?? []
@@ -85,7 +89,7 @@ export function VideosPage() {
       <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
         <PageHeader
           title="视频"
-          sub={`${seriesList.length} 个教程系列 · ${clips.length} 个素材（ffprobe 解析 · Direct Play）`}
+          sub={`${seriesList.length} 个教程系列 · ${hasNextPage ? `已加载 ${clips.length} 个素材（滚动到底自动续载）` : `${clips.length} 个素材`}（ffprobe 解析 · Direct Play）`}
           right={
             <div className="flex items-center gap-2">
               <CategorySidebarToggle
@@ -217,6 +221,8 @@ export function VideosPage() {
       <div className="mt-6 text-center text-xs text-slate-400">
         系列识别规则：S01E02 / 第02讲 / EP02 / 父目录（存疑进确认队列）
       </div>
+
+      <InfiniteFooter sentinelRef={sentinelRef} loading={isFetchingNextPage} hasMore={!!hasNextPage} loaded={videos.length} unit="个" />
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="videos" onDone={exit} onCancel={exit} />}
       </div>

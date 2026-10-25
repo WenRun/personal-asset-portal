@@ -95,7 +95,10 @@ export interface AdminUser {
   last_login_at: string | null
 }
 
-export interface ListParams { q?: string; tag?: string; category?: string; favorite?: boolean }
+export interface ListParams { q?: string; tag?: string; category?: string; favorite?: boolean; cursor?: string }
+
+/** 游标分页的一页结果：nextCursor 非空表示还有下一页（滚动加载用） */
+export interface Paged<T> { items: T[]; nextCursor: string | null }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
@@ -278,14 +281,14 @@ function toPhoto(r: RawAsset): Photo {
   }
 }
 
-async function listRaw(route: string, params?: { q?: string; tag?: string; category?: string; favorite?: boolean }): Promise<RawAsset[]> {
+async function listRaw(route: string, params?: ListParams): Promise<{ items: RawAsset[]; next_cursor: string | null }> {
   const usp = new URLSearchParams({ page_size: '200' })
   if (params?.q) usp.set('q', params.q)
   if (params?.tag) usp.set('tag', params.tag)
   if (params?.category) usp.set('category', params.category)
   if (params?.favorite) usp.set('favorite', 'true')
-  const d = await req<{ items: RawAsset[] }>(`/api/${route}?${usp}`)
-  return d.items
+  if (params?.cursor) usp.set('cursor', params.cursor)
+  return req<{ items: RawAsset[]; next_cursor: string | null }>(`/api/${route}?${usp}`)
 }
 
 async function detailRaw(id: string): Promise<RawAsset> {
@@ -381,14 +384,14 @@ export const api = {
   stats: () => req<StatsPayload>('/api/stats'),
   recent: (limit = 12) => req<RawAsset[]>(`/api/recent?limit=${limit}`),
 
-  // 五类资源
-  videos: async (p?: ListParams): Promise<Clip[]> => (await listRaw('videos', p)).map(toClip),
+  // 五类资源（列表为游标分页：配合 useInfiniteList 滚动加载）
+  videos: async (p?: ListParams): Promise<Paged<Clip>> => { const d = await listRaw('videos', p); return { items: d.items.map(toClip), nextCursor: d.next_cursor } },
   video: async (id: string) => toClip(await detailRaw(id)),
-  books: async (p?: ListParams): Promise<Book[]> => (await listRaw('books', p)).map(toBook),
+  books: async (p?: ListParams): Promise<Paged<Book>> => { const d = await listRaw('books', p); return { items: d.items.map(toBook), nextCursor: d.next_cursor } },
   book: async (id: string) => toBook(await detailRaw(id)),
-  photos: async (p?: ListParams): Promise<Photo[]> => (await listRaw('images', p)).map(toPhoto),
+  photos: async (p?: ListParams): Promise<Paged<Photo>> => { const d = await listRaw('images', p); return { items: d.items.map(toPhoto), nextCursor: d.next_cursor } },
   photo: async (id: string) => toPhoto(await detailRaw(id)),
-  fonts: async (p?: ListParams): Promise<FontFamily[]> => (await listRaw('fonts', p)).map(toFont),
+  fonts: async (p?: ListParams): Promise<Paged<FontFamily>> => { const d = await listRaw('fonts', p); return { items: d.items.map(toFont), nextCursor: d.next_cursor } },
   fontCharset: (id: string) => req<{ name: string; pct: number }[]>(`/api/fonts/${id}/charset`),
   bookFileUrl: (id: string) => `${BASE}/api/books/${id}/file`,
   bookCoverUrl: (id: string, size: 256 | 1024) => `${BASE}/api/books/${id}/cover?size=${size}`,
@@ -409,10 +412,14 @@ export const api = {
   fontFileUrl: (id: string) => `${BASE}/api/fonts/${id}/file`,
   fontSpecimenUrl: (id: string) => `${BASE}/api/fonts/${id}/preview/specimen`,
   fontFamilyPackUrl: (id: string) => `${BASE}/api/fonts/${id}/family-pack`,
-  musicAlbums: (category?: string) =>
-    req<{ id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]>(
-      `/api/music/albums${category ? `?category=${encodeURIComponent(category)}` : ''}`,
-    ),
+  musicAlbums: (opts?: { category?: string; page?: number }) => {
+    const q = new URLSearchParams()
+    if (opts?.category) q.set('category', opts.category)
+    if (opts?.page && opts.page > 1) q.set('page', String(opts.page))
+    return req<{ items: { id: string; name: string; artist: string; year: number | null; format: string | null; track_count: number; duration_sec: number; has_cover: boolean }[]; total: number; has_more: boolean }>(
+      `/api/music/albums?${q}`,
+    )
+  },
   album: async (id: string): Promise<Album> => {
     const d = await req<{ id: string; name: string; artist: string; year: number | null; has_cover: boolean; path?: string | null; tracks: { asset_id: string; no: number | null; title: string; duration_sec: number; bitrate_kbps: number | null; sample_rate_hz?: number | null; channels?: number | null; channel_layout?: string | null; surround?: string | null; format?: string | null; lrc: boolean; streamable: boolean; size_bytes: number; is_cue_track?: boolean }[] }>(`/api/music/albums/${id}`)
     const firstFormat = d.tracks.find((t) => t.format)?.format?.toUpperCase() || ''
@@ -482,7 +489,7 @@ export const api = {
   /** 详情接口的资源路径（library/ 后的部分）；列表接口不含此字段，按需单取 */
   assetPath: (id: string) => detailRaw(id).then((r) => r.rel_path ?? null),
   /** 按类型列原始资产（收藏页等跨类型场景直接用 RawAsset 渲染） */
-  assetsByType: (route: 'fonts' | 'music' | 'videos' | 'books' | 'images', p?: ListParams) => listRaw(route, p),
+  assetsByType: async (route: 'fonts' | 'music' | 'videos' | 'books' | 'images', p?: ListParams) => (await listRaw(route, p)).items,
 
   // 分类（M7）
   categories: (route: string) => req<CategoriesResult>(`/api/${route}/categories`),

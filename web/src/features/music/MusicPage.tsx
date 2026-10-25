@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { Check, ListChecks, Play } from 'lucide-react'
 import { api } from '@/api/client'
@@ -10,6 +10,7 @@ import { SelectionBar } from '@/components/SelectionBar'
 import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useBulkSelect } from '@/lib/useBulkSelect'
+import { InfiniteFooter, useSentinel } from '@/lib/infinite'
 import { cleanTrackTitleAndArtist, cn, fmtTime } from '@/lib/utils'
 import { TrackAudioBadge } from './TrackAudioBadge'
 
@@ -36,11 +37,17 @@ export function MusicPage() {
     setParams(p, { replace: true })
   }
 
-  const { data: albums } = useQuery({
+  // 滚动加载：专辑墙接口为 offset 分页（每页 60），albums 为已加载全部；不做 10s 轮询——
+  // 无限列表的轮询会每次重拉所有已加载页，新专辑靠扫描完成后的手动刷新进入
+  const { data: albumsData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ['music-albums', catFilter],
-    queryFn: () => api.musicAlbums(catFilter),
-    refetchInterval: 10_000,
+    queryFn: ({ pageParam }) => api.musicAlbums({ category: catFilter || undefined, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (last, _all, lastParam) => (last.has_more ? lastParam + 1 : undefined),
   })
+  const albums = useMemo(() => albumsData?.pages.flatMap((p) => p.items) ?? [], [albumsData])
+  const total = albumsData?.pages[0]?.total
+  const sentinelRef = useSentinel(() => void fetchNextPage(), !!hasNextPage && !isFetchingNextPage, albums.length)
   const playAlbum = usePlayer((s) => s.playAlbum)
   const nav = useAssetNav()
   const [view, setView] = useState<View>('album')
@@ -85,7 +92,7 @@ export function MusicPage() {
       <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
         <PageHeader
           title="音乐"
-          sub={`${albums?.length ?? 0} 张专辑（mutagen 标签解析 · 真实音频流播放）`}
+          sub={`${total != null && albums.length < total ? `${albums.length} / ${total} 张专辑（滚动到底自动续载）` : `${albums.length} 张专辑`}（mutagen 标签解析 · 真实音频流播放）`}
           right={
             <div className="flex items-center gap-2">
               <CategorySidebarToggle
@@ -185,6 +192,9 @@ export function MusicPage() {
         </div>
       )}
 
+      {(view === 'album' || view === 'artist') && (
+        <InfiniteFooter sentinelRef={sentinelRef} loading={isFetchingNextPage} hasMore={!!hasNextPage} loaded={albums.length} unit="张" />
+      )}
       {view === 'tracks' && <TracksView category={catFilter} />}
       </div>
     </div>

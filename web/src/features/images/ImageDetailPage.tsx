@@ -28,7 +28,16 @@ export function ImageDetailPage() {
     setToastMsg(text)
     window.setTimeout(() => setToastMsg((curr) => (curr === text ? null : curr)), 2000)
   }
-  const { data: photos } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
+  const { data: photosData } = useQuery({ queryKey: ['photos'], queryFn: () => api.photos() })
+  const listed = photosData?.items
+  // 首页滚动加载后可进入最新 200 条之外的旧图：列表里找不到时按 id 单取兜底
+  // （上下张导航与缩略条退化为单张，其余功能不受影响）
+  const { data: single } = useQuery({
+    queryKey: ['photo', id],
+    queryFn: () => api.photo(id!),
+    enabled: !!id && !listed?.some((p) => p.id === id),
+  })
+  const photos = listed?.some((p) => p.id === id) ? listed : single ? [single] : undefined
   // 资源路径（library/ 后的部分）：列表接口不含此字段，按详情单取；游客无权限时显示 —
   const { data: pathInfo } = useQuery({
     queryKey: ['asset-path', id],

@@ -8,6 +8,7 @@ import { SelectionBar } from '@/components/SelectionBar'
 import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
+import { InfiniteFooter, useInfiniteList, useSentinel } from '@/lib/infinite'
 import { cn } from '@/lib/utils'
 
 function BookCover({ id, hue, title, className }: { id?: string; hue: number; title: string; className?: string }) {
@@ -42,13 +43,12 @@ export function BooksPage() {
     setParams(p, { replace: true })
   }
 
-  const { data: books } = useQuery({
-    queryKey: ['books', tagFilter, catFilter],
-    queryFn: () => api.books({
-      tag: tagFilter || undefined,
-      category: catFilter || undefined,
-    }),
-  })
+  // 滚动加载：游标分页逐页追加（每页 200），books 为已加载全部
+  const { data: booksData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteList(
+    ['books', tagFilter, catFilter],
+    (cursor) => api.books({ tag: tagFilter || undefined, category: catFilter || undefined, cursor }),
+  )
+  const books = useMemo(() => booksData?.pages.flatMap((p) => p.items) ?? [], [booksData])
   const { data: progressMap } = useQuery({
     queryKey: ['progress', 'all'],
     queryFn: () => api.getAllProgress(),
@@ -60,6 +60,7 @@ export function BooksPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [coverFail, setCoverFail] = useState<Record<string, boolean>>({})
   const cardClick = (id: string) => (selMode ? toggleSel([id]) : nav(`/books/${id}`))
+  const sentinelRef = useSentinel(() => void fetchNextPage(), !!hasNextPage && !isFetchingNextPage, books.length)
 
   const list = useMemo(() => {
     const arr = (books ?? []).map((b) => {
@@ -102,7 +103,7 @@ export function BooksPage() {
       <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
         <PageHeader
           title="书籍"
-          sub={`${books?.length ?? 0} 本（支持 EPUB / PDF / MOBI / AZW3 / TXT 在线阅读与章节翻页）`}
+          sub={`${hasNextPage ? `已加载 ${books.length} 本（滚动到底自动续载）` : `${books.length} 本`}（支持 EPUB / PDF / MOBI / AZW3 / TXT 在线阅读与章节翻页）`}
           right={
             <div className="flex items-center gap-2">
               <CategorySidebarToggle
@@ -173,6 +174,8 @@ export function BooksPage() {
           )
         })}
       </div>
+
+      <InfiniteFooter sentinelRef={sentinelRef} loading={isFetchingNextPage} hasMore={!!hasNextPage} loaded={books.length} unit="本" />
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="books" onDone={exit} onCancel={exit} />}
       </div>

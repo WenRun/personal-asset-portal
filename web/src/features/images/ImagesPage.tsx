@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { Check, Heart, ListChecks } from 'lucide-react'
 import { api, API_BASE } from '@/api/client'
@@ -9,6 +9,7 @@ import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySid
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
+import { InfiniteFooter, useInfiniteList, useSentinel } from '@/lib/infinite'
 import { cn } from '@/lib/utils'
 import type { Photo } from '@/types'
 
@@ -24,11 +25,12 @@ export function ImagesPage() {
     setParams(p, { replace: true })
   }
 
-  // 有 tag/category 参数时走服务端过滤
-  const { data: photos } = useQuery({
-    queryKey: ['photos', tagFilter, catFilter],
-    queryFn: () => api.photos({ tag: tagFilter || undefined, category: catFilter || undefined }),
-  })
+  // 滚动加载：游标分页逐页追加（每页 200），photos 为已加载全部
+  const { data: photosData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteList(
+    ['photos', tagFilter, catFilter],
+    (cursor) => api.photos({ tag: tagFilter || undefined, category: catFilter || undefined, cursor }),
+  )
+  const photos = useMemo(() => photosData?.pages.flatMap((p) => p.items) ?? [], [photosData])
   const nav = useAssetNav()
   const qc = useQueryClient()
   const user = useAuth((s) => s.user)
@@ -37,6 +39,7 @@ export function ImagesPage() {
   const [filter, setFilter] = useState<string>(params.get('favorite') ? 'fav' : 'all')
   const [favs, setFavs] = useState<Record<string, boolean>>({})
   const [imgFail, setImgFail] = useState<Record<string, boolean>>({})
+  const sentinelRef = useSentinel(() => void fetchNextPage(), !!hasNextPage && !isFetchingNextPage, photos.length)
 
   const months = useMemo(() => [...new Set((photos ?? []).map((p) => p.takenAt.slice(0, 7)))].sort().reverse(), [photos])
   const cameras = useMemo(() => [...new Set((photos ?? []).map((p) => p.camera).filter(Boolean))], [photos])
@@ -72,7 +75,7 @@ export function ImagesPage() {
       <div className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
         <PageHeader
           title="图片"
-          sub={`${photos?.length ?? 0} 张 · 时间线按拍摄时间分组（无 EXIF 时回退入库时间）`}
+          sub={`${hasNextPage ? `已加载 ${photos.length} 张（滚动到底自动续载）` : `${photos.length} 张`} · 时间线按拍摄时间分组（无 EXIF 时回退入库时间）`}
           right={
             <div className="flex items-center gap-2">
               <CategorySidebarToggle
@@ -165,10 +168,10 @@ export function ImagesPage() {
         </div>
       ))}
 
-      {photos && list.length === 0 && (
+      {photos.length === 0 && (
         <div className="mt-10 rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-400">没有符合条件的图片</div>
       )}
-      <div className="mt-6 text-center text-xs text-slate-400">滚动加载更多（游标分页）…</div>
+      <InfiniteFooter sentinelRef={sentinelRef} loading={isFetchingNextPage} hasMore={!!hasNextPage} loaded={photos.length} unit="张" />
 
       {user && selMode && <SelectionBar ids={[...sel]} categoryRoute="images" onDone={exit} onCancel={exit} />}
       </div>

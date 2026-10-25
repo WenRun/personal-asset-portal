@@ -24,9 +24,10 @@ router = APIRouter(prefix="/api/music", tags=["音乐"])
 
 
 @router.get("/albums", summary="专辑墙",
-            description="公开。返回全部专辑（艺术家 / 年份 / 曲目数 / 总时长 / 格式 / 是否有封面），按年份倒序、名称排序。")
-async def list_albums(category: str | None = None, db: AsyncSession = Depends(get_db)):
-    """专辑墙（公开浏览页）。"""
+            description="公开。分页返回专辑（艺术家 / 年份 / 曲目数 / 总时长 / 格式 / 是否有封面），按年份倒序、名称排序；返回 {items, total, has_more}。")
+async def list_albums(category: str | None = None, page: int = Query(1, ge=1),
+                      page_size: int = Query(60, ge=1, le=120), db: AsyncSession = Depends(get_db)):
+    """专辑墙（公开浏览页）。offset 分页：排序键 year 可空且名称可重复，无法做稳定游标。"""
     q = (
         select(
             MusicAlbum.id, MusicAlbum.name, MusicAlbum.year, MusicAlbum.cover_path,
@@ -50,16 +51,21 @@ async def list_albums(category: str | None = None, db: AsyncSession = Depends(ge
         .having(func.count(MusicTrack.asset_id) > 0)
         .order_by(MusicAlbum.year.desc().nullslast(), MusicAlbum.name)
     )
-    rows = (await db.execute(q)).all()
-    return [
-        {
-            "id": str(r.id), "name": r.name, "artist": r.artist or "未知艺术家",
-            "year": r.year, "format": r.format, "track_count": r.track_count,
-            "duration_sec": int((r.duration_ms or 0) / 1000),
-            "has_cover": bool(r.cover_path),
-        }
-        for r in rows
-    ]
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
+    rows = (await db.execute(q.offset((page - 1) * page_size).limit(page_size))).all()
+    return {
+        "items": [
+            {
+                "id": str(r.id), "name": r.name, "artist": r.artist or "未知艺术家",
+                "year": r.year, "format": r.format, "track_count": r.track_count,
+                "duration_sec": int((r.duration_ms or 0) / 1000),
+                "has_cover": bool(r.cover_path),
+            }
+            for r in rows
+        ],
+        "total": total,
+        "has_more": page * page_size < total,
+    }
 
 
 @router.get("/tracks", summary="全部曲目（平铺）",

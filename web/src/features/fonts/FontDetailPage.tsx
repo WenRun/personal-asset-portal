@@ -29,7 +29,8 @@ export function FontDetailPage() {
     window.setTimeout(() => setToastMsg((curr) => (curr === text ? null : curr)), 2000)
   }
   const { data: font } = useQuery({ queryKey: ['font', id], queryFn: () => api.font(id!), enabled: !!id })
-  const { data: allFonts } = useQuery({ queryKey: ['fonts'], queryFn: () => api.fonts() })
+  const { data: allFontsData } = useQuery({ queryKey: ['fonts'], queryFn: () => api.fonts() })
+  const allFonts = allFontsData?.items
   const { data: charset } = useQuery({
     queryKey: ['font-charset', id],
     queryFn: () => api.fontCharset(id!),
