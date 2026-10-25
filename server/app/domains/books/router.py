@@ -305,7 +305,8 @@ async def scrape_missing_books(body: ScrapeBody, db: AsyncSession = Depends(get_
 
 @admin_router.get("/books/confirm", summary="待确认图书候选列表",
                   description="管理员。返回刮削时书名搜索出多个候选、等待人工选择的图书及其候选明细"
-                              "（候选来自 meta.book_scrape.candidates，含书名/作者/出版社/年份/ISBN/封面）。")
+                              "（候选来自 meta.book_scrape.candidates，含书名/作者/出版社/年份/ISBN/封面）。"
+                              "全库批量刮削后待确认可能上千条：按创建时间只返回最新 50 条，处理完刷新出下一批。")
 async def book_confirm_list(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     rows = (
         await db.execute(
@@ -316,6 +317,8 @@ async def book_confirm_list(db: AsyncSession = Depends(get_db), _: User = Depend
                 Asset.deleted_at.is_(None),
                 Asset.meta["book_scrape"]["status"].astext == "ambiguous",
             )
+            .order_by(Asset.created_at.desc())
+            .limit(50)
         )
     ).all()
     out = []

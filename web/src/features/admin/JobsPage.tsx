@@ -388,6 +388,11 @@ export function JobsPage() {
             <Button size="sm" className="ml-auto" disabled={scrapeMissing.isPending} onClick={() => scrapeMissing.mutate(false)}>
               <BookOpen className="h-3.5 w-3.5" />批量刮削缺失图书
             </Button>
+            <Button size="sm" variant="outline" disabled={scrapeMissing.isPending}
+              title="忽略已有结果强制重刮全部（人工跳过的除外）。封面反盗链/年份择优等修复上线后用它补全存量"
+              onClick={() => { if (confirm('强制重刮全部图书？（人工「跳过」的仍会跳过）\n用于修复上线后补全豆瓣封面/评分，约需 1~2 小时。')) scrapeMissing.mutate(true) }}>
+              强制重刮
+            </Button>
             {scrapeMsg && <span className="text-xs text-brand-600">{scrapeMsg}</span>}
           </div>
 

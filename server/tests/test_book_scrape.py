@@ -9,6 +9,8 @@ from app.core.models import Asset, BookDetail
 from app.domains.books.parser import _parse_pdf
 from app.domains.books.scrape import (
     BookCandidate,
+    _cover_is_synthetic,
+    _pick_by_year,
     _title_matches,
     cover_urls,
     candidates_from_response,
@@ -171,6 +173,40 @@ class TestNeedsScrape(unittest.TestCase):
     def test_none_detail(self):
         a, _ = make_book()
         self.assertTrue(needs_scrape(a, None))
+
+
+class TestCoverSyntheticInference(unittest.TestCase):
+    def test_mark_present_wins(self):
+        a, d = make_book(meta={"cover_synthetic": True}, note="x")
+        d.format = "epub"
+        self.assertTrue(_cover_is_synthetic(a, d))
+        a2, d2 = make_book(meta={"cover_synthetic": False}, note="x")
+        d2.format = "txt"
+        self.assertFalse(_cover_is_synthetic(a2, d2))
+
+    def test_legacy_null_by_format(self):
+        # 一期上线前解析的老书无标记：txt 必为合成；epub/pdf/mobi 保守按真封面
+        a, d = make_book(meta={}, note="x"); d.format = "txt"
+        self.assertTrue(_cover_is_synthetic(a, d))
+        for fmt in ("epub", "pdf", "mobi"):
+            a2, d2 = make_book(meta={}, note="x"); d2.format = fmt
+            self.assertFalse(_cover_is_synthetic(a2, d2), fmt)
+
+
+class TestPickByYear(unittest.TestCase):
+    def test_unique_year_match_wins(self):
+        a, d = make_book(note="x"); d.pub_year = 2017
+        cands = [BookCandidate(source_id="1", title="书", pub_year=2022),
+                 BookCandidate(source_id="2", title="书", pub_year=2017)]
+        self.assertEqual(_pick_by_year(cands, d).source_id, "2")
+
+    def test_ambiguous_or_missing_year(self):
+        a, d = make_book(note="x"); d.pub_year = None
+        self.assertIsNone(_pick_by_year([BookCandidate(source_id="1", title="书", pub_year=2017)], d))
+        d.pub_year = 2020  # 两个同年后选：仍无法唯一确定
+        cands = [BookCandidate(source_id="1", title="书", pub_year=2020),
+                 BookCandidate(source_id="2", title="书", pub_year=2020)]
+        self.assertIsNone(_pick_by_year(cands, d))
 
 
 class TestCoverUrls(unittest.TestCase):

@@ -195,9 +195,12 @@ async def download_cover(primary_url: str, out_dir: Path, isbn: str | None = Non
     last_err = "no attempt"
     for url in cover_urls(primary_url, isbn):
         try:
-            # 豆瓣图片国内直连（海外出口访问 doubanio 反而更易失败）；其余（Google/OpenLibrary）走代理
-            async with _client(use_proxy="doubanio.com" not in url) as c:
-                r = await c.get(url)
+            # 豆瓣图片国内直连（海外出口访问 doubanio 反而更易失败）+ 必须带豆瓣 Referer
+            # （CDN 反盗链，不带会 418）；其余（Google/OpenLibrary）走代理
+            is_douban_img = "doubanio.com" in url
+            headers = {"Referer": "https://book.douban.com/"} if is_douban_img else None
+            async with _client(use_proxy=not is_douban_img) as c:
+                r = await c.get(url, headers=headers)
                 r.raise_for_status()
                 data = r.content
             img = Image.open(io.BytesIO(data))
@@ -213,6 +216,25 @@ async def download_cover(primary_url: str, out_dir: Path, isbn: str | None = Non
 
 
 # ---------- 落库（只填空缺）与状态 ----------
+
+def _cover_is_synthetic(asset: Asset, detail: BookDetail) -> bool:
+    """当前封面是否为合成占位图。meta.cover_synthetic 是权威标记；一期上线前解析的
+    老书没有该标记（null），按格式兜底推断：txt 从无内嵌封面必然是合成图；
+    epub/pdf 是文件自带真封面；mobi/azw3 无法区分（保守按真封面处理，宁可不换也不错换）。"""
+    v = (asset.meta or {}).get("cover_synthetic")
+    if v is not None:
+        return bool(v)
+    return (detail.format or "") == "txt"
+
+
+def _pick_by_year(candidates: list, detail: BookDetail):
+    """多候选同年份择优：书名一致的候选里恰好只有一册出版年与库内一致时直接采用
+    （同名多版本最常见的差异就是年份，能消掉大部分本要人工确认的书）。"""
+    if not detail.pub_year:
+        return None
+    same = [c for c in candidates if getattr(c, "pub_year", None) == detail.pub_year]
+    return same[0] if len(same) == 1 else None
+
 
 def _now() -> str:
     return dt.now().astimezone().isoformat(timespec="seconds")
@@ -273,7 +295,7 @@ async def apply_candidate(db: AsyncSession, asset: Asset, detail: BookDetail, ca
 
     out_dir = derived_dir(str(asset.id))
     has_cover = out_dir.is_dir() and next(out_dir.glob("cover_src.*"), None) is not None
-    if cand.cover_url and (not has_cover or (asset.meta or {}).get("cover_synthetic")):
+    if cand.cover_url and (not has_cover or _cover_is_synthetic(asset, detail)):
         name, cover_err = await download_cover(
             cand.cover_url, out_dir, isbn=normalize_isbn(detail.isbn) or cand.isbn
         )
@@ -430,8 +452,8 @@ async def scrape_book(db: AsyncSession, payload: dict) -> None:
                 # suggest 对长查询极敏感：书名+作者组合常直接 0 结果，只用纯书名查
                 cands = await douban.douban_search((asset.title or "").strip())
                 exacts = [c for c in cands if _title_matches(asset.title, c.title)]
-                if len(cands) == 1 or len(exacts) == 1:
-                    pick = exacts[0] if len(exacts) == 1 else cands[0]
+                if len(cands) == 1 or len(exacts) == 1 or (pick := _pick_by_year(exacts, detail)):
+                    pick = pick or (exacts[0] if len(exacts) == 1 else cands[0])
                     if (full := await douban.douban_subject(pick.source_id.removeprefix("douban:"))) is not None:
                         pick = full  # suggest 只有建议级字段，详情页补全评分/出版社/丛书/简介
                     await apply_candidate(db, asset, detail, pick, matched_by="title")
@@ -464,10 +486,10 @@ async def scrape_book(db: AsyncSession, payload: dict) -> None:
             await apply_candidate(db, asset, detail, candidates[0], matched_by="isbn")
             applied = True
         else:
-            # 书名搜索：唯一命中、或恰好只有一个候选书名与资产一致 → 直接应用；否则进确认队列
+            # 书名搜索：唯一命中 / 书名唯一一致 / 年份唯一一致 → 直接应用；否则进确认队列
             exacts = [c for c in candidates if _title_matches(asset.title, c.title)]
-            if len(candidates) == 1 or len(exacts) == 1:
-                pick = exacts[0] if len(exacts) == 1 else candidates[0]
+            if len(candidates) == 1 or len(exacts) == 1 or (pick := _pick_by_year(exacts, detail)):
+                pick = pick or (exacts[0] if len(exacts) == 1 else candidates[0])
                 await apply_candidate(db, asset, detail, pick, matched_by="title")
                 applied = True
             else:
