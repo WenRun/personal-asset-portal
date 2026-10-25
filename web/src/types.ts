@@ -208,10 +208,22 @@ export interface ScanRoot {
   types: AssetType[]
 }
 
+/** AI 识别配置（设置页读写；api_key 后端只回掩码，留空提交 = 保持不变） */
+export interface AiSettings {
+  enabled: boolean
+  base_url: string
+  model: string
+  proxy_url: string
+  timeout_seconds: number
+  api_key_set: boolean
+  api_key_masked: string
+}
+
 export interface AppSettings {
   scan_roots: ScanRoot[]
   registration_open: boolean
   max_upload_gb?: number
+  ai?: AiSettings
 }
 
 // ---- 分类体系 ----

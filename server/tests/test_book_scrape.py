@@ -11,6 +11,7 @@ from app.domains.books.scrape import (
     BookCandidate,
     _cover_is_synthetic,
     _pick_by_year,
+    _pick_candidate,
     _title_matches,
     cover_urls,
     candidates_from_response,
@@ -207,6 +208,34 @@ class TestPickByYear(unittest.TestCase):
         cands = [BookCandidate(source_id="1", title="书", pub_year=2020),
                  BookCandidate(source_id="2", title="书", pub_year=2020)]
         self.assertIsNone(_pick_by_year(cands, d))
+
+
+class TestPickCandidate(unittest.TestCase):
+    """回归：条件短路导致 pick 未赋值（线上 6 本 NameError）；统一走 _pick_candidate。"""
+
+    def _mk(self, **kw):
+        return BookCandidate(source_id=kw.pop("sid", "x"), title=kw.pop("title", "书"), **kw)
+
+    def test_single_candidate(self):
+        a, d = make_book(note="x"); d.pub_year = None
+        only = [self._mk(sid="1")]
+        self.assertEqual(_pick_candidate(a.title, only, d).source_id, "1")
+
+    def test_single_exact(self):
+        a, d = make_book(note="x"); d.pub_year = None
+        cands = [self._mk(sid="1", title="测试书"), self._mk(sid="2", title="别的书")]
+        self.assertEqual(_pick_candidate("测试书", cands, d).source_id, "1")
+
+    def test_year_unique(self):
+        a, d = make_book(note="x"); d.pub_year = 2017
+        cands = [self._mk(sid="1", title="测试书", pub_year=2017), self._mk(sid="2", title="测试书", pub_year=2022)]
+        self.assertEqual(_pick_candidate("测试书", cands, d).source_id, "1")
+
+    def test_no_pick(self):
+        a, d = make_book(note="x"); d.pub_year = None
+        cands = [self._mk(sid="1", title="测试书"), self._mk(sid="2", title="测试书")]
+        self.assertIsNone(_pick_candidate("测试书", cands, d))
+        self.assertIsNone(_pick_candidate("测试书", [], d))
 
 
 class TestCoverUrls(unittest.TestCase):

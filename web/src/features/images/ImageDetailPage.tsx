@@ -10,6 +10,7 @@ import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { FavoriteButton } from '@/components/FavoriteButton'
+import { AiEnrichPanel } from '@/components/AiEnrich'
 import { cn } from '@/lib/utils'
 
 export function ImageDetailPage() {
@@ -271,6 +272,7 @@ export function ImageDetailPage() {
                 </button>
               </div>
             </section>
+            {isAdmin && photo && <AiEnrichPanel assetId={photo.id} detailKey={['photos']} />}
             <section>
               <div className="mb-1 text-xs font-semibold text-slate-400">派生物（可重建）</div>
               <ul className="space-y-1 font-mono text-xs text-slate-400">

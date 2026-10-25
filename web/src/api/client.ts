@@ -486,6 +486,8 @@ export const api = {
     req<{ ok: boolean }>('/api/admin/confirm', { method: 'POST', body: JSON.stringify({ asset_id: assetId, series_name: seriesName, episode }) }),
   musicStreamUrl: (assetId: string) => `${BASE}/api/music/${assetId}/stream`,
   font: async (id: string) => toFont(await detailRaw(id)),
+  /** 原始资产详情（含 meta；AI 识别结果卡片等需要视图模型之外字段的场景） */
+  assetRaw: (id: string) => detailRaw(id),
   /** 详情接口的资源路径（library/ 后的部分）；列表接口不含此字段，按需单取 */
   assetPath: (id: string) => detailRaw(id).then((r) => r.rel_path ?? null),
   /** 按类型列原始资产（收藏页等跨类型场景直接用 RawAsset 渲染） */
@@ -555,8 +557,25 @@ export const api = {
     }
   },
   settings: () => req<AppSettings>('/api/admin/settings'),
-  updateSettings: (patch: { scan_roots?: ScanRoot[]; registration_open?: boolean; max_upload_gb?: number }) => req<AppSettings>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+  updateSettings: (patch: {
+    scan_roots?: ScanRoot[]; registration_open?: boolean; max_upload_gb?: number
+    ai?: { enabled?: boolean; base_url?: string; api_key?: string; model?: string; proxy_url?: string; timeout_seconds?: number }
+  }) => req<AppSettings>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(patch) }),
   scan: (rootAlias: string) => req<{ job_id: string }>('/api/admin/scan', { method: 'POST', body: JSON.stringify({ root_alias: rootAlias }) }),
+
+  // AI 元数据识别（一期：图片/视频/书籍/字体；配置在设置页）
+  /** 探活：用表单当前值（留空项回落已保存配置）发一次带小图的最小视觉调用 */
+  aiTest: (body: { base_url?: string; api_key?: string; model?: string; proxy_url?: string; timeout_seconds?: number }) =>
+    req<{ ok: boolean; latency_ms: number; reply: string; model: string }>('/api/admin/ai/test', { method: 'POST', body: JSON.stringify(body) }),
+  /** 详情页单资源触发（手动点击即重跑） */
+  aiEnrichAsset: (id: string) =>
+    req<{ job_id: string }>(`/api/assets/${id}/ai-enrich`, { method: 'POST' }),
+  /** 任务中心批量：所选类型中缺简介且未识别过的资源（书籍仅限刮削已到头的） */
+  aiEnrichBatch: (types: string[], force = false) =>
+    req<{ enqueued: number; capped: boolean; total_missing: number }>('/api/admin/ai-enrich', { method: 'POST', body: JSON.stringify({ types, force }) }),
+  /** 采纳 AI 建议：tags 创建并挂载标签，title 改标题 */
+  aiAdopt: (id: string, fields: string[]) =>
+    req<{ applied: string[] }>(`/api/assets/${id}/ai-adopt`, { method: 'POST', body: JSON.stringify({ fields }) }),
 
   // 用户管理（admin）
   adminUsers: (limit = 200) => req<{ total: number; items: AdminUser[] }>(`/api/admin/users?limit=${limit}&offset=0`),

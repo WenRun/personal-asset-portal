@@ -1,14 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle,
-  Check,
-  CheckCircle2,
-  Pencil,
-  Plus,
-  RefreshCw,
-  ScanSearch,
-  Trash2,
+  AlertCircle, Check, CheckCircle2, Pencil, Plus, RefreshCw, ScanSearch, Sparkles, Trash2,
 } from 'lucide-react'
 import { api } from '@/api/client'
 import { usePrefs } from '@/stores/prefs'
@@ -50,10 +43,66 @@ export function SettingsPage() {
   const [formTypes, setFormTypes] = useState<AssetType[]>([])
 
   const update = useMutation({
-    mutationFn: (patch: { scan_roots?: ScanRoot[]; registration_open?: boolean; max_upload_gb?: number }) =>
-      api.updateSettings(patch),
+    mutationFn: (patch: {
+      scan_roots?: ScanRoot[]; registration_open?: boolean; max_upload_gb?: number
+      ai?: { enabled?: boolean; base_url?: string; api_key?: string; model?: string; proxy_url?: string; timeout_seconds?: number }
+    }) => api.updateSettings(patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   })
+
+  // ---- AI 识别配置（本地表单态：null = 沿用已保存值，输入过才覆盖提交）----
+  const ai = settings?.ai
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null)
+  const aiOn = aiEnabled ?? ai?.enabled ?? false
+  const [aiBaseUrl, setAiBaseUrl] = useState<string | null>(null)
+  const effBaseUrl = aiBaseUrl ?? ai?.base_url ?? ''
+  const [aiModel, setAiModel] = useState<string | null>(null)
+  const effModel = aiModel ?? ai?.model ?? ''
+  const [aiKey, setAiKey] = useState('')
+  const [aiProxy, setAiProxy] = useState<string | null>(null)
+  const effProxy = aiProxy ?? ai?.proxy_url ?? ''
+  const [aiTimeout, setAiTimeout] = useState<number | null>(null)
+  const effTimeout = aiTimeout ?? ai?.timeout_seconds ?? 90
+  const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const aiDirty = aiEnabled !== null || aiBaseUrl !== null || aiModel !== null || aiProxy !== null
+    || aiTimeout !== null || aiKey.trim() !== '' || (ai?.enabled ?? false) !== aiOn
+
+  const aiTest = useMutation({
+    mutationFn: () => api.aiTest({
+      base_url: effBaseUrl.trim(),
+      model: effModel.trim(),
+      // key 输入框留空 = 用已保存的 key（后端回落），填了 = 用新填的值试
+      ...(aiKey.trim() ? { api_key: aiKey.trim() } : {}),
+      ...(effProxy.trim() ? { proxy_url: effProxy.trim() } : {}),
+      timeout_seconds: Math.min(effTimeout, 60),
+    }),
+    onSuccess: (r) => setAiTestResult({ ok: true, text: `连通正常 · ${r.model} · ${(r.latency_ms / 1000).toFixed(1)}s · 模型看到的小图是「${r.reply}」` }),
+    onError: (e) => setAiTestResult({ ok: false, text: (e as Error).message }),
+  })
+
+  const saveAi = () => {
+    update.mutate(
+      {
+        ai: {
+          enabled: aiOn,
+          base_url: effBaseUrl.trim(),
+          model: effModel.trim(),
+          proxy_url: effProxy.trim(),
+          timeout_seconds: effTimeout,
+          ...(aiKey.trim() ? { api_key: aiKey.trim() } : {}),
+        },
+      },
+      {
+        onSuccess: () => {
+          setAiKey('')
+          setAiBaseUrl(null); setAiModel(null); setAiProxy(null); setAiTimeout(null); setAiEnabled(null)
+          showToast('ok', 'AI 识别配置已保存（worker 即时生效，无需重启）')
+        },
+        onError: (e) => showToast('err', (e as Error).message),
+      },
+    )
+  }
 
   const showToast = (kind: 'ok' | 'err', text: string) => {
     setToast({ kind, text })
@@ -212,6 +261,88 @@ export function SettingsPage() {
           <div className="mb-1 text-sm font-semibold">字体样张默认文案</div>
           <p className="mb-3 text-xs text-slate-400">字体样张墙与详情页的全局预览文案（当前存浏览器本地，M2 移入服务端设置）。</p>
           <Input className="w-full" value={fontText} onChange={(e) => setFontPreview({ fontText: e.target.value })} />
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            AI 识别（大模型补全元数据）
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-slate-400">
+            在图片 / 视频 / 书籍 / 字体详情页可手动触发：AI 看封面或缩略图 + 文件信息，补全简介、推荐分类并给出标签等建议
+            （只填空缺，绝不覆盖已有内容）。协议为 OpenAI 兼容接口——智谱、通义、OpenAI、局域网 Ollama 都能用同一套配置。
+          </p>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <button
+                className={`relative h-6 w-11 rounded-full transition ${aiOn ? 'bg-brand-600' : 'bg-slate-300'}`}
+                onClick={() => setAiEnabled(!aiOn)}
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${aiOn ? 'left-[22px]' : 'left-0.5'}`} />
+              </button>
+              <span className="text-sm text-slate-500">{aiOn ? '已启用' : '未启用'}</span>
+              {ai && !ai.enabled && ai.api_key_set && <span className="text-xs text-slate-400">（已配置过，打开开关即可用）</span>}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">接口地址 base_url</label>
+                <Input className="w-full font-mono text-xs" placeholder="如 https://open.bigmodel.cn/api/paas/v4"
+                  value={effBaseUrl} onChange={(e) => setAiBaseUrl(e.target.value)} />
+                <p className="mt-1 text-[11px] text-slate-400">到 /v4 或 /v1 这一级；局域网 Ollama 填 http://IP:11434/v1</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">模型名 model</label>
+                <Input className="w-full font-mono text-xs" placeholder="如 glm-4.5v / qwen-vl-max"
+                  value={effModel} onChange={(e) => setAiModel(e.target.value)} />
+                <p className="mt-1 text-[11px] text-slate-400">必须选<b>支持看图</b>的视觉模型</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">API Key</label>
+                <Input type="password" className="w-full font-mono text-xs" autoComplete="new-password"
+                  placeholder={ai?.api_key_set ? `已配置（${ai.api_key_masked}），留空保持不变` : '供应商控制台申请'}
+                  value={aiKey} onChange={(e) => setAiKey(e.target.value)} />
+                <p className="mt-1 text-[11px] text-slate-400">只存本系统数据库，不出内网（仅发往你填的接口地址）</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">代理（可空）</label>
+                  <Input className="w-full font-mono text-xs" placeholder="192.168.31.32:7890"
+                    value={effProxy} onChange={(e) => setAiProxy(e.target.value)} />
+                  <p className="mt-1 text-[11px] text-slate-400">国产供应商直连，留空</p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">超时（秒）</label>
+                  <Input type="number" min={10} max={600} className="w-full font-mono text-xs"
+                    value={effTimeout} onChange={(e) => setAiTimeout(Math.max(10, Math.min(600, Number(e.target.value) || 90)))} />
+                  <p className="mt-1 text-[11px] text-slate-400">视觉模型较慢，默认 90</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" disabled={!aiDirty || update.isPending} onClick={saveAi}>
+                {update.isPending ? '保存中…' : '保存配置'}
+              </Button>
+              <Button size="sm" variant="outline" disabled={aiTest.isPending || !effBaseUrl.trim() || !effModel.trim()} onClick={() => aiTest.mutate()}>
+                <Sparkles className="h-3.5 w-3.5" />
+                {aiTest.isPending ? '测试中…' : '测试连通性'}
+              </Button>
+              <span className="text-xs text-slate-400">会发一张纯色小图做最小视觉调用（同时验证地址 / Key / 模型 / 看图能力）</span>
+            </div>
+
+            {aiTestResult && (
+              <div className={cn(
+                'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
+                aiTestResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700',
+              )}>
+                {aiTestResult.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                <span className="min-w-0 break-all">{aiTestResult.text}</span>
+                <button className="ml-auto shrink-0 opacity-50 hover:opacity-100" onClick={() => setAiTestResult(null)}>✕</button>
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">

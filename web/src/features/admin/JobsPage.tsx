@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, RefreshCw, Trash2 } from 'lucide-react'
+import { BookOpen, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { api } from '@/api/client'
-import { Badge, Button, PageHeader } from '@/components/ui'
+import { Badge, Button, Chip, PageHeader } from '@/components/ui'
 import type { JobPayload, JobTarget } from '@/api/client'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +24,7 @@ const KIND_LABELS: Record<string, string> = {
   'derive:thumb_image': '生成图片缩略图',
   'derive:book_cover': '生成书籍封面',
   'scrape:book': '刮削图书信息',
+  ai_enrich: 'AI 识别元数据',
   'derive:font_specimen': '生成字体样张',
   'derive:font_charset': '统计字体字符集',
   pack_zip: '打包下载 ZIP',
@@ -155,6 +156,35 @@ export function JobsPage() {
     },
   })
 
+  // AI 批量识别：一期四类；书籍只处理在线刮削已到头的（豆瓣/Google 免费且权威，优先）
+  const AI_TYPES = [
+    { key: 'image', label: '图片' },
+    { key: 'video', label: '视频' },
+    { key: 'book', label: '书籍' },
+    { key: 'font', label: '字体' },
+  ] as const
+  const [aiTypes, setAiTypes] = useState<string[]>(['image'])
+  const [aiForce, setAiForce] = useState(false)
+  const [aiMsg, setAiMsg] = useState('')
+  const aiBatch = useMutation({
+    mutationFn: () => api.aiEnrichBatch(aiTypes, aiForce),
+    onSuccess: (r) => {
+      const parts = [`已入队 ${r.enqueued} 条`]
+      if (r.capped) parts.push('（达单次 500 条上限，可稍后再点继续）')
+      setAiMsg(parts.join('') + '，进度见下方任务列表；识别结果到各详情页查看与采纳')
+      setTimeout(() => setAiMsg(''), 8000)
+    },
+    onError: (e) => { setAiMsg((e as Error).message); setTimeout(() => setAiMsg(''), 8000) },
+  })
+  const runAiBatch = () => {
+    const labels = aiTypes.map((t) => AI_TYPES.find((x) => x.key === t)?.label ?? t).join('、')
+    if (confirm(
+      aiForce
+        ? `对${labels}全部资源强制重跑 AI 识别？\n将逐条调用大模型（每类单次最多 500 条），确认继续？`
+        : `对${labels}中缺简介且未识别过的资源批量 AI 识别？\n书籍仅含刮削未收录的。每类单次最多 500 条，确认继续？`,
+    )) aiBatch.mutate()
+  }
+
   const retry = useMutation({
     mutationFn: (id: string) => api.retryJob(id),
     // 重试成功后无需手动刷新：retry 端点会发 NOTIFY，SSE 推 snapshot → version 变化 → 当前页重查
@@ -270,6 +300,28 @@ export function JobsPage() {
 
       {tab === 'jobs' ? (
         <>
+          {/* AI 批量识别：配置在「设置」页；花钱的活批量前先确认 */}
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            <span className="font-medium text-slate-700">AI 批量识别</span>
+            <span className="text-xs text-slate-400">识别对象：所选类型中缺简介的资源（图片/视频看图，书籍看封面，字体看样张）</span>
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
+              {AI_TYPES.map((t) => (
+                <Chip key={t.key} active={aiTypes.includes(t.key)} onClick={() =>
+                  setAiTypes((s) => (s.includes(t.key) ? s.filter((x) => x !== t.key) : [...s, t.key]))}>
+                  {t.label}
+                </Chip>
+              ))}
+              <label className="ml-2 flex items-center gap-1 text-xs text-slate-500" title="忽略识别记录对所选类型全量重跑（更花 token）">
+                <input type="checkbox" className="accent-brand-600" checked={aiForce} onChange={(e) => setAiForce(e.target.checked)} />强制重跑
+              </label>
+              <Button size="sm" disabled={aiTypes.length === 0 || aiBatch.isPending} onClick={runAiBatch}>
+                {aiBatch.isPending ? '入队中…' : '批量识别'}
+              </Button>
+            </div>
+            {aiMsg && <span className="w-full text-xs text-brand-600">{aiMsg}</span>}
+          </div>
+
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
             {([['all', '全部'], ['queued', '队列中'], ['running', '运行中'], ['failed', '失败'], ['done', '完成']] as const).map(([v, label]) => (
               <button

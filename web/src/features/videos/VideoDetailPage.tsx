@@ -12,6 +12,7 @@ import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { FavoriteButton } from '@/components/FavoriteButton'
+import { AiEnrichPanel } from '@/components/AiEnrich'
 import { cn, fmtDate, fmtTime } from '@/lib/utils'
 
 /** 视频详情（§5.3）：Direct Play <video> 真实播放 + 观看进度云端同步 + 全屏/网页全屏/画中画/倍速/音量控制 + 系列集数平滑切换 */
@@ -497,6 +498,12 @@ export function VideoDetailPage() {
           )}
         </div>
       </div>
+
+      {isAdmin && video && (
+        <div className="mt-3 max-w-3xl">
+          <AiEnrichPanel assetId={video.id} detailKey={['video', video.id]} />
+        </div>
+      )}
 
       <div className="mt-4 flex flex-col gap-6 xl:flex-row">
         <div className="min-w-0 flex-1 space-y-4">

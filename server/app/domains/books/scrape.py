@@ -236,6 +236,17 @@ def _pick_by_year(candidates: list, detail: BookDetail):
     return same[0] if len(same) == 1 else None
 
 
+def _pick_candidate(asset_title: str | None, cands: list, detail: BookDetail):
+    """书名搜索候选择优：唯一命中 / 书名唯一一致 / 年份唯一一致；都不满足返回 None（进确认队列）。"""
+    exacts = [c for c in cands if _title_matches(asset_title, c.title)]
+    pick = _pick_by_year(exacts, detail)
+    if pick is None and len(exacts) == 1:
+        pick = exacts[0]
+    if pick is None and len(cands) == 1:
+        pick = cands[0]
+    return pick
+
+
 def _now() -> str:
     return dt.now().astimezone().isoformat(timespec="seconds")
 
@@ -451,9 +462,7 @@ async def scrape_book(db: AsyncSession, payload: dict) -> None:
             if not applied:
                 # suggest 对长查询极敏感：书名+作者组合常直接 0 结果，只用纯书名查
                 cands = await douban.douban_search((asset.title or "").strip())
-                exacts = [c for c in cands if _title_matches(asset.title, c.title)]
-                if len(cands) == 1 or len(exacts) == 1 or (pick := _pick_by_year(exacts, detail)):
-                    pick = pick or (exacts[0] if len(exacts) == 1 else cands[0])
+                if (pick := _pick_candidate(asset.title, cands, detail)) is not None:
                     if (full := await douban.douban_subject(pick.source_id.removeprefix("douban:"))) is not None:
                         pick = full  # suggest 只有建议级字段，详情页补全评分/出版社/丛书/简介
                     await apply_candidate(db, asset, detail, pick, matched_by="title")
@@ -487,9 +496,7 @@ async def scrape_book(db: AsyncSession, payload: dict) -> None:
             applied = True
         else:
             # 书名搜索：唯一命中 / 书名唯一一致 / 年份唯一一致 → 直接应用；否则进确认队列
-            exacts = [c for c in candidates if _title_matches(asset.title, c.title)]
-            if len(candidates) == 1 or len(exacts) == 1 or (pick := _pick_by_year(exacts, detail)):
-                pick = pick or (exacts[0] if len(exacts) == 1 else candidates[0])
+            if (pick := _pick_candidate(asset.title, candidates, detail)) is not None:
                 await apply_candidate(db, asset, detail, pick, matched_by="title")
                 applied = True
             else:

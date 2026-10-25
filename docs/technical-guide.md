@@ -156,6 +156,7 @@ e256f2a718d5 基线（M0–M6 共 21 张表）
   - `scan_roots`：`[{alias, path, types}]`，`types` 是该目录允许入库的资产类型白名单
   - `registration_open`：是否开放注册
   - `max_upload_gb`：单文件上传上限，1–128
+  - `ai_config`：AI 识别的大模型配置（enabled / base_url / api_key / model / proxy_url / timeout_seconds）。api_key 是敏感值：读接口只回掩码，worker 每次任务实时读库，改配置保存即生效
   - `font_preview_text`：字体样张文案（派生任务读取；**管理设置接口不暴露这项**，前端设置页的预览文案存在浏览器 `localStorage`）
 - `jobs`：`kind`、`payload`、`status`（queued / running / done / failed）、`priority`（数字越小越先跑）、`attempts`、`run_at`、`started_at`、`last_error`。失败按 30 秒 / 5 分钟 / 30 分钟退避，第四次仍失败则停。
 
@@ -227,6 +228,7 @@ CUE 分轨的 `storage_key` 以 `cue:` 开头，不属于任何扫描根，对�
 | `derive:thumb_image` | 256 / 1024 / 2560 WebP |
 | `derive:book_cover` / `derive:music_cover` | 封面 WebP |
 | `scrape:book` | 联网刮削图书元数据（Google Books，第一期） |
+| `ai_enrich` | 大模型识别元数据（一期：图片/视频/书籍/字体，手动触发；配置在设置页 `ai_config`） |
 | `derive:music_stream` | 非原生格式 / 多声道 → `stream.mp3` |
 | `derive:cue_slices` | 预切 CUE 全部分轨 |
 | `pack_zip` | 批量打包下载 |
@@ -361,6 +363,17 @@ fontTools 读 name 表 / OS/2 / 可变轴 `fvar` / cmap 语言。坏文件仍入
 
 浏览页是 CSS columns 瀑布流，按拍摄月份分组。文案里写过「虚拟滚动」，**没有做**，大图库会一次性要较多卡片（列表 `page_size` 前端固定 200）。
 
+### 8.6 AI 元数据识别（一期：图片 / 视频 / 书籍 / 字体）
+
+**是什么：** 管理员手动触发，用 OpenAI 兼容的视觉大模型（配置在**设置页**，不进 .env）识别资源并补元数据。与图书刮削（豆瓣/Google）互补：刮削靠查权威书目，AI 靠看图推断，覆盖教程、自摄影、无收录书目这类没有条目的资源。**音乐二期**（按专辑聚合，需要把任务目标从资产扩展到专辑）。
+
+- **配置（settings 表 `ai_config`，保存即生效）**：enabled / base_url / api_key / model / proxy_url / timeout_seconds。读接口对 key 只回掩码；保存时留空 key = 保持不变。`POST /api/admin/ai/test` 探活：发一张纯色小图做最小视觉调用，同时验证地址 / Key / 模型 / 看图能力，错误翻成大白话。
+- **触发**：`POST /api/assets/{id}/ai-enrich`（详情页按钮，手动点击即重跑）；`POST /api/admin/ai-enrich` 批量（任务中心顶部操作条，每类单次上限 500 条；只挑缺简介且从未识别过的；书籍仅限 `book_scrape.status` 为 not_found/ambiguous/skipped 的——在线来源免费且权威，AI 只兜底）。
+- **证据收集**（零新增派生）：图片 thumb_1024（发送前压到长边 768 JPEG）；视频 cover_1 + cover_3 两帧；书籍 cover_src.*（无则派生封面）；字体 specimen.png。文本侧给文件名、目录、领域解析字段，并附该类型现有分类树让 AI 优先沿用。
+- **落库红线**（与刮削对齐）：`note` 只填空缺；`suggested_category` 进推荐位（沿用既有「采纳」徽章）；`assets.rating` 永不写；书籍不采信 AI 报的 ISBN。标签 / 标题 / 视频系列名 / 书籍出版信息只存 `meta.ai_enrich.suggestions`，`POST /api/assets/{id}/ai-adopt` 一键采纳（标签增量创建挂载，幂等）。
+- **状态机** `meta.ai_enrich.status`：ok（含 applied/suggestions/usage/model/time）/ not_found / error（含原因原文）/ skipped（入队后配置被关）。失败重试走任务系统 30s/5m/30m 退避；模型回不出合法 JSON 落 error 不重试。
+- 客户端 `app/core/ai.py`：httpx 直调 chat completions（不引 SDK），图片 base64 data URL，JSON 解析容忍围栏/闲话/数组包对象（`raw_decode` 语法级提取）。
+
 ---
 
 ## 9. 前端
@@ -428,6 +441,7 @@ lib/categories.ts      平铺分类 → 树
 - `POST /api/admin/uploads`
 - 软删 / 恢复 / purge、挂标签、批量改分类
 - 视频确认队列、换封面
+- AI 识别：`POST /api/admin/ai/test`（探活）、`POST /api/admin/ai-enrich`（批量）、`POST /api/assets/{id}/ai-enrich`（单资源）、`POST /api/assets/{id}/ai-adopt`（采纳建议）
 - 创建 / 列出 / 作废分享链接
 - 标签的增删改
 

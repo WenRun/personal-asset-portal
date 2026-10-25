@@ -10,6 +10,7 @@ import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { FavoriteButton } from '@/components/FavoriteButton'
 import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
+import { AiEnrichPanel } from '@/components/AiEnrich'
 import { fmtDate } from '@/lib/utils'
 import { BookReader } from './BookReader'
 
@@ -200,6 +201,12 @@ export function BookDetailPage() {
               {book.desc || '（简介随元数据入库；可在「编辑」中手动维护备注与简介）'}
             </p>
           </div>
+
+          {isAdmin && (
+            <div className="mt-3">
+              <AiEnrichPanel assetId={book.id} detailKey={['book', book.id]} />
+            </div>
+          )}
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
             <div className="mb-2 text-xs font-semibold text-slate-400">元数据</div>

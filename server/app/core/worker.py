@@ -20,6 +20,7 @@ import app.domains.music.thumbs  # noqa: F401  M4: derive:music_cover
 import app.domains.music.transcode  # noqa: F401  DTS: derive:music_stream
 import app.domains.videos.parser  # noqa: F401  M5: parse:video
 import app.core.downloads  # noqa: F401  M6: pack_zip
+import app.core.ai_enrich  # noqa: F401  AI 识别: ai_enrich（大模型补全元数据）
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 

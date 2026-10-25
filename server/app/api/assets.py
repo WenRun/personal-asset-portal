@@ -515,6 +515,69 @@ async def patch_asset(asset_id: uuid.UUID, body: AssetPatch, db: AsyncSession = 
             "tags": [{"id": str(t.id), "name": t.name} for t in tags]}
 
 
+# ---------- AI 元数据识别（一期：图片/视频/书籍/字体） ----------
+
+@router.post("/assets/{asset_id}/ai-enrich", summary="触发单资源 AI 识别",
+             description="管理员。为该资源入队 ai_enrich 任务（识别封面/缩略图/抽帧 + 文件信息 → 补简介、荐分类、"
+                         "出标签等建议）。手动点击视为重跑（覆盖上次结果）；需先在设置页启用并配置大模型。")
+async def ai_enrich_asset(asset_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                          _: User = Depends(require_admin)):
+    from app.core.ai import AI_ENRICHABLE_TYPES, ai_config_ready, get_ai_config
+
+    a = await db.get(Asset, asset_id)
+    if a is None or a.deleted_at is not None:
+        raise not_found()
+    if a.asset_type not in AI_ENRICHABLE_TYPES:
+        raise bad_request("该类型暂不支持 AI 识别（一期支持图片/视频/书籍/字体，音乐二期）")
+    ready, hint = ai_config_ready(await get_ai_config(db))
+    if not ready:
+        raise bad_request(hint)
+    job_id = await enqueue(db, "ai_enrich", {"asset_id": str(a.id)}, priority=7)
+    return {"job_id": str(job_id)}
+
+
+class AiAdoptBody(BaseModel):
+    fields: list[str] = Field(min_length=1, description="要采纳的建议字段：tags / title")
+
+
+@router.post("/assets/{asset_id}/ai-adopt", summary="采纳 AI 建议",
+             description="管理员。把 meta.ai_enrich.suggestions 里的建议落到资产：tags 创建/挂载标签，"
+                         "title 改标题（等价编辑）。分类建议不走这里——AI 直接写 suggested_category，"
+                         "由详情页既有的「推荐分类 · 采纳」徽章负责。")
+async def ai_adopt(asset_id: uuid.UUID, body: AiAdoptBody, db: AsyncSession = Depends(get_db),
+                   _: User = Depends(require_admin)):
+    a = await db.get(Asset, asset_id)
+    if a is None or a.deleted_at is not None:
+        raise not_found()
+    sug = ((a.meta or {}).get("ai_enrich") or {}).get("suggestions") or {}
+    applied: list[str] = []
+
+    if "tags" in body.fields:
+        names = [n for n in (sug.get("tags") or []) if n and n.strip()]
+        for name in names:
+            t = (await db.execute(select(Tag).where(Tag.name == name))).scalar_one_or_none()
+            if t is None:
+                t = Tag(name=name)
+                db.add(t)
+                await db.flush()
+            # 已挂过的标签不重复挂（与编辑弹窗重置式写法不同：这里是增量采纳）
+            await db.execute(
+                pg_insert(AssetTag).values(asset_id=a.id, tag_id=t.id).on_conflict_do_nothing()
+            )
+        if names:
+            applied.append("tags")
+
+    if "title" in body.fields and sug.get("title"):
+        a.title = str(sug["title"])
+        applied.append("title")
+
+    if not applied:
+        raise bad_request("没有可采纳的建议（该资源可能还没识别过，或建议已全部采纳）")
+    await db.commit()
+    await _reindex(db, a)
+    return {"applied": applied}
+
+
 @router.delete("/assets/{asset_id}", summary="删除资产",
                description="管理员。默认软删（可恢复）；purge=true 彻底删除记录并移出搜索索引，delete_file=true 连同源文件一起删除（仅与 purge 同时生效）。两种删除都会同步清理该资产的派生物（缩略图/封面/样张等）。")
 async def delete_asset(asset_id: uuid.UUID, purge: bool = Query(False, description="是否彻底删除（默认软删）"),

@@ -11,6 +11,7 @@ import { ShareDialog } from '@/components/ShareDialog'
 import { DeleteAssetDialog } from '@/components/DeleteAssetDialog'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
 import { FavoriteButton } from '@/components/FavoriteButton'
+import { AiEnrichPanel } from '@/components/AiEnrich'
 import { cn } from '@/lib/utils'
 
 /** 字体详情（§5.1）：同字族字重列表 + FontFace 实时样张 + 可变轴 + 字符集覆盖率 */
@@ -176,6 +177,8 @@ export function FontDetailPage() {
             {isAdmin && <Button variant="outline" title="生成公开分享链接" onClick={() => setShareOpen(true)}><Link2 className="h-3.5 w-3.5" />分享</Button>}
             {isAdmin && <Button variant="outline" className="text-rose-600 hover:bg-rose-50" title="删除该字体" onClick={() => setDelOpen(true)}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
+
+          {isAdmin && current && <AiEnrichPanel assetId={current.id} detailKey={['font', id ?? '']} />}
 
           {axes.length > 0 && (
             <section>

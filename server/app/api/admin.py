@@ -295,16 +295,32 @@ class ScanRoot(BaseModel):
     types: list[str] = Field(default_factory=list, description="允许入库的资产类型白名单；为空表示全部允许")
 
 
+class AiSettingsPatch(BaseModel):
+    """AI 识别配置：api_key 留空（或省略）= 保持已保存的 key 不变（读接口只回掩码，前端拿不回原文）。"""
+    enabled: bool | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+    proxy_url: str | None = None
+    timeout_seconds: float | None = Field(default=None, ge=10, le=600)
+
+
 class SettingsBody(BaseModel):
     scan_roots: list[ScanRoot] | None = None
     registration_open: bool | None = None
     max_upload_gb: int | None = None
+    ai: AiSettingsPatch | None = None
 
 
 @router.get("/settings", summary="查看系统设置",
-            description="管理员。返回扫描根目录列表（alias / 路径）与注册开关。")
+            description="管理员。返回扫描根目录列表（alias / 路径）与注册开关；"
+                        "ai 为大模型识别配置（api_key 只回掩码与是否已配置，原文永不出库）。")
 async def get_settings_api(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
-    return await get_app_settings(db)
+    from app.core.ai import get_ai_config, ai_config_public_view
+
+    kv = await get_app_settings(db)
+    kv["ai"] = ai_config_public_view(await get_ai_config(db))
+    return kv
 
 
 @router.put("/settings", summary="修改系统设置",
@@ -341,8 +357,111 @@ async def put_settings_api(body: SettingsBody, db: AsyncSession = Depends(get_db
         if body.max_upload_gb < 1 or body.max_upload_gb > 128:
             raise bad_request("单文件上传上限需在 1 ~ 128 GB 范围内")
         await _upsert("max_upload_gb", body.max_upload_gb)
+    if body.ai is not None:
+        from app.core.ai import save_ai_config, ai_config_ready
+
+        row = await db.get(Setting, "ai_config")
+        merged = save_ai_config(row.value if row is not None else None, body.ai.model_dump(exclude_unset=True))
+        if merged.get("enabled"):
+            # 只有开着才要求字段齐全；关掉开关（哪怕配置残缺）必须允许保存——那是停用入口
+            ready, hint = ai_config_ready(merged)
+            if not ready:
+                raise bad_request(f"AI 配置无法保存：{hint}")
+        await _upsert("ai_config", merged)
     await db.commit()
-    return await get_app_settings(db)
+    return await get_settings_api(db)
+
+
+# ---------- AI 元数据识别（一期：图片/视频/书籍/字体；音乐二期） ----------
+
+class AiTestBody(BaseModel):
+    """探活参数：全部可选，缺省回落到已保存配置（表单没改的项不用重填）。"""
+    base_url: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+    proxy_url: str | None = None
+    timeout_seconds: float | None = Field(default=None, ge=10, le=120)
+
+
+@router.post("/ai/test", summary="测试 AI 连通性",
+             description="管理员。用表单当前值（未填项回落已保存配置，api_key 留空=用已存的 key）"
+                         "发一次带小图的最小视觉调用：同时验证地址可达、key 有效、模型存在且支持看图。"
+                         "返回延迟与模型回复；失败返回可直接展示的原因提示。")
+async def ai_test(body: AiTestBody, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    from app.core.ai import AiCallError, get_ai_config, ping_with_tiny_image
+
+    saved = await get_ai_config(db)
+    cfg = {
+        "base_url": body.base_url or saved.get("base_url") or "",
+        "api_key": body.api_key or saved.get("api_key") or "",
+        "model": body.model or saved.get("model") or "",
+        "proxy_url": body.proxy_url if body.proxy_url is not None else (saved.get("proxy_url") or ""),
+        "timeout_seconds": body.timeout_seconds or saved.get("timeout_seconds") or 30.0,
+    }
+    if not cfg["base_url"] or not cfg["model"]:
+        raise bad_request("请先填写接口地址与模型名（或先保存配置）再测试")
+    if not cfg["api_key"] and "11434" not in cfg["base_url"]:
+        # Ollama 本地服务可无 key，其余供应商没 key 必然 401，提前说清楚
+        raise bad_request("缺少 API Key：请在下方输入框填写后再测试（已保存过则检查是否被清空）")
+    try:
+        return {"ok": True, **await ping_with_tiny_image(cfg)}
+    except AiCallError as exc:
+        raise bad_request(f"连通失败：{exc}") from exc
+
+
+class AiEnrichBatchBody(BaseModel):
+    types: list[str] = Field(min_length=1, description="asset_type 列表，一期合法值 image/video/book/font")
+    force: bool = False
+
+
+@router.post("/ai-enrich", summary="批量 AI 识别缺简介资源",
+             description="管理员。对所选类型中「简介为空且从未 AI 识别过」的资源批量入队（force 可重跑全部）；"
+                         "书籍仅限在线刮削已到头（未收录/多候选/人工跳过）的，豆瓣/Google 优先且免费。"
+                         "每类单次最多 500 条防误触花冤枉钱，返回 {enqueued, capped, total_missing}。")
+async def ai_enrich_batch(body: AiEnrichBatchBody, db: AsyncSession = Depends(get_db),
+                          _: User = Depends(require_admin)):
+    from app.core.ai import AI_ENRICHABLE_TYPES, ai_config_ready, get_ai_config
+    from app.core.ai_enrich import BOOK_BATCH_SCRAPE_DEAD, needs_ai_enrich
+
+    cfg = await get_ai_config(db)
+    ready, hint = ai_config_ready(cfg)
+    if not ready:
+        raise bad_request(hint)
+
+    bad = [t for t in body.types if t not in AI_ENRICHABLE_TYPES]
+    if bad:
+        raise bad_request(f"暂不支持 AI 识别的类型: {bad}（一期支持 图片/视频/书籍/字体，音乐二期）")
+
+    CAP = 500
+    enqueued = capped = False
+    total_missing = 0
+    for t in body.types:
+        rows = (await db.execute(
+            select(Asset)
+            .where(Asset.asset_type == t, Asset.deleted_at.is_(None), Asset.status == "ready")
+            .order_by(Asset.created_at.desc())
+        )).scalars().all()
+        if body.force:
+            targets = rows[:CAP]
+            capped = capped or len(rows) > CAP
+        else:
+            if t == "book":
+                # 在线刮削还没跑/已成功的书不掺和：豆瓣/Google 免费且权威，AI 只做查不到时的兜底
+                targets = [
+                    a for a in rows
+                    if needs_ai_enrich(a)
+                    and ((a.meta or {}).get("book_scrape") or {}).get("status") in BOOK_BATCH_SCRAPE_DEAD
+                ]
+            else:
+                targets = [a for a in rows if needs_ai_enrich(a)]
+            total_missing += len(targets)
+            capped = capped or len(targets) > CAP
+            targets = targets[:CAP]
+        for a in targets:
+            await enqueue(db, "ai_enrich", {"asset_id": str(a.id)}, priority=7)
+        enqueued += len(targets)
+    await db.commit()
+    return {"enqueued": enqueued, "capped": capped, "total_missing": total_missing}
 
 
 # ---------- 用户管理 ----------
