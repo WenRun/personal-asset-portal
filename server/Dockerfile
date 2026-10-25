@@ -1,6 +1,8 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 国内 NAS 访问 deb.debian.org 极慢（ffmpeg+字体 ~160MB 可拖一小时）：换清华镜像源
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
