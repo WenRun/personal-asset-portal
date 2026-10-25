@@ -6,7 +6,6 @@ import { api, API_BASE } from '@/api/client'
 import { useAssetNav, Badge, Button, Chip, HueCover, PageHeader } from '@/components/ui'
 import { SelectionBar } from '@/components/SelectionBar'
 import { CategorySidebar, CategorySidebarToggle } from '@/components/CategorySidebar'
-import { AdoptCategoryBadge } from '@/components/AdoptCategoryBadge'
 import { useAuth } from '@/stores/auth'
 import { useBulkSelect } from '@/lib/useBulkSelect'
 import { cn } from '@/lib/utils'
@@ -143,10 +142,7 @@ export function BooksPage() {
               >
                 <BookCover id={b.id} hue={b.hue} title={b.title} className="aspect-[3/4] shadow-sm transition group-hover:shadow-md" />
                 <div className="mt-1.5 truncate text-xs font-medium">{b.title}</div>
-                <div className="flex items-center justify-between gap-1 mt-0.5">
-                  {fmtState(b)}
-                  <AdoptCategoryBadge assetId={b.id} category={b.category} suggestedCategory={b.suggested_category} />
-                </div>
+                <div className="mt-0.5">{fmtState(b)}</div>
               </div>
             ))}
           </div>
@@ -172,9 +168,6 @@ export function BooksPage() {
                 {onlyDownload
                   ? <span className="text-amber-600">{b.formats[0].kind} · 仅下载</span>
                   : <>{b.author && `${b.author} · `}{fmtState(b)}</>}
-              </div>
-              <div className="mt-1">
-                <AdoptCategoryBadge assetId={b.id} category={b.category} suggestedCategory={b.suggested_category} />
               </div>
             </div>
           )
